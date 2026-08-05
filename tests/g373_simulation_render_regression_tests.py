@@ -78,10 +78,10 @@ def main() -> int:
     ):
         require(symbol in policy, f"simulation render policy is missing {symbol}")
 
-    require("!simulated_node&&animate_authored_subnodes&&parent.root&&" in app and
+    require("!simulated_node&&animate_authored_subnodes&&" in app and
             "simulation_model_node_is_weapon_aim_axis" in app and
-            "node.child_slot==1U" in app,
-            "authored child-1 animation can still overwrite a simulated weapon node")
+            "model_runtime_child_yaw_step_turn16" in app,
+            "authored recursive child animation can still overwrite a simulated weapon node")
 
     print("G373 live-actor-only simulation replacement and bounded texture residency PASS")
     return 0

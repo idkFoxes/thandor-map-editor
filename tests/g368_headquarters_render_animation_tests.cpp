@@ -60,10 +60,15 @@ int main() try {
     assert(app_h.find("bool owner_is_building{}")!=std::string::npos);
     assert(app_c.find("Exact game rate (1x)")!=std::string::npos);
     assert(app_c.find("16x")!=std::string::npos);
+    assert(app_c.find("64x inspection")==std::string::npos);
+    assert(app_c.find("256x inspection")==std::string::npos);
+    assert(app_h.find("animation_preview_rate_user_selected_")==std::string::npos);
+    assert(app_h.find("animation_preview_rate_auto_selected_for_buildings_")==std::string::npos);
     assert(app_c.find("current_building_animation_tick_")!=std::string::npos);
     assert(app_c.find("const uint32_t authored_animation_tick=is_building")!=std::string::npos);
     assert(app_c.find("?current_building_animation_tick_:current_presentation_tick_")!=std::string::npos);
-    assert(app_c.find("preset->child0_rotation_step_turn16)*authored_animation_tick")!=std::string::npos);
+    assert(app_c.find("model_runtime_child_yaw_step_turn16")!=std::string::npos);
+    assert(app_c.find("animation_owner=hierarchy[node.parent_index]")!=std::string::npos);
     assert(app_c.find("!source.owner_is_building||animate_buildings_")!=std::string::npos);
     assert(app_c.find("sprite_lod_oriented_transform(")!=std::string::npos);
     // Fixed EFF sprites preserve all three authored owner angles; only explicit
@@ -82,7 +87,7 @@ int main() try {
     assert(app_c.find("volumetric_cross_plane") == std::string::npos);
     assert(app_c.find("invented_smoke_plane") == std::string::npos);
 
-    std::cout << "G368/G369 Headquarters alpha queue, billboard smoke, owner-scoped effects and selectable exact-rate animation PASS\n";
+    std::cout << "G368/G369 Headquarters alpha queue, billboard smoke, owner-scoped effects and game-runtime MDL animation PASS\n";
     return 0;
 } catch(const std::exception& error) {
     std::cerr << "G368_HEADQUARTERS_RENDER_ANIMATION FAIL: " << error.what() << '\n';

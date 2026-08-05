@@ -1,4 +1,5 @@
 #include "thandor/catalog.hpp"
+#include "thandor/model_animation.hpp"
 #include "thandor/text_resource.hpp"
 
 #include <algorithm>
@@ -841,59 +842,49 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                 if (lower.find("rohstoff") != std::string::npos) preset.group_hint = "Resources";
                 else if (lower.find("ruinen") != std::string::npos || lower.find("baum") != std::string::npos || lower.find("busch") != std::string::npos || lower.find("farne") != std::string::npos || lower.find("kaktus") != std::string::npos) preset.group_hint = "Scenery / effects";
                 else preset.group_hint = "Units / structures";
-                if (byte_size >= 0x2CU) {
-                    preset.child0_rotation_step_turn16 = read_i32(bytes, offset + 0x10U);
-                    preset.child2_vertical_step_q12 = read_i32(bytes, offset + 0x14U);
-                    if (preset.runtime_model_class_id == 2U)
-                        preset.track_texture_travel_scale = preset.child2_vertical_step_q12;
-                    preset.child1_rotation_step_turn16 = read_i32(bytes, offset + 0x1CU);
-                    preset.child2_vertical_min_q12 = read_i32(bytes, offset + 0x24U);
-                    preset.child2_vertical_max_q12 = read_i32(bytes, offset + 0x28U);
-                    const auto has_live_root_child = [&](uint32_t slot) {
-                        const auto& hierarchy = preset.resolved_model_hierarchy.empty()
-                            ? preset.model_hierarchy : preset.resolved_model_hierarchy;
-                        return std::any_of(hierarchy.begin(), hierarchy.end(),
-                            [&](const ModelVisualNode& node) {
-                                return node.parent_index == 0U && node.child_slot == slot &&
-                                       node.creates_runtime_node() && !node.sprite_path.empty();
-                            });
-                    };
+                if (byte_size >= 0x18U && preset.runtime_model_class_id == 2U) {
+                    // Binary class-2 movement uses top-level ARM +0x14 only as the track-texture
+                    // distance scale. It is not the generic child[2] vertical animation step.
+                    preset.track_texture_travel_scale = read_i32(bytes, offset + 0x14U);
+                }
+                {
+                    const auto& resolved_hierarchy = preset.resolved_model_hierarchy.empty()
+                        ? preset.model_hierarchy : preset.resolved_model_hierarchy;
+                    const ModelVisualNode* root_node = nullptr;
+                    for (const auto& node : resolved_hierarchy) {
+                        if (node.parent_index == std::numeric_limits<uint32_t>::max()) {
+                            root_node = &node;
+                            break;
+                        }
+                    }
+                    // Compatibility fields now mirror the selected root MDL runtime-animation
+                    // profile. The renderer itself evaluates every owning parent recursively, so
+                    // linked MDLs such as Headquarters radar model 229 keep their own 512-step
+                    // channel instead of inheriting unrelated ARM +0x10 value 1.
+                    if (root_node != nullptr) {
+                        preset.child0_rotation_step_turn16 =
+                            root_node->simulation.yaw_max_velocity_turn16;
+                        preset.child1_rotation_step_turn16 =
+                            root_node->simulation.yaw_acceleration_turn16;
+                        preset.child2_vertical_step_q12 =
+                            root_node->simulation.pitch_max_velocity_turn16;
+                        preset.child2_vertical_min_q12 =
+                            root_node->simulation.pitch_min_turn16;
+                        preset.child2_vertical_max_q12 =
+                            root_node->simulation.pitch_max_turn16;
+                    }
                     preset.runtime_uses_generic_model_subnode_animation =
-                        preset.runtime_model_class_id == 4U ||
-                        preset.runtime_model_class_id == 11U ||
-                        preset.runtime_model_class_id == 13U ||
-                        preset.runtime_model_class_id == 14U;
+                        std::any_of(resolved_hierarchy.begin(), resolved_hierarchy.end(),
+                            [](const ModelVisualNode& node) {
+                                return runtime_class_uses_generic_model_subnode_animation(
+                                    node.runtime_class_id);
+                            });
                     preset.runtime_uses_class17_movement_banking =
                         preset.runtime_model_class_id == 17U;
                     preset.has_model_subnode_animation =
-                        preset.runtime_uses_generic_model_subnode_animation &&
-                        ((preset.child0_rotation_step_turn16 != 0 && has_live_root_child(0U)) ||
-                         (preset.child1_rotation_step_turn16 != 0 && has_live_root_child(1U)) ||
-                         (preset.child2_vertical_step_q12 != 0 && has_live_root_child(2U)));
-                    const auto& resolved_hierarchy = preset.resolved_model_hierarchy.empty()
-                        ? preset.model_hierarchy : preset.resolved_model_hierarchy;
+                        hierarchy_has_authored_model_subnode_animation(resolved_hierarchy);
                     preset.has_continuous_radar_subnode_animation =
-                        std::any_of(resolved_hierarchy.begin(), resolved_hierarchy.end(),
-                            [&](const ModelVisualNode& parent_node) {
-                                if (parent_node.runtime_class_id != 10U) return false;
-                                const bool rotates_child0 =
-                                    parent_node.simulation.yaw_max_velocity_turn16 != 0 &&
-                                    std::any_of(resolved_hierarchy.begin(), resolved_hierarchy.end(),
-                                        [&](const ModelVisualNode& child) {
-                                            return child.parent_index ==
-                                                static_cast<uint32_t>(&parent_node - resolved_hierarchy.data()) &&
-                                                child.child_slot == 0U && child.creates_runtime_node();
-                                        });
-                                const bool rotates_child1 =
-                                    parent_node.simulation.yaw_acceleration_turn16 != 0 &&
-                                    std::any_of(resolved_hierarchy.begin(), resolved_hierarchy.end(),
-                                        [&](const ModelVisualNode& child) {
-                                            return child.parent_index ==
-                                                static_cast<uint32_t>(&parent_node - resolved_hierarchy.data()) &&
-                                                child.child_slot == 1U && child.creates_runtime_node();
-                                        });
-                                return rotates_child0 || rotates_child1;
-                            });
+                        hierarchy_has_continuous_radar_subnode_animation(resolved_hierarchy);
                 }
                 if (const auto placement_count = stock_placement_counts.find(preset.registry_id);
                     placement_count != stock_placement_counts.end())

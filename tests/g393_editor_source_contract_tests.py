@@ -84,8 +84,8 @@ def main() -> int:
 
     require("has_continuous_radar_subnode_animation" in catalog_header and
             "!continuous_radar_placements_.empty()" in app and
-            "runtime_class_id==10U" in app and
-            "yaw_max_velocity_turn16" in app and "yaw_acceleration_turn16" in app,
+            "runtime_class_uses_continuous_radar_subnode_animation" in app and
+            "model_runtime_child_yaw_step_turn16" in app,
             "linked class-10 radar animation route is incomplete")
     require("simulation_model_node_is_weapon_aim_axis" in app,
             "ordinary weapon axes are not protected from ambient authored rotation")

@@ -23,8 +23,9 @@ int main(int argc,char** argv) try {
         throw std::runtime_error("Headquarters model/class identity changed");
     if(preset->timed_effect_id!=131U||preset->timed_effect_interval_ticks!=8U)
         throw std::runtime_error("Headquarters no longer owns periodic EFF 131");
-    if(preset->child0_rotation_step_turn16!=1||!preset->has_model_subnode_animation)
-        throw std::runtime_error("Headquarters radar animation field changed");
+    if(preset->child0_rotation_step_turn16!=0||preset->child2_vertical_step_q12!=16||
+       !preset->has_model_subnode_animation)
+        throw std::runtime_error("Headquarters root/recursive MDL animation fields changed");
 
     const std::set<std::string> expected{
         "spr/gebaeude/gsbau0.spr","spr/gebaeude/gsbau1.spr","spr/gebaeude/gsbau2.spr",
@@ -76,7 +77,7 @@ int main(int argc,char** argv) try {
 
     std::cout << "G368_STOCK_HEADQUARTERS_CENSUS asset=300 hierarchy=5 radar_triangles=44 "
                  "root_triangles=216 center_roof_alpha_triangles=2 smokestacks=2 "
-                 "eff131_billboard=1 radar_step_turn16=1 PASS\n";
+                 "eff131_billboard=1 linked_radar_step_turn16=512 PASS\n";
     return 0;
 } catch(const std::exception& error) {
     std::cerr << "G368_STOCK_HEADQUARTERS_CENSUS FAIL: " << error.what() << '\n';

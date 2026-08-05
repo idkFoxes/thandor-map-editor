@@ -3,6 +3,7 @@
 #include "articulated_walker_pose.hpp"
 #include "thandor/terrain_shadow.hpp"
 #include "thandor/simulation_render_policy.hpp"
+#include "thandor/model_animation.hpp"
 
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
@@ -161,14 +162,15 @@ uint32_t sample_preview_patch_argb(const thandor::RgbaImage& image,
     return average_argb(samples,prefer_bright);
 }
 
-float animated_child2_translation_q12(const thandor::ArmyAssetPreset& preset,uint32_t tick,
-                                      float initial_translation) noexcept {
-    if(preset.child2_vertical_step_q12==0||
-       preset.child2_vertical_max_q12<=preset.child2_vertical_min_q12) return initial_translation;
-    const int64_t minimum=preset.child2_vertical_min_q12;
-    const int64_t maximum=preset.child2_vertical_max_q12;
+float animated_child2_translation_q12(const thandor::ModelRuntimeSimulationProfile& profile,
+                                      uint32_t tick,float initial_translation) noexcept {
+    if(profile.pitch_max_velocity_turn16==0||
+       profile.pitch_max_turn16<=profile.pitch_min_turn16) return initial_translation;
+    const int64_t minimum=profile.pitch_min_turn16;
+    const int64_t maximum=profile.pitch_max_turn16;
     const int64_t span=maximum-minimum;
-    const int64_t step=std::max<int64_t>(1,std::llabs(static_cast<long long>(preset.child2_vertical_step_q12)));
+    const int64_t step=std::max<int64_t>(1,
+        std::llabs(static_cast<long long>(profile.pitch_max_velocity_turn16)));
     const int64_t period_steps=std::max<int64_t>(2,(span+step-1)/step);
     const int64_t phase=static_cast<int64_t>(tick)%(period_steps*2);
     const int64_t distance=phase<=period_steps?phase:period_steps*2-phase;
@@ -3564,15 +3566,14 @@ void EditorApp::rebuild_objects(){
                         if(attachment==nullptr)
                             throw std::runtime_error("MDL child slot has no matching SPR attachment transform");
                         uint32_t animated_angle2=node.local_rotation_angle2;
-                        if(preset->runtime_uses_generic_model_subnode_animation&&
-                           parent.root&&node.child_slot==0U&&preset->child0_rotation_step_turn16!=0){
-                            animated_angle2=static_cast<uint32_t>(static_cast<int64_t>(animated_angle2)+
-                                static_cast<int64_t>(preset->child0_rotation_step_turn16)*hierarchy_tick)&0xFFFFU;
-                            ++animated_model_node_count_;
-                        }else if(preset->runtime_uses_generic_model_subnode_animation&&
-                                  parent.root&&node.child_slot==1U&&preset->child1_rotation_step_turn16!=0){
-                            animated_angle2=static_cast<uint32_t>(static_cast<int64_t>(animated_angle2)+
-                                static_cast<int64_t>(preset->child1_rotation_step_turn16)*hierarchy_tick)&0xFFFFU;
+                        const auto& animation_owner=hierarchy[node.parent_index];
+                        const int32_t authored_yaw_step=
+                            thandor::model_runtime_child_yaw_step_turn16(
+                                animation_owner,node.child_slot);
+                        if(authored_yaw_step!=0){
+                            animated_angle2=thandor::wrap_turn16(
+                                static_cast<int64_t>(animated_angle2)+
+                                static_cast<int64_t>(authored_yaw_step)*hierarchy_tick);
                             ++animated_model_node_count_;
                         }
                         uint32_t animated_angle1=node.local_rotation_angle1;
@@ -3582,10 +3583,10 @@ void EditorApp::rebuild_objects(){
                         auto local=fixed_model_rotation_basis(animated_angle2,
                             animated_angle1,node.local_rotation_angle0);
                         local.translation=attachment->local_translation;
-                        if(preset->runtime_uses_generic_model_subnode_animation&&
-                           parent.root&&node.child_slot==2U&&preset->child2_vertical_step_q12!=0){
-                            local.translation.z=animated_child2_translation_q12(*preset,
-                                hierarchy_tick,local.translation.z);
+                        if(thandor::model_runtime_child_uses_bounded_vertical_channel(
+                               animation_owner,node.child_slot)){
+                            local.translation.z=animated_child2_translation_q12(
+                                animation_owner.simulation,hierarchy_tick,local.translation.z);
                             ++animated_model_node_count_;
                         }
                         instance.transform=compose_model_transform(parent.transform,local);
@@ -4181,30 +4182,31 @@ std::vector<ModelHierarchyTransform> EditorApp::simulation_hierarchy_transforms(
                         ((is_building&&animate_buildings_)||(!is_building&&animate_units_));
                     const uint32_t authored_animation_tick=is_building
                         ?current_building_animation_tick_:current_presentation_tick_;
-                    const bool root_child=node.parent_index<hierarchy.size()&&
-                        hierarchy[node.parent_index].parent_index==std::numeric_limits<uint32_t>::max();
+                    const auto& animation_owner=hierarchy[node.parent_index];
+                    const bool root_child=
+                        animation_owner.parent_index==std::numeric_limits<uint32_t>::max();
                     if(preset.runtime_model_class_id==17U&&root_child&&node.child_slot<3U){
                         angle1=thandor::wrap_turn16(static_cast<int64_t>(angle1)+
                             actor.class17_rotor_tilt_turn16);
                         simulated_node=true;
-                    }else if(!simulated_node&&animate_authored_subnodes&&root_child&&
+                    }else if(!simulated_node&&animate_authored_subnodes&&
                              !thandor::simulation_model_node_is_weapon_aim_axis(
                                  preset.simulation_weapon_profiles,static_cast<uint32_t>(node_index))){
-                        if(node.child_slot==0U&&preset.child0_rotation_step_turn16!=0)
+                        const int32_t authored_yaw_step=
+                            thandor::model_runtime_child_yaw_step_turn16(
+                                animation_owner,node.child_slot);
+                        if(authored_yaw_step!=0)
                             angle2=thandor::wrap_turn16(static_cast<int64_t>(angle2)+
-                                static_cast<int64_t>(preset.child0_rotation_step_turn16)*authored_animation_tick);
-                        else if(node.child_slot==1U&&preset.child1_rotation_step_turn16!=0)
-                            angle2=thandor::wrap_turn16(static_cast<int64_t>(angle2)+
-                                static_cast<int64_t>(preset.child1_rotation_step_turn16)*authored_animation_tick);
+                                static_cast<int64_t>(authored_yaw_step)*authored_animation_tick);
                     }
                     angle2=thandor::wrap_turn16(static_cast<int64_t>(angle2)+recoil_angle_turn16);
                     auto local=fixed_model_rotation_basis(angle2,angle1,node.local_rotation_angle0);
                     local.translation=attachment->local_translation;
-                    if(animate_authored_subnodes&&node.parent_index<hierarchy.size()&&
-                       hierarchy[node.parent_index].parent_index==std::numeric_limits<uint32_t>::max()&&
-                       node.child_slot==2U&&preset.child2_vertical_step_q12!=0)
-                        local.translation.z=animated_child2_translation_q12(preset,
-                            authored_animation_tick,local.translation.z);
+                    if(animate_authored_subnodes&&
+                       thandor::model_runtime_child_uses_bounded_vertical_channel(
+                           animation_owner,node.child_slot))
+                        local.translation.z=animated_child2_translation_q12(
+                            animation_owner.simulation,authored_animation_tick,local.translation.z);
                     if(recoil_translation_q12!=0){
                         const Vec3f recoil=transform_vector(local,{thandor::q12_to_float(recoil_translation_q12),0.0F,0.0F});
                         local.translation=add(local.translation,recoil);
@@ -5231,37 +5233,25 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                     const uint32_t authored_animation_tick=is_building
                         ?current_building_animation_tick_:current_presentation_tick_;
                     const auto& authored_parent_node=hierarchy[node.parent_index];
-                    if(!simulated_node&&authored_parent_node.runtime_class_id==10U&&
-                       node.child_slot==0U&&
-                       authored_parent_node.simulation.yaw_max_velocity_turn16!=0){
+                    const bool continuous_radar_parent=
+                        thandor::runtime_class_uses_continuous_radar_subnode_animation(
+                            authored_parent_node.runtime_class_id);
+                    const int32_t authored_yaw_step=
+                        thandor::model_runtime_child_yaw_step_turn16(
+                            authored_parent_node,node.child_slot);
+                    if(!simulated_node&&authored_yaw_step!=0&&
+                       (continuous_radar_parent||animate_authored_subnodes)&&
+                       !thandor::simulation_model_node_is_weapon_aim_axis(
+                           preset->simulation_weapon_profiles,static_cast<uint32_t>(node_index))){
+                        const uint32_t animation_tick=continuous_radar_parent
+                            ?current_presentation_tick_:authored_animation_tick;
                         angle2=thandor::wrap_turn16(static_cast<int64_t>(angle2)+
-                            static_cast<int64_t>(authored_parent_node.simulation.yaw_max_velocity_turn16)*
-                                current_presentation_tick_);
-                    }else if(!simulated_node&&authored_parent_node.runtime_class_id==10U&&
-                             node.child_slot==1U&&
-                             authored_parent_node.simulation.yaw_acceleration_turn16!=0){
-                        angle2=thandor::wrap_turn16(static_cast<int64_t>(angle2)+
-                            static_cast<int64_t>(authored_parent_node.simulation.yaw_acceleration_turn16)*
-                                current_presentation_tick_);
+                            static_cast<int64_t>(authored_yaw_step)*animation_tick);
                     }else if(preset->runtime_model_class_id==17U&&parent.root&&node.child_slot<3U&&
                        simulation_state!=nullptr){
                         angle1=thandor::wrap_turn16(static_cast<int64_t>(angle1)+
                             simulation_state->class17_rotor_tilt_turn16);
                         simulated_node=true;
-                    }else if(!simulated_node&&animate_authored_subnodes&&parent.root&&
-                             !thandor::simulation_model_node_is_weapon_aim_axis(
-                                 preset->simulation_weapon_profiles,static_cast<uint32_t>(node_index))&&
-                             node.child_slot==0U&&
-                             preset->child0_rotation_step_turn16!=0){
-                        angle2=static_cast<uint32_t>(static_cast<int64_t>(angle2)+
-                            static_cast<int64_t>(preset->child0_rotation_step_turn16)*authored_animation_tick)&0xFFFFU;
-                    }else if(!simulated_node&&animate_authored_subnodes&&parent.root&&
-                             !thandor::simulation_model_node_is_weapon_aim_axis(
-                                 preset->simulation_weapon_profiles,static_cast<uint32_t>(node_index))&&
-                             node.child_slot==1U&&
-                             preset->child1_rotation_step_turn16!=0){
-                        angle2=static_cast<uint32_t>(static_cast<int64_t>(angle2)+
-                            static_cast<int64_t>(preset->child1_rotation_step_turn16)*authored_animation_tick)&0xFFFFU;
                     }
                     auto local=fixed_model_rotation_basis(angle2,angle1,node.local_rotation_angle0);
                     local.translation=attachment->local_translation;
@@ -5270,10 +5260,12 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                             {thandor::q12_to_float(recoil_translation_q12),0.0F,0.0F});
                         local.translation=add(local.translation,recoil);
                     }
-                    if(animate_authored_subnodes&&parent.root&&node.child_slot==2U&&
-                       preset->child2_vertical_step_q12!=0)
-                        local.translation.z=animated_child2_translation_q12(*preset,
-                            authored_animation_tick,local.translation.z);
+                    if(animate_authored_subnodes&&
+                       thandor::model_runtime_child_uses_bounded_vertical_channel(
+                           authored_parent_node,node.child_slot))
+                        local.translation.z=animated_child2_translation_q12(
+                            authored_parent_node.simulation,authored_animation_tick,
+                            local.translation.z);
                     instance.transform=compose_model_transform(parent.transform,local);
                     }
                 }

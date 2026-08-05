@@ -6,6 +6,15 @@ app=(r/'src/editor/editor_app.cpp').read_text(); hdr=(r/'src/editor/editor_app.h
 for name,token in [('fog menu','BeginMenu("Fog of war preview")'),('scaled timeline','animation_preview_multiplier_'),('shared simulation tick','update_simulation(current_presentation_tick_)'),('drop-local popup','popup_screen_position'),('popup positioning','SetNextWindowPos'),('selection brackets','const ImU32 selection=IM_COL32(75,255,105,245)'),('production order','SetProductionRallyPoint'),('production marker state','simulation_production_rally_points_'),('near sphere fallback','eye_distance<=std::max(2.0F,radius*2.5F)'),('near AABB fallback','distance_to_bounds<=std::max(3.0F,radius*1.5F)')]:
     if token not in app+hdr+ctx: raise SystemExit(f'missing {name}: {token}')
 if 'building_animation_preview_multiplier_' in app+hdr: raise SystemExit('building-only speed domain survived')
+
+for name,token in [
+    ('recursive MDL animation helper','model_runtime_child_yaw_step_turn16'),
+    ('recursive animation owner','animation_owner=hierarchy[node.parent_index]')]:
+    if token not in app+hdr: raise SystemExit(f'missing {name}: {token}')
+for rejected in ['64x inspection','256x inspection','animation_preview_multiplier_=256U',
+                 'animation_preview_rate_user_selected_',
+                 'animation_preview_rate_auto_selected_for_buildings_']:
+    if rejected in app+hdr: raise SystemExit(f'superseded G397 workaround survived: {rejected}')
 if 'rotate_basis_from_to(transforms[upper]' in walker or 'transforms[foot].basis=transforms[root].basis' in walker: raise SystemExit('detaching world-space walker IK survived')
 if 'for(auto& transform:transforms)transform.translation.z+=root_delta' not in walker: raise SystemExit('coherent walker support missing')
 linux=r/'build_linux.sh'

@@ -65,6 +65,24 @@ if(THANDOR_EDITOR_BUILD_TESTS)
     set_tests_properties(thandor_g395_editor_regression_contract_tests
                          PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
 
+    add_executable(thandor_g397_visible_building_animation_rate_tests
+                   tests/g397_visible_building_animation_rate_tests.cpp)
+    target_link_libraries(thandor_g397_visible_building_animation_rate_tests
+                          PRIVATE thandor_map_core)
+    target_compile_definitions(thandor_g397_visible_building_animation_rate_tests PRIVATE
+                               THANDOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME thandor_g397_visible_building_animation_rate_tests
+             COMMAND thandor_g397_visible_building_animation_rate_tests)
+
+    add_executable(thandor_g398_game_runtime_building_animation_pipeline_tests
+                   tests/g398_game_runtime_building_animation_pipeline_tests.cpp)
+    target_link_libraries(thandor_g398_game_runtime_building_animation_pipeline_tests
+                          PRIVATE thandor_map_core)
+    target_compile_definitions(thandor_g398_game_runtime_building_animation_pipeline_tests PRIVATE
+                               THANDOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME thandor_g398_game_runtime_building_animation_pipeline_tests
+             COMMAND thandor_g398_game_runtime_building_animation_pipeline_tests)
+
     add_executable(thandor_g391_tank_track_articulated_walker_unit_class_tests
                    tests/g391_tank_track_articulated_walker_unit_class_tests.cpp)
     target_include_directories(thandor_g391_tank_track_articulated_walker_unit_class_tests PRIVATE src/editor)
@@ -655,6 +673,15 @@ if(THANDOR_EDITOR_BUILD_TESTS)
                                PRIVATE THANDOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME thandor_g386_technology_variant_asset_name_effect_pipeline_tests
              COMMAND thandor_g386_technology_variant_asset_name_effect_pipeline_tests)
+
+    add_executable(thandor_g396_fog_economy_integrity_damage_effect_transparency_tests
+                   tests/g396_fog_economy_integrity_damage_effect_transparency_tests.cpp)
+    target_link_libraries(thandor_g396_fog_economy_integrity_damage_effect_transparency_tests
+                          PRIVATE thandor_map_core)
+    target_compile_definitions(thandor_g396_fog_economy_integrity_damage_effect_transparency_tests
+                               PRIVATE THANDOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME thandor_g396_fog_economy_integrity_damage_effect_transparency_tests
+             COMMAND thandor_g396_fog_economy_integrity_damage_effect_transparency_tests)
 
     add_test(NAME thandor_g363_full_authority_metadata_validation
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/validate_g363_full_authority_metadata.py

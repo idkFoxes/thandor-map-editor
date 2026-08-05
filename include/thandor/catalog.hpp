@@ -204,9 +204,10 @@ struct ArmyAssetPreset {
     uint32_t timed_effect_id{};
     uint32_t timed_effect_interval_ticks{};
     uint32_t timed_effect_random_ticks{};
-    // ArmyRuntime_UpdateAnimatedModelSubnodes reads these exact ARM record fields for
-    // root child slots 0, 1, and 2. Rotation steps are turn16 units per simulation tick;
-    // the vertical channel is Q12 and bounces between its serialized limits.
+    // Compatibility summary of the selected root MDL animation profile. Runtime rendering uses
+    // every parent ModelVisualNode::simulation recursively; these are not top-level ARM fields.
+    // Rotation steps are turn16 units per 20 Hz simulation tick. The child[2] channel uses the
+    // same integer fixed-point scale and bounded min/max values consumed by the game callback.
     int32_t child0_rotation_step_turn16{};
     int32_t child1_rotation_step_turn16{};
     int32_t child2_vertical_step_q12{};
@@ -216,10 +217,9 @@ struct ArmyAssetPreset {
     // A linked runtime-class-10 radar node owns continuously rotating child[0]/child[1]
     // subnodes. This callback is independent from weapon target acquisition.
     bool has_continuous_radar_subnode_animation{};
-    // Only runtime-update classes 4, 11, 13, and 14 call
-    // ArmyRuntime_UpdateAnimatedModelSubnodes. Other classes reuse the same ARM offsets for
-    // movement or class state; treating those values as fan/child animation corrupts Hornet and
-    // hover-unit hierarchies.
+    // True when any resolved MDL runtime parent uses callback classes 4, 11, 13 or 14 and owns
+    // an authored child channel. This is recursive: linked model runtimes do not inherit the ARM
+    // root class or its animation profile.
     bool runtime_uses_generic_model_subnode_animation{};
     // Runtime class 17 owns the dedicated movement/banking callback and must not be routed through
     // the generic child[0]/child[1] spin + child[2] bounce helper.
