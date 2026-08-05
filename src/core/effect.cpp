@@ -1,0 +1,504 @@
+#include "thandor/effect.hpp"
+
+#include "thandor/binary.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+
+namespace thandor {
+namespace {
+constexpr std::size_t kHeaderSize = 0x200;
+constexpr std::size_t kDefinitionSize = 0xC0;
+constexpr std::size_t kPathOffset = 0x7C;
+constexpr std::size_t kPathBytes = 68;
+constexpr std::size_t kShotDefinitionSize = 0x2E0;
+constexpr std::size_t kShotPathOffset = 0x29C;
+
+std::string read_resource_path(std::span<const std::byte> data, std::size_t offset) {
+    std::string raw;
+    raw.reserve(kPathBytes / 2U);
+    for (std::size_t cursor = 0; cursor + 2U <= kPathBytes; cursor += 2U) {
+        const uint16_t value = read_u16(data, offset + cursor);
+        if (value == 0U) break;
+        if (value < 0x20U || value >= 0x7FU) throw FormatError("EFF sprite path is not narrow ASCII UTF-16");
+        raw.push_back(static_cast<char>(value));
+    }
+    auto path = normalize_asset_path(raw);
+    if (!path.empty() && !path.ends_with(".spr")) path += ".spr";
+    return path;
+}
+} // namespace
+
+const char* shot_trajectory_mode_name(ShotTrajectoryMode mode) noexcept {
+    switch (mode) {
+        case ShotTrajectoryMode::DirectLine: return "direct line";
+        case ShotTrajectoryMode::Ballistic: return "ballistic";
+        case ShotTrajectoryMode::FixedRange: return "fixed range";
+        case ShotTrajectoryMode::LeadAdjusted: return "lead adjusted";
+    }
+    return "unknown";
+}
+
+const char* effect_lifecycle_transition_kind_name(
+    EffectLifecycleTransitionKind kind) noexcept {
+    switch (kind) {
+        case EffectLifecycleTransitionKind::SpawnLinkedEffectAfterCountdown:
+            return "spawn linked effect after countdown";
+        case EffectLifecycleTransitionKind::AdvancePeriodicEmissionAndCompletionAction:
+            return "periodic emission/completion";
+        case EffectLifecycleTransitionKind::IntegrateLinearMotionAndShadingPosition:
+            return "linear motion/shading position";
+        case EffectLifecycleTransitionKind::NoAdditionalAction:
+            return "no additional action";
+        case EffectLifecycleTransitionKind::AdvanceTerrainRelativeMotionAndTerminateOnContact:
+            return "terrain-relative motion/contact termination";
+    }
+    return "unknown";
+}
+
+ShotAsset ShotAsset::parse(std::span<const std::byte> data) {
+    if (data.size() < kHeaderSize || read_u32(data, 0) != fourcc("sht")) {
+        throw FormatError("SHT magic mismatch");
+    }
+    const uint32_t declared_size = read_u32(data, 4);
+    if (declared_size != data.size()) throw FormatError("SHT declared size does not match payload");
+    if (read_u32(data, 0x0C) != 0x00060006U) throw FormatError("unsupported SHT converter version");
+    const uint32_t count = read_u32(data, 0xB0);
+    const uint64_t expected = kHeaderSize + static_cast<uint64_t>(count) * kShotDefinitionSize;
+    if (expected != data.size()) throw FormatError("SHT definition count does not match payload size");
+
+    ShotAsset result;
+    result.definitions_.reserve(count);
+    for (uint32_t index = 0; index < count; ++index) {
+        const std::size_t offset = kHeaderSize + static_cast<std::size_t>(index) * kShotDefinitionSize;
+        ShotDefinitionRecord record;
+        record.trajectory_mode = read_i32(data, offset + 0x00);
+        if (record.trajectory_mode < static_cast<int32_t>(ShotTrajectoryMode::DirectLine) ||
+            record.trajectory_mode > static_cast<int32_t>(ShotTrajectoryMode::LeadAdjusted))
+            throw FormatError("SHT trajectory mode exceeds recovered four-entry enum");
+        record.definition_id = read_u32(data, offset + 0x08);
+        record.launch_speed_q12 = read_i32(data, offset + 0x0C);
+        record.model_spin_step_turn16 = read_i32(data, offset + 0xD8);
+        record.ballistic_divisor_q12 = read_i32(data, offset + 0xDC);
+        record.primary_effect_id = read_u32(data, offset + 0x10);
+        record.launch_effect_id = read_u32(data, offset + 0xD4);
+        record.shading_color_argb = read_u32(data, offset + 0x25C);
+        record.shading_transition_ticks = read_i32(data, offset + 0x260);
+        record.secondary_effect_id = read_u32(data, offset + 0x268);
+        for (uint32_t class_index = 0; class_index < record.target_impact_effect_ids.size();
+             ++class_index) {
+            record.target_impact_effect_ids[class_index] =
+                read_u32(data, offset + 0x90 + class_index * 4U);
+            record.target_impact_damage_q12[class_index] =
+                read_i32(data, offset + 0xB0 + class_index * 4U);
+        }
+        record.lifetime_ticks = read_u32(data, offset + 0xD0);
+        record.range_scale_d0_q12 = read_i32(data, offset + 0xD0);
+        record.animation_threshold_q4 = read_u32(data, offset + 0x15C);
+        record.animation_frame_count = read_u32(data, offset + 0x1DC);
+        record.secondary_effect_interval_ticks = read_u32(data, offset + 0x26C);
+        record.range_scale_270_q12 = read_i32(data, offset + 0x270);
+        record.elevation_offset_angle16 = read_i32(data, offset + 0x278);
+        record.mode2_selection_range_q12 = read_i32(data, offset + 0x27C);
+        record.mode3_lead_disabled = read_u32(data, offset + 0x290);
+        for (uint32_t effect_index = 0; effect_index < record.terrain_impact_effect_ids.size();
+             ++effect_index) {
+            record.terrain_impact_effect_ids[effect_index] =
+                read_u32(data, offset + 0x14 + effect_index * 4U);
+            record.terrain_material_indices[effect_index] =
+                read_i32(data, offset + 0x1E0 + effect_index * 4U);
+        }
+        record.state_tint_argb = read_u32(data, offset + 0x284);
+        record.sprite_path = read_resource_path(data, offset + kShotPathOffset);
+        if (record.sprite_path.empty()) throw FormatError("SHT definition has no sprite path");
+        result.definitions_.push_back(std::move(record));
+    }
+    return result;
+}
+
+
+int32_t shot_selection_range_q12(const ShotDefinitionRecord& definition) noexcept {
+    // game.exe ShotDefinition_ComputeSelectionRange. Keep the signed intermediate arithmetic
+    // and clamp only the final editor-facing result to the representable positive Q12 domain.
+    std::int64_t value = 0;
+    if (definition.trajectory_mode == 1) {
+        if (definition.ballistic_divisor_q12 == 0) return 0;
+        const std::int64_t speed = definition.launch_speed_q12;
+        value = ((speed * speed) / definition.ballistic_divisor_q12 * 9) >> 3;
+    } else if (definition.trajectory_mode == 2) {
+        value = definition.mode2_selection_range_q12;
+    } else {
+        const std::int64_t scaled270 =
+            (static_cast<std::int64_t>(definition.range_scale_270_q12) * -0xAAA) >> 12;
+        value = (scaled270 + definition.range_scale_d0_q12) *
+                static_cast<std::int64_t>(definition.launch_speed_q12);
+    }
+    if (value <= 0) return 0;
+    return static_cast<int32_t>(std::min<std::int64_t>(value,
+        std::numeric_limits<int32_t>::max()));
+}
+
+float shot_selection_range_world(const ShotDefinitionRecord& definition) noexcept {
+    return q12_to_float(shot_selection_range_q12(definition));
+}
+
+EffectAsset EffectAsset::parse(std::span<const std::byte> data) {
+    if (data.size() < kHeaderSize || read_u32(data, 0) != fourcc("eff")) {
+        throw FormatError("EFF magic mismatch");
+    }
+    const uint32_t declared_size = read_u32(data, 4);
+    if (declared_size != data.size()) throw FormatError("EFF declared size does not match payload");
+    if (read_u32(data, 0x0C) != 0x00040007U) throw FormatError("unsupported EFF converter version");
+    const uint32_t count = read_u32(data, 0xB0);
+    const uint64_t expected = kHeaderSize + static_cast<uint64_t>(count) * kDefinitionSize;
+    if (expected != data.size()) throw FormatError("EFF definition count does not match payload size");
+
+    EffectAsset result;
+    result.definitions_.reserve(count);
+    for (uint32_t index = 0; index < count; ++index) {
+        const std::size_t offset = kHeaderSize + static_cast<std::size_t>(index) * kDefinitionSize;
+        EffectDefinitionRecord record;
+        record.transition_kind = read_u32(data, offset + 0x00);
+        if (record.transition_kind > 4U) throw FormatError("EFF transition kind exceeds recovered dispatch table");
+        record.definition_id = read_u32(data, offset + 0x08);
+        record.runtime_value_0c = read_u32(data, offset + 0x0C);
+        record.linked_effect_present = read_u32(data, offset + 0x10);
+        record.linked_effect_id = read_u32(data, offset + 0x14);
+        record.linked_shot_present = read_u32(data, offset + 0x18);
+        record.linked_shot_id = read_u32(data, offset + 0x1C);
+        record.movement_speed_q12 = read_i32(data, offset + 0x20);
+        record.terrain_grid_mask_index = read_i32(data, offset + 0x2C);
+        record.creation_flags = read_u32(data, offset + 0x30);
+        record.shading_color_argb = read_u32(data, offset + 0x34);
+        record.shading_transition_ticks = read_i32(data, offset + 0x38);
+        record.shading_release_transition_ticks = read_i32(data, offset + 0x3C);
+        record.frame_advance_threshold_q4 = read_u32(data, offset + 0x28);
+        record.shading_start_frame = read_u32(data, offset + 0x40);
+        record.shading_stop_frame = read_u32(data, offset + 0x44);
+        record.periodic_effect_id = read_u32(data, offset + 0x48);
+        record.periodic_effect_interval_ticks = read_u32(data, offset + 0x4C);
+        record.alpha_fade_in_ticks = read_u32(data, offset + 0x50);
+        record.alpha_fade_out_ticks = read_u32(data, offset + 0x54);
+        record.state_tint_argb = read_u32(data, offset + 0x60);
+        record.model_scale_x_q12 = read_i32(data, offset + 0x64);
+        record.model_scale_y_q12 = read_i32(data, offset + 0x68);
+        record.positioned_sound_argument0 = read_u32(data, offset + 0x6C);
+        record.positioned_sound_argument1 = read_u32(data, offset + 0x70);
+        record.sprite_path = read_resource_path(data, offset + kPathOffset);
+        if (record.sprite_path.empty()) throw FormatError("EFF definition has no sprite path");
+        result.definitions_.push_back(std::move(record));
+    }
+    return result;
+}
+
+ResourceShadingGlowProfile make_resource_shading_glow_profile(
+    const EffectDefinitionRecord& definition) {
+    if ((definition.shading_color_argb & 0x00FFFFFFU) == 0U) {
+        throw FormatError("resource shading effect has no RGB contribution");
+    }
+    if (definition.shading_transition_ticks <= 0 ||
+        definition.shading_release_transition_ticks <= 0) {
+        throw FormatError("resource shading effect has invalid transition duration");
+    }
+    const float frame_ticks = definition.frame_advance_threshold_q4 == 0U
+        ? 1.0F
+        : static_cast<float>(definition.frame_advance_threshold_q4) / 16.0F;
+    const uint32_t radius_q12 = ((definition.shading_color_argb >> 24U) & 0xFFU) << 8U;
+    return {
+        definition.definition_id,
+        definition.shading_color_argb & 0x00FFFFFFU,
+        q12_to_float(static_cast<int32_t>(radius_q12)),
+        static_cast<float>(definition.shading_transition_ticks),
+        static_cast<float>(definition.shading_release_transition_ticks),
+        static_cast<float>(definition.shading_start_frame) * frame_ticks,
+        static_cast<float>(definition.shading_stop_frame) * frame_ticks,
+        static_cast<float>(definition.runtime_value_0c) * frame_ticks,
+    };
+}
+
+float graphics_shading_radius_at_age(const ResourceShadingGlowProfile& profile,
+                                     float age_ticks) noexcept {
+    if (age_ticks < profile.shading_start_tick || profile.target_radius_world <= 0.0F) return 0.0F;
+    const float local_age = age_ticks - profile.shading_start_tick;
+    if (local_age < profile.grow_transition_ticks) {
+        return profile.target_radius_world *
+            std::clamp(local_age / profile.grow_transition_ticks, 0.0F, 1.0F);
+    }
+    if (age_ticks < profile.shading_stop_tick) return profile.target_radius_world;
+    const float release_age = age_ticks - profile.shading_stop_tick;
+    if (release_age >= profile.release_transition_ticks) return 0.0F;
+    return profile.target_radius_world *
+        std::clamp(1.0F - release_age / profile.release_transition_ticks, 0.0F, 1.0F);
+}
+
+float graphics_shading_radial_factor(float distance_world, float radius_world) noexcept {
+    if (radius_world <= 0.0F || distance_world >= radius_world) return 0.0F;
+    const float normalized = distance_world / radius_world;
+    return std::clamp(1.0F - normalized * normalized, 0.0F, 1.0F);
+}
+
+uint32_t graphics_shading_directdraw_lookup_index(float distance_world,
+                                                   float radius_world) noexcept {
+    if (!std::isfinite(distance_world) || !std::isfinite(radius_world) ||
+        radius_world <= 0.0F || distance_world >= radius_world) {
+        return 0U;
+    }
+    const double radius_squared = static_cast<double>(radius_world) * radius_world;
+    const double remaining_squared = radius_squared -
+        static_cast<double>(distance_world) * distance_world;
+    if (remaining_squared <= 0.0) return 0U;
+    // 0x004CCA90: (remainingQ24 >> 5) / (radiusSquaredQ24 >> 12). The algebraic
+    // quotient is floor(128 * remaining / radiusSquared), with center index 128.
+    return static_cast<uint32_t>(std::clamp(
+        std::floor(remaining_squared * 128.0 / radius_squared), 0.0, 128.0));
+}
+
+uint16_t graphics_shading_directdraw_raw_word(uint8_t color_channel,
+                                                uint32_t lookup_index) noexcept {
+    lookup_index = std::min(lookup_index, 128U);
+    // 0x004CCB13-0x004CCB26: unpack byte, shift right by two, multiply the
+    // selected 0x0041DE80 lookup word, and saturating-add the high word.
+    const uint32_t source_word = (static_cast<uint32_t>(color_channel) * 257U) >> 2U;
+    const uint32_t lookup_word = (lookup_index * 257U) >> 4U;
+    return static_cast<uint16_t>((source_word * lookup_word) >> 16U);
+}
+
+uint8_t graphics_shading_directdraw_modulated_channel(
+    uint8_t base_light_channel, uint32_t accumulated_shading_word) noexcept {
+    // Terrain packet preparation starts from a white 0xFFFF lane shifted to Q10,
+    // adds all resource words with saturation, then pmulhw-modulates that lane by
+    // the ordinary packed terrain light (0x0050054C-0x00500588 and parallels).
+    constexpr uint32_t white_source_word = (255U * 257U) >> 6U;
+    const uint32_t lit_word = std::min(65535U, white_source_word + accumulated_shading_word);
+    const uint32_t modulation_word =
+        (static_cast<uint32_t>(base_light_channel) * 257U) >> 2U;
+    return static_cast<uint8_t>(std::min(255U, (lit_word * modulation_word) >> 16U));
+}
+
+uint8_t graphics_shading_directdraw_channel_addition(uint8_t color_channel,
+                                                     uint32_t lookup_index) noexcept {
+    const uint32_t raw_word = graphics_shading_directdraw_raw_word(color_channel, lookup_index);
+    constexpr uint32_t white_modulation_word = (255U * 257U) >> 2U;
+    return static_cast<uint8_t>(std::min(255U,
+        (raw_word * white_modulation_word) >> 16U));
+}
+
+std::array<float, 3> graphics_shading_rgb_contribution(
+    const ResourceShadingGlowProfile& profile, float age_ticks, float distance_world) noexcept {
+    const float radius = graphics_shading_radius_at_age(profile, std::floor(age_ticks));
+    const uint32_t index = graphics_shading_directdraw_lookup_index(distance_world, radius);
+    constexpr float inverse_byte = 1.0F / 255.0F;
+    return {
+        static_cast<float>(graphics_shading_directdraw_channel_addition(
+            static_cast<uint8_t>((profile.packed_color_rgb >> 16U) & 0xFFU), index)) * inverse_byte,
+        static_cast<float>(graphics_shading_directdraw_channel_addition(
+            static_cast<uint8_t>((profile.packed_color_rgb >> 8U) & 0xFFU), index)) * inverse_byte,
+        static_cast<float>(graphics_shading_directdraw_channel_addition(
+            static_cast<uint8_t>(profile.packed_color_rgb & 0xFFU), index)) * inverse_byte,
+    };
+}
+
+std::array<float, 3> graphics_shading_saturating_add(
+    std::array<float, 3> base, std::array<float, 3> addition) noexcept {
+    for (std::size_t component = 0; component < base.size(); ++component) {
+        base[component] = std::clamp(base[component] + addition[component], 0.0F, 1.0F);
+    }
+    return base;
+}
+
+std::array<float, 3> graphics_shading_directdraw_vertex_light(
+    std::array<float, 3> base, const ResourceShadingGlowProfile& profile,
+    float age_ticks, float distance_world) noexcept {
+    const float radius = graphics_shading_radius_at_age(profile, std::floor(age_ticks));
+    const uint32_t index = graphics_shading_directdraw_lookup_index(distance_world, radius);
+    const std::array<uint8_t, 3> source{
+        static_cast<uint8_t>((profile.packed_color_rgb >> 16U) & 0xFFU),
+        static_cast<uint8_t>((profile.packed_color_rgb >> 8U) & 0xFFU),
+        static_cast<uint8_t>(profile.packed_color_rgb & 0xFFU),
+    };
+    std::array<float, 3> result{};
+    for (std::size_t component = 0; component < result.size(); ++component) {
+        const auto base_byte = static_cast<uint8_t>(std::clamp(
+            std::lround(base[component] * 255.0F), 0L, 255L));
+        result[component] = static_cast<float>(graphics_shading_directdraw_modulated_channel(
+            base_byte, graphics_shading_directdraw_raw_word(source[component], index))) / 255.0F;
+    }
+    return result;
+}
+
+std::array<float, 3> graphics_shading_generated_terrain_overlay(
+    std::array<float, 3> base, const ResourceShadingGlowProfile& profile,
+    float age_ticks, float distance_world) noexcept {
+    return graphics_shading_directdraw_vertex_light(base, profile, age_ticks, distance_world);
+}
+
+namespace {
+uint32_t resource_random_next_primary(uint32_t& state) noexcept {
+    const uint32_t first = state * 33U + 101U;
+    state = first * 33U + 101U;
+    return (first << 14U) ^ (state >> 2U);
+}
+
+uint32_t mix_resource_seed(uint32_t value) noexcept {
+    value ^= value >> 16U;
+    value *= 0x7FEB352DU;
+    value ^= value >> 15U;
+    value *= 0x846CA68BU;
+    return value ^ (value >> 16U);
+}
+}
+
+ResourceEmitterSchedule build_resource_emitter_schedule(
+    std::span<const ResourceEmitterTiming> emitters, uint32_t primary_rng_seed,
+    uint32_t preferred_cycle_ticks, uint32_t maximum_pulses) {
+    ResourceEmitterSchedule result;
+    if (emitters.empty() || maximum_pulses == 0U) return result;
+    if (preferred_cycle_ticks < 2U) preferred_cycle_ticks = 2U;
+
+    std::vector<uint32_t> next_ticks(emitters.size(), 0U);
+    std::vector<uint32_t> occurrence_counts(emitters.size(), 0U);
+    uint32_t state = primary_rng_seed;
+    uint32_t latest_spawn = 0U;
+    while (result.pulses.size() < maximum_pulses) {
+        uint32_t next_tick = preferred_cycle_ticks;
+        for (const uint32_t value : next_ticks) next_tick = std::min(next_tick, value);
+        if (next_tick >= preferred_cycle_ticks) break;
+
+        bool emitted = false;
+        for (std::size_t index = 0; index < emitters.size(); ++index) {
+            if (next_ticks[index] != next_tick) continue;
+            if (result.pulses.size() >= maximum_pulses) break;
+            const auto& timing = emitters[index];
+            const uint32_t interval_random = resource_random_next_primary(state);
+            const uint32_t interval = std::max(1U, timing.base_interval_ticks +
+                (timing.random_interval_ticks == 0U ? 0U
+                 : interval_random % timing.random_interval_ticks));
+            // ArmyRuntime_UpdateTimedShotAndEffectEmitters selects its kind-6 attachment from
+            // either the shared primary RNG or the persistent per-runtime counter selected by
+            // MDL +0x68 bit 0. Preserve the selected value and consume no fabricated RNG draw.
+            const uint32_t attachment_random = timing.consumes_attachment_random
+                ? resource_random_next_primary(state) : occurrence_counts[index];
+            ++occurrence_counts[index];
+            const uint32_t orientation_random = timing.consumes_orientation_random
+                ? resource_random_next_primary(state) : 0U;
+            result.pulses.push_back({static_cast<uint32_t>(index), next_tick,
+                                     attachment_random, orientation_random});
+            latest_spawn = next_tick;
+            emitted = true;
+            next_ticks[index] = next_tick + interval;
+        }
+        if (!emitted) break;
+    }
+
+    // If the 256-record DirectDraw-era table bounded the preview before the requested horizon, end
+    // the repeating window immediately after the last complete event rather than dropping records
+    // in the middle of a nominal 2048-tick cycle.
+    result.cycle_ticks = result.pulses.size() == maximum_pulses
+        ? std::max(2U, latest_spawn + 1U) : preferred_cycle_ticks;
+    return result;
+}
+
+uint32_t effect_frame_index_at_age(const EffectDefinitionRecord& definition,
+                                   uint32_t age_ticks) noexcept {
+    if (definition.runtime_value_0c == 0U) return 0U;
+    const uint32_t threshold = std::max(1U, definition.frame_advance_threshold_q4);
+    const uint64_t unconstrained = (static_cast<uint64_t>(age_ticks) * 16U) / threshold;
+    const uint32_t bounded_rate = static_cast<uint32_t>(std::min<uint64_t>(age_ticks, unconstrained));
+    return std::min(definition.runtime_value_0c - 1U, bounded_rate);
+}
+
+uint32_t effect_tick_for_completed_frames(const EffectDefinitionRecord& definition,
+                                          uint32_t completed_frames) noexcept {
+    if (completed_frames == 0U) return 0U;
+    const uint32_t threshold = std::max(1U, definition.frame_advance_threshold_q4);
+    // The maintenance loop advances no more than one frame per update. For thresholds at or above
+    // Q4 one-frame (0x10), ceiling division reproduces its accumulator. Smaller thresholds still
+    // need one complete presentation update per frame.
+    const uint64_t scaled = static_cast<uint64_t>(completed_frames) * threshold;
+    const uint64_t accumulator_ticks = (scaled + 15U) / 16U;
+    return static_cast<uint32_t>(std::max<uint64_t>(completed_frames, accumulator_ticks));
+}
+
+uint32_t effect_lifetime_ticks(const EffectDefinitionRecord& definition) noexcept {
+    return effect_tick_for_completed_frames(definition, definition.runtime_value_0c);
+}
+
+uint8_t effect_alpha_at_age(const EffectDefinitionRecord& definition,
+                            uint32_t age_ticks) noexcept {
+    const uint32_t lifetime = effect_lifetime_ticks(definition);
+    if (lifetime == 0U || age_ticks >= lifetime) return 0U;
+    if (definition.alpha_fade_in_ticks != 0U && age_ticks < definition.alpha_fade_in_ticks) {
+        return static_cast<uint8_t>(std::min<uint64_t>(255U,
+            static_cast<uint64_t>(age_ticks) * 255U / definition.alpha_fade_in_ticks));
+    }
+    if (definition.alpha_fade_out_ticks != 0U) {
+        const uint32_t fade_start = lifetime > definition.alpha_fade_out_ticks
+            ? lifetime - definition.alpha_fade_out_ticks : 0U;
+        if (age_ticks > fade_start) {
+            const uint32_t remaining = lifetime - age_ticks;
+            return static_cast<uint8_t>(std::min<uint64_t>(255U,
+                static_cast<uint64_t>(remaining) * 255U / definition.alpha_fade_out_ticks));
+        }
+    }
+    return 255U;
+}
+
+std::array<float, 3> effect_transition2_displacement_at_age(
+    const EffectDefinitionRecord& definition, uint32_t age_ticks,
+    uint32_t orientation_random) noexcept {
+    std::array<float, 3> result{};
+    if (definition.transition_kind != 2U || definition.movement_speed_q12 == 0 || age_ticks == 0U)
+        return result;
+    const float speed = q12_to_float(definition.movement_speed_q12);
+    uint32_t azimuth = orientation_random & 0xFFFFU;
+    uint32_t elevation = (0x4000U - (orientation_random >> 20U)) & 0xFFFFU;
+    constexpr float turn_to_radians = 6.28318530717958647692F / 65536.0F;
+    // Effect lifetimes are small (EFF 131 is 80 ticks), so reproducing the integer recurrence is
+    // both cheaper than rebuilding model geometry and more faithful than integrating a float curve.
+    const uint32_t steps = std::min(age_ticks, effect_lifetime_ticks(definition));
+    for (uint32_t tick = 0; tick < steps; ++tick) {
+        const float elevation_radians = static_cast<float>(elevation) * turn_to_radians;
+        const float azimuth_radians = static_cast<float>(azimuth) * turn_to_radians;
+        const float horizontal = std::cos(elevation_radians) * speed;
+        result[0] += horizontal * std::cos(azimuth_radians);
+        result[1] += horizontal * std::sin(azimuth_radians);
+        result[2] += std::sin(elevation_radians) * speed;
+        elevation = static_cast<uint32_t>((static_cast<uint64_t>(elevation) * 63U + 0x4000U) >> 6U)
+            & 0xFFFFU;
+    }
+    return result;
+}
+
+std::vector<LinkedShotEmission> build_linked_shot_emissions(
+    const EffectDefinitionRecord& definition) {
+    std::vector<LinkedShotEmission> result;
+    if (definition.transition_kind != 1U || definition.linked_shot_present == 0U ||
+        definition.linked_shot_id == 0U) return result;
+    // EffectModelRuntimeMaintenance decrements the runtime counter at +0x10 once per
+    // 20 Hz maintenance update, reloads it from EFF +0x18, and increments the type-2
+    // attachment index after every emission. It is independent from sprite-frame advance.
+    const uint32_t cadence_ticks = definition.linked_shot_present;
+    const uint32_t lifetime_ticks = effect_lifetime_ticks(definition);
+    for (uint32_t tick = cadence_ticks, attachment = 0U; tick <= lifetime_ticks;
+         tick += cadence_ticks, ++attachment) {
+        result.push_back({tick, attachment});
+        if (lifetime_ticks - tick < cadence_ticks) break;
+    }
+    return result;
+}
+
+uint32_t deterministic_resource_emitter_period(uint32_t base_ticks, uint32_t random_range_ticks,
+                                               uint32_t stable_seed) noexcept {
+    if (random_range_ticks == 0U) return std::max(1U, base_ticks);
+    return std::max(1U, base_ticks + mix_resource_seed(stable_seed) % random_range_ticks);
+}
+
+uint32_t deterministic_resource_emitter_phase(uint32_t period_ticks, uint32_t stable_seed) noexcept {
+    if (period_ticks == 0U) return 0U;
+    return mix_resource_seed(stable_seed ^ 0xA511E9B3U) % period_ticks;
+}
+
+} // namespace thandor
