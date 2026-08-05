@@ -162,6 +162,15 @@ struct ModelRuntimeSimulationProfile {
     int32_t recoil_translation_q12{};       // MDL +0x3C
     int32_t action_vector0{};               // MDL +0x40
     int32_t action_vector1{};               // MDL +0x44
+    // ArmyRuntime_RebuildDerivedSelectionMetrics and ModelRuntimePool_CreateInstanceByDefinitionIdCf
+    // take the maximum MDL +0x48 across the resolved live model hierarchy. The projected-terrain
+    // occlusion callback passes that exact value as its radius and converts it to terrain scan
+    // steps with radius / 0x240, clamped to 1..255.
+    int32_t fog_uncover_radius_q12{};        // MDL +0x48
+    // ModelRuntime creation copies MDL +0x60 into the live integrity field. Damage, technology
+    // variant replacement, and hierarchy aggregation all preserve this as the initial/maximum
+    // model-node integrity value.
+    int32_t maximum_integrity{};             // MDL +0x60
     // Runtime class 3 uses these model-definition fields for its paired articulated contacts.
     // +0x54 lifts the root above the two foot contacts. +0xC0 is the Q12 numerator used to
     // derive each contact interpolation step; +0xC4 is the vertical contact lift/clearance term.

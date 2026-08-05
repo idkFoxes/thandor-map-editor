@@ -90,6 +90,28 @@ struct WeaponEffectPipelineInfo {
     std::string shot_sprite_path;
 };
 
+struct AssetTechnologyCostComponent {
+    uint32_t model_definition_id{};
+    uint32_t technology_id{};
+    std::string title;
+    uint32_t xenite_cost_q4{};
+    uint32_t energy_cost_q4{};
+    uint32_t research_duration_q5{};
+};
+
+struct EffectPipelineValidationSummary {
+    uint32_t weapon_pipeline_count{};
+    uint32_t shot_reference_count{};
+    uint32_t effect_reference_count{};
+    uint32_t sprite_reference_count{};
+    uint32_t maximum_effect_depth{};
+    uint32_t missing_reference_count{};
+    uint32_t cycle_count{};
+    std::vector<std::string> issues;
+
+    bool ok() const noexcept { return issues.empty(); }
+};
+
 struct ModelTechnologyVariant {
     uint32_t variant_index{};
     uint32_t model_definition_id{};
@@ -206,6 +228,21 @@ struct ArmyAssetPreset {
     // movement/aim/fire callbacks and from kind-2 launch attachments in the selected SPR LOD.
     SimulationMotionProfile simulation_motion_profile;
     std::vector<SimulationWeaponProfile> simulation_weapon_profiles;
+    // Binary/PCK-proven asset statistics used by the browser and simulated fog of war.
+    // MDL +0x48 is max-aggregated over the resolved model hierarchy by the retail runtime.
+    int32_t fog_uncover_radius_q12{};
+    uint32_t fog_uncover_scan_steps{};
+    // MDL +0x60 is the initial/maximum model-node integrity. The total follows the runtime's
+    // recursive hierarchy aggregation, while root keeps the selected chassis/building value.
+    int32_t root_maximum_integrity{};
+    int64_t total_maximum_integrity{};
+    // Stock ARM +0x28 is the runtime purchase value but is zero in serialized stock records.
+    // These PCK-backed base-configuration costs are therefore retained as exact TEC component
+    // sums rather than mislabelled as a directly serialized ARM price.
+    std::vector<AssetTechnologyCostComponent> base_cost_components;
+    uint64_t base_xenite_cost_q4{};
+    uint64_t base_energy_cost_q4{};
+    EffectPipelineValidationSummary effect_pipeline_validation;
     // Canonical browser placement ID. Stock maps also contain compatible active variants
     // (810 for energy and 814 for building material), but new placements use 811/815.
     uint32_t canonical_registry_id{};

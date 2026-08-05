@@ -521,6 +521,10 @@ std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::b
             visual.simulation.recoil_translation_q12 = read_i32(data, offset + 0x3CU);
             visual.simulation.action_vector0 = read_i32(data, offset + 0x40U);
             visual.simulation.action_vector1 = read_i32(data, offset + 0x44U);
+            if (size >= 0x4CU)
+                visual.simulation.fog_uncover_radius_q12 = read_i32(data, offset + 0x48U);
+            if (size >= 0x64U)
+                visual.simulation.maximum_integrity = read_i32(data, offset + 0x60U);
             if (size >= 0x58U)
                 visual.simulation.articulated_root_height_q12 = read_i32(data, offset + 0x54U);
         }

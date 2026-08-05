@@ -24,6 +24,10 @@ enum class PrimitiveBlendPreset : std::uint8_t {
     AlphaDepthWrite,
     AlphaNoDepthWrite,
     AdditiveNoDepthWrite,
+    // Editor-only late compositing pass for simulated fog of war. It is intentionally absent
+    // from the retail primitive selector table and must be queued after terrain, lava/water,
+    // opaque models, and transparent effects.
+    FogOverlayNoDepthTest,
 };
 
 struct PrimitiveRenderDecision {

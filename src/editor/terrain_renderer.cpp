@@ -607,7 +607,8 @@ void TerrainRenderer::create_pipelines() {
                                    VkBlendFactor source_color = VK_BLEND_FACTOR_SRC_ALPHA,
                                    VkBlendFactor destination_color = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
                                    VkBlendFactor source_alpha = VK_BLEND_FACTOR_ONE,
-                                   VkBlendFactor destination_alpha = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA) {
+                                   VkBlendFactor destination_alpha = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                                   bool depth_test = true) {
         const std::array<VkPipelineShaderStageCreateInfo, 2> stages{{
             {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
              VK_SHADER_STAGE_VERTEX_BIT, vertex, "main", nullptr},
@@ -618,6 +619,7 @@ void TerrainRenderer::create_pipelines() {
         local_raster.polygonMode = mode;
         local_raster.cullMode = cull_mode;
         auto local_depth = depth;
+        local_depth.depthTestEnable = depth_test ? VK_TRUE : VK_FALSE;
         local_depth.depthWriteEnable = depth_write ? VK_TRUE : VK_FALSE;
         auto local_color = color;
         if (alpha) {
@@ -706,6 +708,11 @@ void TerrainRenderer::create_pipelines() {
             build_surface(model_vertex, model_fragment, &object_input, VK_POLYGON_MODE_FILL,
                           true, false, cull, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
                           VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO);
+        object_pipelines_[object_pipeline_index(PrimitiveBlendPreset::FogOverlayNoDepthTest, two_sided)] =
+            build_surface(model_vertex, model_fragment, &object_input, VK_POLYGON_MODE_FILL,
+                          true, false, cull, VK_BLEND_FACTOR_SRC_ALPHA,
+                          VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, VK_BLEND_FACTOR_ONE,
+                          VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, false);
     }
 
     for (const auto module : {terrain_vertex, terrain_fragment, surface_vertex, surface_fragment,
@@ -1048,6 +1055,15 @@ void TerrainRenderer::render(VkCommandBuffer command, const Camera& camera,
         vkCmdBindIndexBuffer(command,dynamic_shadow_index.buffer,0,VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexed(command,dynamic_shadow_index_counts_[frame_index],1,0,0,0);
     }
+    // Animated water/lava writes depth before live models and effects. Opaque dynamic models still
+    // pass when they are physically in front; smoke and other no-depth-write effects now blend
+    // after the surface and can no longer be overwritten merely because lava was submitted later.
+    if (draw_surface && surface_index_count_) {
+        vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, surface_pipeline_);
+        vkCmdBindVertexBuffers(command, 0, 1, &surface_vertex_buffer_.buffer, &offset);
+        vkCmdBindIndexBuffer(command, surface_index_buffer_.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(command, surface_index_count_, 1, 0, 0, 0);
+    }
     if (dynamic_object_index_counts_[frame_index]) {
         const auto& vertex_buffer = dynamic_object_vertex_buffers_[frame_index];
         const auto& index_buffer = dynamic_object_index_buffers_[frame_index];
@@ -1058,12 +1074,6 @@ void TerrainRenderer::render(VkCommandBuffer command, const Camera& camera,
             vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
             vkCmdDrawIndexed(command, run.index_count, 1, run.first_index, 0, 0);
         }
-    }
-    if (draw_surface && surface_index_count_) {
-        vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, surface_pipeline_);
-        vkCmdBindVertexBuffers(command, 0, 1, &surface_vertex_buffer_.buffer, &offset);
-        vkCmdBindIndexBuffer(command, surface_index_buffer_.buffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexed(command, surface_index_count_, 1, 0, 0, 0);
     }
 }
 

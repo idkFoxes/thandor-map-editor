@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cctype>
 #include <cmath>
 #include <limits>
@@ -1269,6 +1270,57 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
     // not guess a live faction state: it preserves all eight model alternatives, their MDL unlock
     // technology, kind-2 launch points, SHT trajectory, and EFF launch/impact references.
     for (auto& preset : catalog.army_presets_) {
+        // The executable clears ArmyRuntime.runtimeState44 and recursively re-accumulates the
+        // maximum MDL +0x48 from every instantiated model definition. The final value is passed
+        // unchanged to TerrainProjectedOcclusion_AccumulateMaskAroundWorldPoint, whose exact
+        // terrain-wedge step count is radius / 0x240 clamped to 1..255.
+        const auto& resolved_statistics_hierarchy = preset.resolved_model_hierarchy.empty()
+            ? preset.model_hierarchy : preset.resolved_model_hierarchy;
+        for (const auto& node : resolved_statistics_hierarchy) {
+            if (!node.creates_runtime_node()) continue;
+            preset.fog_uncover_radius_q12 = std::max(
+                preset.fog_uncover_radius_q12, node.simulation.fog_uncover_radius_q12);
+            preset.total_maximum_integrity +=
+                static_cast<int64_t>(std::max(0, node.simulation.maximum_integrity));
+            if (node.parent_index == std::numeric_limits<uint32_t>::max())
+                preset.root_maximum_integrity = node.simulation.maximum_integrity;
+        }
+        if (preset.root_maximum_integrity == 0 && !resolved_statistics_hierarchy.empty())
+            preset.root_maximum_integrity = resolved_statistics_hierarchy.front().simulation.maximum_integrity;
+        if (preset.fog_uncover_radius_q12 > 0) {
+            preset.fog_uncover_scan_steps = std::clamp<uint32_t>(
+                static_cast<uint32_t>(preset.fog_uncover_radius_q12 / 0x240), 1U, 255U);
+        }
+
+        // Stock ARM +0x28 is consumed as the runtime purchase/refund value, but the serialized
+        // stock records contain zero there. The exact nonzero PCK economy authority is the base
+        // ARM->MDL technology chain. Preserve each component and its sum instead of inventing a
+        // direct ARM price or silently conflating upgrade variants with the base configuration.
+        std::unordered_set<uint32_t> base_cost_technology_ids;
+        for (const auto& group : preset.model_variant_groups) {
+            if (group.variants.empty()) continue;
+            const auto base = std::min_element(group.variants.begin(), group.variants.end(),
+                [](const ModelTechnologyVariant& left, const ModelTechnologyVariant& right) {
+                    return left.variant_index < right.variant_index;
+                });
+            uint32_t technology_id = base->technology_unlock_id;
+            if (technology_id == 0U) technology_id = base->linked_technology_id;
+            if (technology_id == 0U || !base_cost_technology_ids.insert(technology_id).second)
+                continue;
+            const auto* technology = technology_record_at(catalog.technologies_, technology_id);
+            if (technology == nullptr) continue;
+            AssetTechnologyCostComponent component;
+            component.model_definition_id = base->model_definition_id;
+            component.technology_id = technology_id;
+            component.title = technology->title;
+            component.xenite_cost_q4 = technology->xenite_cost_q4;
+            component.energy_cost_q4 = technology->energy_cost_q4;
+            component.research_duration_q5 = technology->research_duration_q5;
+            preset.base_xenite_cost_q4 += component.xenite_cost_q4;
+            preset.base_energy_cost_q4 += component.energy_cost_q4;
+            preset.base_cost_components.push_back(std::move(component));
+        }
+
         for (auto& group : preset.model_variant_groups) {
             for (auto& variant : group.variants) {
                 const auto* visual = select_model_visual_for_arm(
@@ -1345,6 +1397,127 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                         return left.shot_definition_id < right.shot_definition_id;
                     });
             }
+        }
+
+        // Validate the complete recursive SHT/EFF/SPR graph, not only the direct effects shown in
+        // the G386 browser rows. Linked effects, periodic emissions, linked shots, impact tables,
+        // transition enums, missing resources, and cycles are all included in this census.
+        {
+            auto& validation = preset.effect_pipeline_validation;
+            std::unordered_set<uint32_t> visited_shots;
+            std::unordered_set<uint32_t> visited_effects;
+            std::unordered_set<uint32_t> active_effects;
+            std::unordered_set<std::string> visited_sprites;
+            const auto add_issue = [&](std::string issue) {
+                validation.issues.push_back(std::move(issue));
+                ++validation.missing_reference_count;
+            };
+            const auto validate_sprite = [&](std::string_view path, std::string_view owner) {
+                if (path.empty()) return; // Invisible EFF controllers and deferred MDL variants are valid.
+                const std::string normalized = normalize_asset_path(path);
+                if (!visited_sprites.insert(normalized).second) return;
+                ++validation.sprite_reference_count;
+                const auto* record = catalog.find(normalized);
+                if (record == nullptr || extension_of(record->normalized_path) != "spr") {
+                    add_issue(std::string(owner) + " references missing SPR " + normalized);
+                    return;
+                }
+                try {
+                    (void)SpriteAsset::parse(catalog.load(*record));
+                } catch (const std::exception& error) {
+                    add_issue(std::string(owner) + " has invalid SPR " + normalized + ": " + error.what());
+                }
+            };
+            std::function<void(uint32_t, uint32_t, std::string_view)> validate_effect;
+            std::function<void(uint32_t, uint32_t, std::string_view)> validate_shot;
+            validate_shot = [&](uint32_t shot_id, uint32_t depth, std::string_view owner) {
+                if (shot_id == 0U) return;
+                validation.maximum_effect_depth = std::max(validation.maximum_effect_depth, depth);
+                if (!visited_shots.insert(shot_id).second) return;
+                ++validation.shot_reference_count;
+                const auto found = catalog.shot_definitions_.find(shot_id);
+                if (found == catalog.shot_definitions_.end()) {
+                    add_issue(std::string(owner) + " references missing SHT " + std::to_string(shot_id));
+                    return;
+                }
+                const auto& shot = found->second;
+                if (shot.trajectory_mode < 0 || shot.trajectory_mode > 3)
+                    add_issue("SHT " + std::to_string(shot_id) + " has unsupported trajectory mode " +
+                              std::to_string(shot.trajectory_mode));
+                if (shot.sprite_path.empty())
+                    add_issue("SHT " + std::to_string(shot_id) + " has no SPR path");
+                else
+                    validate_sprite(shot.sprite_path, "SHT " + std::to_string(shot_id));
+                validate_effect(shot.primary_effect_id, depth + 1U, "SHT primary");
+                validate_effect(shot.launch_effect_id, depth + 1U, "SHT launch");
+                validate_effect(shot.secondary_effect_id, depth + 1U, "SHT secondary");
+                for (const uint32_t effect_id : shot.target_impact_effect_ids)
+                    validate_effect(effect_id, depth + 1U, "SHT target impact");
+                for (const uint32_t effect_id : shot.terrain_impact_effect_ids)
+                    validate_effect(effect_id, depth + 1U, "SHT terrain impact");
+            };
+            validate_effect = [&](uint32_t effect_id, uint32_t depth, std::string_view owner) {
+                if (effect_id == 0U) return;
+                validation.maximum_effect_depth = std::max(validation.maximum_effect_depth, depth);
+                if (active_effects.contains(effect_id)) {
+                    ++validation.cycle_count;
+                    validation.issues.push_back(std::string(owner) + " closes recursive EFF cycle at " +
+                                                std::to_string(effect_id));
+                    return;
+                }
+                if (!visited_effects.insert(effect_id).second) return;
+                ++validation.effect_reference_count;
+                const auto found = catalog.effect_definitions_.find(effect_id);
+                if (found == catalog.effect_definitions_.end()) {
+                    add_issue(std::string(owner) + " references missing EFF " + std::to_string(effect_id));
+                    return;
+                }
+                const auto& effect = found->second;
+                if (effect.transition_kind > 4U)
+                    add_issue("EFF " + std::to_string(effect_id) + " has unsupported transition kind " +
+                              std::to_string(effect.transition_kind));
+                validate_sprite(effect.sprite_path, "EFF " + std::to_string(effect_id));
+                active_effects.insert(effect_id);
+                if (effect.linked_effect_present != 0U)
+                    validate_effect(effect.linked_effect_id, depth + 1U, "EFF linked effect");
+                if (effect.periodic_effect_id != 0U)
+                    validate_effect(effect.periodic_effect_id, depth + 1U, "EFF periodic effect");
+                if (effect.linked_shot_present != 0U)
+                    validate_shot(effect.linked_shot_id, depth + 1U, "EFF linked shot");
+                active_effects.erase(effect_id);
+            };
+
+            for (const auto& group : preset.model_variant_groups) {
+                for (const auto& variant : group.variants) {
+                    validate_sprite(variant.sprite_path,
+                        "MDL " + std::to_string(variant.model_definition_id));
+                    for (const auto& pipeline : variant.weapon_pipelines) {
+                        ++validation.weapon_pipeline_count;
+                        if (pipeline.launch_attachment_count == 0U) {
+                            add_issue("MDL " + std::to_string(pipeline.model_definition_id) +
+                                      " SHT " + std::to_string(pipeline.shot_definition_id) +
+                                      " has no kind-2 launch attachment");
+                        }
+                        // Multiple kind-2 records may intentionally share one selector index
+                        // (dual muzzles and aircraft racks do this in stock data). The mask is a
+                        // unique-selector set, not a one-bit-per-record count. Require coverage,
+                        // and reject only impossible masks with more unique bits than records.
+                        const uint32_t selector_count = static_cast<uint32_t>(
+                            std::popcount(pipeline.launch_attachment_selector_mask));
+                        if (pipeline.launch_attachment_selector_mask == 0U ||
+                            selector_count > pipeline.launch_attachment_count) {
+                            add_issue("MDL " + std::to_string(pipeline.model_definition_id) +
+                                      " has invalid launch selector coverage");
+                        }
+                        validate_shot(pipeline.shot_definition_id, 1U, "MDL weapon");
+                    }
+                }
+            }
+            if (preset.timed_effect_id != 0U)
+                validate_effect(preset.timed_effect_id, 1U, "ARM timed effect");
+            std::sort(validation.issues.begin(), validation.issues.end());
+            validation.issues.erase(std::unique(validation.issues.begin(), validation.issues.end()),
+                                    validation.issues.end());
         }
 
         std::vector<std::string> attachment_loadout_names;

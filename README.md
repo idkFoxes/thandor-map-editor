@@ -16,9 +16,15 @@
 
 ![Buildings and units](docs/screenshots/buildings_and_units.png)
 
-## Moving Units
+## Effects and Attacks
+![Effects and Attacks](docs/screenshots/attack_test.png)
+![Info tooltip](docs/screenshots/building_and_unit_info.png)
 
+## Moving Units
 ![Moving units](docs/screenshots/moving_units.png)
+
+## Fog of war
+![Fog of war](docs/screenshots/fog_of_war_viewing.png)
 
 ## Wireframe View
 

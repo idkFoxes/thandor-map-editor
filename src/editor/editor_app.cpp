@@ -298,6 +298,7 @@ void order_dynamic_object_queue_like_game(
     ordered_indices.reserve(indices.size());
     std::vector<ObjectDrawRun> ordered_runs;
     std::vector<DeferredObjectPacket> deferred;
+    std::vector<DeferredObjectPacket> late_fog;
     deferred.reserve(indices.size()/3U);
     const Vec3f eye=camera.eye();
     const Vec3f forward=normalize(sub(camera.target,eye));
@@ -321,6 +322,17 @@ void order_dynamic_object_queue_like_game(
         if(run.index_count==0U||run.index_count%3U!=0U||
            run.first_index>indices.size()||run.index_count>indices.size()-run.first_index)
             throw std::runtime_error("dynamic object draw run is not triangle aligned");
+        if(run.blend==PrimitiveBlendPreset::FogOverlayNoDepthTest){
+            DeferredObjectPacket packet;
+            packet.blend=run.blend;
+            packet.two_sided=run.two_sided;
+            packet.source_order=source_order;
+            packet.indices.assign(indices.begin()+run.first_index,
+                                  indices.begin()+run.first_index+run.index_count);
+            late_fog.push_back(std::move(packet));
+            source_order+=run.index_count/3U;
+            continue;
+        }
         if(run.blend==PrimitiveBlendPreset::OpaqueDepthWrite){
             append_packet(run.blend,run.two_sided,run.sort_group,
                 std::span<const uint32_t>(indices).subspan(run.first_index,run.index_count));
@@ -370,6 +382,11 @@ void order_dynamic_object_queue_like_game(
         return left.source_order<right.source_order;
     });
     for(const auto& packet:deferred)
+        append_packet(packet.blend,packet.two_sided,0U,packet.indices);
+    // Simulated fog is a screen-visible cover, not one of the retail object/effect packets. Keep
+    // it after the full depth-sorted dynamic queue so steep terrain and animated lava cannot
+    // overwrite it, and do not let its large triangles disturb smoke-card sorting.
+    for(const auto& packet:late_fog)
         append_packet(packet.blend,packet.two_sided,0U,packet.indices);
     indices=std::move(ordered_indices);
     runs=std::move(ordered_runs);
@@ -966,6 +983,59 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
         ImGui::TextDisabled("Canonical ID %u · compatible IDs %s · stock placements %u",
             thandor::canonical_placement_registry_id(preset),
             compatible_ids.empty()?"same ID only":compatible_ids.c_str(),preset.stock_placement_count);
+
+        ImGui::SeparatorText("PCK gameplay values");
+        if(preset.fog_uncover_radius_q12>0){
+            ImGui::Text("Fog uncover radius: %.3f world units",thandor::q12_to_float(
+                preset.fog_uncover_radius_q12));
+            ImGui::TextDisabled("MDL +0x48 max over resolved hierarchy: %d Q12 · terrain wedge scan %u steps (radius / 0x240)",
+                preset.fog_uncover_radius_q12,preset.fog_uncover_scan_steps);
+        }else ImGui::TextDisabled("Fog uncover radius: no nonzero MDL +0x48 value");
+        ImGui::Text("HP / integrity: %lld total · %d root",
+            static_cast<long long>(preset.total_maximum_integrity),preset.root_maximum_integrity);
+        ImGui::TextDisabled("MDL +0x60 is copied into each live model node; total follows the resolved runtime hierarchy.");
+        if(!preset.base_cost_components.empty()){
+            ImGui::Text("Base configuration price: %.2f Xenite · %.2f energy",
+                static_cast<double>(preset.base_xenite_cost_q4)/16.0,
+                static_cast<double>(preset.base_energy_cost_q4)/16.0);
+            ImGui::TextDisabled("Exact base ARM→MDL TEC component sum. Serialized stock ARM +0x28 is zero; this is not presented as a direct ARM field.");
+            for(const auto& component:preset.base_cost_components){
+                ImGui::BulletText("MDL %u · TEC %u %s: %.2f Xenite, %.2f energy, %.2f s research",
+                    component.model_definition_id,component.technology_id,
+                    component.title.empty()?"unnamed":component.title.c_str(),
+                    static_cast<double>(component.xenite_cost_q4)/16.0,
+                    static_cast<double>(component.energy_cost_q4)/16.0,
+                    static_cast<double>(component.research_duration_q5)/32.0);
+            }
+        }else ImGui::TextDisabled("Base configuration price: no nonzero base TEC component");
+
+        std::unordered_set<uint32_t> displayed_damage_shots;
+        for(const auto& weapon:preset.simulation_weapon_profiles){
+            if(!displayed_damage_shots.insert(weapon.shot_definition_id).second)continue;
+            const auto* shot=catalog_.shot_definition(weapon.shot_definition_id);
+            if(!shot)continue;
+            const auto [damage_min,damage_max]=std::minmax_element(
+                shot->target_impact_damage_q12.begin(),shot->target_impact_damage_q12.end());
+            ImGui::Text("SHT %u damage: %.3f..%.3f Q12-decoded · range %.3f · reload %u ticks",
+                shot->definition_id,thandor::q12_to_float(*damage_min),
+                thandor::q12_to_float(*damage_max),thandor::shot_selection_range_world(*shot),
+                weapon.reload_ticks);
+            std::string damage_classes;
+            for(uint32_t impact_class=0U;impact_class<shot->target_impact_damage_q12.size();++impact_class){
+                if(!damage_classes.empty())damage_classes+=" · ";
+                damage_classes+=std::to_string(impact_class)+":"+
+                    std::to_string(shot->target_impact_damage_q12[impact_class]);
+            }
+            ImGui::TextDisabled("target-class damage raw (+0xB0): %s",damage_classes.c_str());
+        }
+
+        const auto& pipeline_validation=preset.effect_pipeline_validation;
+        ImGui::Text("Effect pipeline: %s · %u weapon pipelines · %u SHT · %u EFF · %u SPR · depth %u",
+            pipeline_validation.ok()?"validated":"FAILED",pipeline_validation.weapon_pipeline_count,
+            pipeline_validation.shot_reference_count,pipeline_validation.effect_reference_count,
+            pipeline_validation.sprite_reference_count,pipeline_validation.maximum_effect_depth);
+        for(const auto& issue:pipeline_validation.issues)
+            ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),"%s",issue.c_str());
 
         if(!preset.loadout_name.empty()||!preset.technology_panel_entries.empty()||
            !preset.model_variant_groups.empty()){
@@ -4538,12 +4608,10 @@ void EditorApp::bake_selected_target_facing(){
 
 float EditorApp::fog_preview_observer_radius(
     const thandor::ArmyAssetPreset& preset)const noexcept{
-    float radius=preset.browser_kind==thandor::PlacementBrowserKind::Building?7.5F:6.0F;
-    for(const auto& weapon:preset.simulation_weapon_profiles)
-        radius=std::max(radius,thandor::q12_to_float(std::max(0,weapon.maximum_range_q12))*0.75F);
-    const bool continuous_radar=preset.has_continuous_radar_subnode_animation;
-    if(continuous_radar)radius=std::max(radius,18.0F);
-    return std::clamp(radius*fog_preview_radius_scale_,1.0F,48.0F);
+    // Exact retail authority: max(MDL +0x48) across the resolved live model hierarchy. Weapon
+    // range, browser kind, and the presence of a rotating radar model do not alter this value.
+    const float radius=thandor::q12_to_float(std::max(0,preset.fog_uncover_radius_q12));
+    return std::max(0.0F,radius*fog_preview_radius_scale_);
 }
 
 bool EditorApp::fog_preview_point_visible(Vec3f point)const noexcept{
@@ -4571,7 +4639,9 @@ void EditorApp::rebuild_fog_preview_visibility(){
         Vec3f position{placement.render_x(),placement.render_y(),0.0F};
         if(const auto live=simulation_actor_states_.find(index);live!=simulation_actor_states_.end())
             position=live->second.position;
-        fog_preview_observers_.push_back({position,fog_preview_observer_radius(*preset)});
+        const float uncover_radius=fog_preview_observer_radius(*preset);
+        if(uncover_radius<=0.0F)continue;
+        fog_preview_observers_.push_back({position,uncover_radius});
     }
     fog_preview_observer_count_=fog_preview_observers_.size();
     const auto& field=document_->field();
@@ -5545,11 +5615,12 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
         const uint32_t layer=untextured_layer();
         const auto append_fog_vertex=[&](uint32_t x,uint32_t y){
             const auto& cell=field.at(x,y);
-            const float top=cell.water_delta_q12>0
-                ?std::max(cell.terrain_height(),cell.water_height())
-                :cell.terrain_height();
+            // Match the exact terrain heightfield. The fog pass is composited without depth
+            // testing after the animated surface, so water/lava height and shader displacement
+            // cannot punch holes through it.
+            const float top=cell.terrain_height();
             next.vertices.push_back(ObjectVertex{{thandor::q12_to_float(cell.world_x_q12),
-                thandor::q12_to_float(cell.world_y_q12),top+0.10F},
+                thandor::q12_to_float(cell.world_y_q12),top+0.02F},
                 {0.0F,0.0F,1.0F},0.5F,0.5F,layer,0xDC10141CU});
         };
         for(uint32_t y=0;y+1U<field.height();++y){
@@ -5564,11 +5635,13 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                 append_fog_vertex(x,y);append_fog_vertex(x+1U,y);
                 append_fog_vertex(x+1U,y+1U);append_fog_vertex(x,y+1U);
                 uint32_t first=static_cast<uint32_t>(next.indices.size());
-                next.indices.insert(next.indices.end(),{base,base+1U,base+2U});
-                append_draw_run(PrimitiveBlendPreset::AlphaNoDepthWrite,true,first);
+                // FieldGrid uses the BL->TR diagonal as {BL,TL,BR} and {TL,TR,BR}. The old
+                // opposite split visibly detached on steep cells and exposed the terrain/lava.
+                next.indices.insert(next.indices.end(),{base,base+3U,base+1U});
+                append_draw_run(PrimitiveBlendPreset::FogOverlayNoDepthTest,true,first);
                 first=static_cast<uint32_t>(next.indices.size());
-                next.indices.insert(next.indices.end(),{base,base+2U,base+3U});
-                append_draw_run(PrimitiveBlendPreset::AlphaNoDepthWrite,true,first);
+                next.indices.insert(next.indices.end(),{base+3U,base+2U,base+1U});
+                append_draw_run(PrimitiveBlendPreset::FogOverlayNoDepthTest,true,first);
             }
         }
     }

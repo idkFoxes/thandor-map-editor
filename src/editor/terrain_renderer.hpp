@@ -122,7 +122,7 @@ private:
         uint32_t mip_levels{1};
     };
 
-    static constexpr std::size_t kBlendPresetCount = 4U;
+    static constexpr std::size_t kBlendPresetCount = 5U;
     static constexpr std::size_t kCullVariantCount = 2U;
     static constexpr std::size_t kObjectPipelineCount = kBlendPresetCount * kCullVariantCount;
 
