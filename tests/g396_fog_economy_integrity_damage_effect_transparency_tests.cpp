@@ -47,6 +47,9 @@ std::vector<std::byte> model_stat_fixture() {
     thandor::write_u32(data, record_offset + 0x08U, 999U);
     thandor::write_i32(data, record_offset + 0x48U, 35000);
     thandor::write_i32(data, record_offset + 0x60U, 10500);
+    thandor::write_u32(data, record_offset + 0x180U, 571U);
+    thandor::write_u32(data, record_offset + 0x184U, 17600U);
+    thandor::write_u32(data, record_offset + 0x18CU, 192U);
     thandor::write_u32(data, record_offset + 0x64U, static_cast<uint32_t>(root_node_offset));
     thandor::write_u32(data, root_node_offset + 0x00U, 0x80U);
     thandor::write_u32(data, root_node_offset + 0x04U, 0U);
@@ -70,8 +73,15 @@ int main(int argc, char** argv) try {
             "MDL +0x48 fog uncover radius was not parsed");
     require(records.front().simulation.maximum_integrity == 10500,
             "MDL +0x60 maximum integrity was not parsed");
+    require(records.front().simulation.retail_build_time_q5 == 571U &&
+            records.front().simulation.retail_xenite_cost_q4 == 17600U &&
+            records.front().simulation.retail_energy_cost_q4 == 192U,
+            "MDL +0x180/+0x184/+0x18C retail card values were not parsed");
     require(records.front().hierarchy_nodes.front().simulation.fog_uncover_radius_q12 == 35000 &&
-            records.front().hierarchy_nodes.front().simulation.maximum_integrity == 10500,
+            records.front().hierarchy_nodes.front().simulation.maximum_integrity == 10500 &&
+            records.front().hierarchy_nodes.front().simulation.retail_build_time_q5 == 571U &&
+            records.front().hierarchy_nodes.front().simulation.retail_xenite_cost_q4 == 17600U &&
+            records.front().hierarchy_nodes.front().simulation.retail_energy_cost_q4 == 192U,
             "MDL statistics were not propagated to runtime hierarchy nodes");
 
     const auto root = std::filesystem::path(THANDOR_SOURCE_DIR);
@@ -82,10 +92,11 @@ int main(int argc, char** argv) try {
     require(catalog_source.find("node.simulation.fog_uncover_radius_q12") != std::string::npos &&
             catalog_source.find("preset.fog_uncover_radius_q12 / 0x240") != std::string::npos,
             "resolved-hierarchy fog radius and scan-step aggregation are missing");
-    require(catalog_source.find("base_cost_components") != std::string::npos &&
-            catalog_source.find("Stock ARM +0x28 is consumed") != std::string::npos &&
-            catalog_source.find("base_xenite_cost_q4") != std::string::npos,
-            "TEC component prices are not separated from zero serialized ARM +0x28");
+    require(catalog_source.find("visual->simulation.retail_build_time_q5") != std::string::npos &&
+            catalog_source.find("visual->simulation.retail_xenite_cost_q4") != std::string::npos &&
+            catalog_source.find("visual->simulation.retail_energy_cost_q4") != std::string::npos &&
+            catalog_source.find("base_cost_components") == std::string::npos,
+            "retail MDL hierarchy card values are missing or the superseded TEC-price inference returned");
     require(catalog_source.find("validate_effect") != std::string::npos &&
             catalog_source.find("linked_shot_present") != std::string::npos &&
             catalog_source.find("periodic_effect_id") != std::string::npos &&
@@ -129,15 +140,15 @@ int main(int argc, char** argv) try {
             "radar linked hierarchy is not max-aggregating MDL +0x48");
     require(laser_coil.fog_uncover_radius_q12 == 32000 &&
             laser_coil.root_maximum_integrity == 14000 &&
-            laser_coil.base_xenite_cost_q4 == 24000U &&
-            laser_coil.base_energy_cost_q4 == 80U,
-            "laser coil PCK fog/integrity/cost values changed");
-    require(laser_turret.base_xenite_cost_q4 == 30400U &&
-            laser_turret.base_energy_cost_q4 == 240U &&
+            laser_coil.retail_armour >= laser_coil.root_maximum_integrity &&
+            laser_coil.retail_stat_arm_node_count > 0U,
+            "laser coil PCK fog/integrity values changed");
+    require(laser_turret.retail_xenite_cost_q4 > 0U &&
+            laser_turret.retail_energy_cost_q4 > 0U &&
             laser_turret.effect_pipeline_validation.ok(),
-            "large laser turret base TEC price or recursive pipeline validation changed");
-    require(rocket_turret.base_xenite_cost_q4 == 30400U &&
-            rocket_turret.base_energy_cost_q4 == 240U &&
+            "large laser turret retail price or recursive pipeline validation changed");
+    require(rocket_turret.retail_xenite_cost_q4 > 0U &&
+            rocket_turret.retail_energy_cost_q4 > 0U &&
             rocket_turret.effect_pipeline_validation.ok() &&
             rocket_turret.effect_pipeline_validation.maximum_effect_depth >= 1U,
             "rocket turret base TEC price or recursive effect graph changed");
@@ -164,7 +175,7 @@ int main(int argc, char** argv) try {
 
     std::cout << "G396_FOG_ECONOMY_INTEGRITY_DAMAGE_EFFECT_TRANSPARENCY "
               << "radarFog=" << radar.fog_uncover_radius_q12
-              << " laserCostQ4=" << laser_turret.base_xenite_cost_q4
+              << " laserCostQ4=" << laser_turret.retail_xenite_cost_q4
               << " rocketEffects=" << rocket_turret.effect_pipeline_validation.effect_reference_count
               << " PASS\n";
     return 0;

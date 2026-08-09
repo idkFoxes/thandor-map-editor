@@ -993,23 +993,17 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
             ImGui::TextDisabled("MDL +0x48 max over resolved hierarchy: %d Q12 · terrain wedge scan %u steps (radius / 0x240)",
                 preset.fog_uncover_radius_q12,preset.fog_uncover_scan_steps);
         }else ImGui::TextDisabled("Fog uncover radius: no nonzero MDL +0x48 value");
-        ImGui::Text("HP / integrity: %lld total · %d root",
-            static_cast<long long>(preset.total_maximum_integrity),preset.root_maximum_integrity);
-        ImGui::TextDisabled("MDL +0x60 is copied into each live model node; total follows the resolved runtime hierarchy.");
-        if(!preset.base_cost_components.empty()){
-            ImGui::Text("Base configuration price: %.2f Xenite · %.2f energy",
-                static_cast<double>(preset.base_xenite_cost_q4)/16.0,
-                static_cast<double>(preset.base_energy_cost_q4)/16.0);
-            ImGui::TextDisabled("Exact base ARM→MDL TEC component sum. Serialized stock ARM +0x28 is zero; this is not presented as a direct ARM field.");
-            for(const auto& component:preset.base_cost_components){
-                ImGui::BulletText("MDL %u · TEC %u %s: %.2f Xenite, %.2f energy, %.2f s research",
-                    component.model_definition_id,component.technology_id,
-                    component.title.empty()?"unnamed":component.title.c_str(),
-                    static_cast<double>(component.xenite_cost_q4)/16.0,
-                    static_cast<double>(component.energy_cost_q4)/16.0,
-                    static_cast<double>(component.research_duration_q5)/32.0);
-            }
-        }else ImGui::TextDisabled("Base configuration price: no nonzero base TEC component");
+        ImGui::SeparatorText("Retail build card");
+        ImGui::Text("Armour / HP: %lld",static_cast<long long>(preset.retail_armour));
+        ImGui::Text("Energy: %llu MWh",
+            static_cast<unsigned long long>(preset.retail_energy_cost_q4 >> 4U));
+        ImGui::Text("Xenite: %u T",preset.retail_xenite_cost_q4 >> 4U);
+        ImGui::Text("Time: %u T",preset.retail_build_time_q5 >> 5U);
+        ImGui::TextDisabled("Retail formatting: one selected MDL per ARM node; armour = sum +0x60; time = sum +0x180 >> 5; Xenite = sum +0x184 >> 4; energy = sum +0x18C >> 4.");
+        ImGui::TextDisabled("Raw PCK: armour nodes %u · root MDL integrity %d · energy Q4 %llu · Xenite Q4 %u · time Q5 %u",
+            preset.retail_stat_arm_node_count,preset.root_maximum_integrity,
+            static_cast<unsigned long long>(preset.retail_energy_cost_q4),
+            preset.retail_xenite_cost_q4,preset.retail_build_time_q5);
 
         std::unordered_set<uint32_t> displayed_damage_shots;
         for(const auto& weapon:preset.simulation_weapon_profiles){
@@ -1054,10 +1048,20 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
                         preset.technology_branch_names[branch].c_str());
             }
             for(const auto& entry:preset.technology_panel_entries){
-                ImGui::TextDisabled("table index %u · branch %u · panel row %u · TEC %u · %s · %s",
-                    entry.serialized_index,entry.direction_index+1U,entry.row_index+1U,
-                    entry.technology_id,thandor::technology_category_name(entry.category),
+                ImGui::Text("TEC %u · %s",entry.technology_id,
                     entry.title.empty()?"unnamed":entry.title.c_str());
+                ImGui::TextDisabled("table index %u · branch %u · panel row %u · Xenite %uT · Energy %uMWh · Time %uT · weapon category %s",
+                    entry.serialized_index,entry.direction_index+1U,entry.row_index+1U,
+                    entry.xenite_cost_q4 >> 4U,entry.energy_cost_q4 >> 4U,
+                    entry.research_duration_q5 >> 5U,
+                    thandor::technology_category_retail_label(entry.category));
+                if(!entry.special_features.empty())
+                    ImGui::TextDisabled("special features: %s",entry.special_features.c_str());
+                if(!entry.description.empty()){
+                    ImGui::PushTextWrapPos(ImGui::GetCursorPosX()+600.0F);
+                    ImGui::TextDisabled("%s",entry.description.c_str());
+                    ImGui::PopTextWrapPos();
+                }
             }
             for(const auto& group:preset.model_variant_groups){
                 ImGui::Text("ARM node +0x%X · depth %u · child slot %u%s",group.arm_node_offset,

@@ -130,6 +130,94 @@ std::string technology_family_title(std::string title) {
     return title;
 }
 
+std::string trim_ascii(std::string value) {
+    const auto not_space = [](unsigned char character) { return std::isspace(character) == 0; };
+    const auto begin = std::find_if(value.begin(), value.end(), not_space);
+    const auto end = std::find_if(value.rbegin(), value.rend(), not_space).base();
+    if (begin >= end) return {};
+    return std::string(begin, end);
+}
+
+std::vector<std::string> technology_detail_visible_lines(std::string_view value) {
+    std::vector<std::string> lines;
+    std::string line;
+    auto flush = [&]() {
+        lines.push_back(trim_ascii(std::move(line)));
+        line.clear();
+    };
+    for (std::size_t cursor = 0U; cursor < value.size();) {
+        const auto first = static_cast<unsigned char>(value[cursor]);
+        if (first < 0x80U) {
+            if (first == '\r' || first == '\n') flush();
+            else line.push_back(static_cast<char>(first));
+            ++cursor;
+            continue;
+        }
+        std::size_t encoded_bytes = 0U;
+        uint32_t codepoint = 0U;
+        if ((first & 0xE0U) == 0xC0U && cursor + 1U < value.size()) {
+            encoded_bytes = 2U;
+            codepoint = ((first & 0x1FU) << 6U) |
+                (static_cast<unsigned char>(value[cursor + 1U]) & 0x3FU);
+        } else if ((first & 0xF0U) == 0xE0U && cursor + 2U < value.size()) {
+            encoded_bytes = 3U;
+            codepoint = ((first & 0x0FU) << 12U) |
+                ((static_cast<unsigned char>(value[cursor + 1U]) & 0x3FU) << 6U) |
+                (static_cast<unsigned char>(value[cursor + 2U]) & 0x3FU);
+        } else if ((first & 0xF8U) == 0xF0U && cursor + 3U < value.size()) {
+            encoded_bytes = 4U;
+            codepoint = ((first & 0x07U) << 18U) |
+                ((static_cast<unsigned char>(value[cursor + 1U]) & 0x3FU) << 12U) |
+                ((static_cast<unsigned char>(value[cursor + 2U]) & 0x3FU) << 6U) |
+                (static_cast<unsigned char>(value[cursor + 3U]) & 0x3FU);
+        }
+        if (encoded_bytes == 0U) {
+            ++cursor;
+            continue;
+        }
+        if (codepoint == 0x8012U) {
+            flush();
+        } else if (!((codepoint >= 0x8000U && codepoint <= 0x80FFU) ||
+                     (codepoint >= 0x7FF0U && codepoint <= 0x7FFFU))) {
+            line.append(value.substr(cursor, encoded_bytes));
+        }
+        cursor += encoded_bytes;
+    }
+    if (!line.empty()) flush();
+    return lines;
+}
+
+std::string technology_special_features(const TechnologyRecord& technology) {
+    for (const auto& line : technology_detail_visible_lines(technology.detail)) {
+        constexpr std::string_view prefix = "Special features:";
+        if (line.size() >= prefix.size() &&
+            lower_ascii(line.substr(0U, prefix.size())) == lower_ascii(std::string(prefix))) {
+            return trim_ascii(line.substr(prefix.size()));
+        }
+    }
+    return {};
+}
+
+std::string technology_description(const TechnologyRecord& technology) {
+    const auto lines = technology_detail_visible_lines(technology.detail);
+    bool after_features = false;
+    std::string description;
+    const std::string title = lower_ascii(trim_ascii(technology.title));
+    for (const auto& raw_line : lines) {
+        const std::string line = trim_ascii(raw_line);
+        if (!after_features) {
+            if (lower_ascii(line).starts_with("special features:")) after_features = true;
+            continue;
+        }
+        if (line.empty()) continue;
+        const std::string lower = lower_ascii(line);
+        if (!title.empty() && (lower == title || lower == "the " + title)) continue;
+        if (!description.empty()) description += " ";
+        description += line;
+    }
+    return description;
+}
+
 void collect_arm_model_variant_groups(
     ArmyAssetPreset& preset, std::span<const std::byte> arm_bytes,
     std::size_t root_node_offset, std::string_view arm_path,
@@ -723,7 +811,7 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                 preset.source_path = asset.normalized_path;
                 preset.compatible_arm_paths.push_back(asset.normalized_path);
                 const auto root_node_offset = static_cast<std::size_t>(read_u32(bytes, offset + 0x0C));
-                if (root_node_offset + 0x24 <= bytes.size()) {
+                if (root_node_offset <= bytes.size() && 0x24U <= bytes.size() - root_node_offset) {
                     preset.model_definition_id = base_arm_model_definition_id(bytes, root_node_offset);
                     if (const auto found = model_visuals.find(preset.model_definition_id); found != model_visuals.end()) {
                         for (const auto& candidate : found->second) {
@@ -780,7 +868,12 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                                 if (const auto* technology = technology_record_at(
                                         catalog.technologies_, technology_id); technology != nullptr) {
                                     panel_entry.category = technology->category;
+                                    panel_entry.xenite_cost_q4 = technology->xenite_cost_q4;
+                                    panel_entry.energy_cost_q4 = technology->energy_cost_q4;
+                                    panel_entry.research_duration_q5 = technology->research_duration_q5;
                                     panel_entry.title = technology->title;
+                                    panel_entry.special_features = technology_special_features(*technology);
+                                    panel_entry.description = technology_description(*technology);
                                 }
                                 preset.technology_panel_entries.push_back(std::move(panel_entry));
                             }
@@ -1271,45 +1364,34 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
             if (!node.creates_runtime_node()) continue;
             preset.fog_uncover_radius_q12 = std::max(
                 preset.fog_uncover_radius_q12, node.simulation.fog_uncover_radius_q12);
-            preset.total_maximum_integrity +=
-                static_cast<int64_t>(std::max(0, node.simulation.maximum_integrity));
-            if (node.parent_index == std::numeric_limits<uint32_t>::max())
-                preset.root_maximum_integrity = node.simulation.maximum_integrity;
         }
-        if (preset.root_maximum_integrity == 0 && !resolved_statistics_hierarchy.empty())
-            preset.root_maximum_integrity = resolved_statistics_hierarchy.front().simulation.maximum_integrity;
         if (preset.fog_uncover_radius_q12 > 0) {
             preset.fog_uncover_scan_steps = std::clamp<uint32_t>(
                 static_cast<uint32_t>(preset.fog_uncover_radius_q12 / 0x240), 1U, 255U);
         }
 
-        // Stock ARM +0x28 is consumed as the runtime purchase/refund value, but the serialized
-        // stock records contain zero there. The exact nonzero PCK economy authority is the base
-        // ARM->MDL technology chain. Preserve each component and its sum instead of inventing a
-        // direct ARM price or silently conflating upgrade variants with the base configuration.
-        std::unordered_set<uint32_t> base_cost_technology_ids;
+        // The retail build card does not sum every visual node. The ARM registration loop calls
+        // ModelDefinitionRegistry_FindRuntimeDescriptorById for one base MDL per ARM node and
+        // accumulates returned MDL +0x180/+0x184 into ARM record +0x24/+0x28. The hover path then
+        // recursively sums selected MDL +0x60 and +0x18C. The editor's no-faction base preview uses
+        // the first serialized nonzero variant and applies the same once-per-ARM-node accounting.
         for (const auto& group : preset.model_variant_groups) {
             if (group.variants.empty()) continue;
             const auto base = std::min_element(group.variants.begin(), group.variants.end(),
                 [](const ModelTechnologyVariant& left, const ModelTechnologyVariant& right) {
                     return left.variant_index < right.variant_index;
                 });
-            uint32_t technology_id = base->technology_unlock_id;
-            if (technology_id == 0U) technology_id = base->linked_technology_id;
-            if (technology_id == 0U || !base_cost_technology_ids.insert(technology_id).second)
-                continue;
-            const auto* technology = technology_record_at(catalog.technologies_, technology_id);
-            if (technology == nullptr) continue;
-            AssetTechnologyCostComponent component;
-            component.model_definition_id = base->model_definition_id;
-            component.technology_id = technology_id;
-            component.title = technology->title;
-            component.xenite_cost_q4 = technology->xenite_cost_q4;
-            component.energy_cost_q4 = technology->energy_cost_q4;
-            component.research_duration_q5 = technology->research_duration_q5;
-            preset.base_xenite_cost_q4 += component.xenite_cost_q4;
-            preset.base_energy_cost_q4 += component.energy_cost_q4;
-            preset.base_cost_components.push_back(std::move(component));
+            const auto* visual = select_model_visual_for_arm(
+                model_visuals, base->model_definition_id, preset.source_path);
+            if (visual == nullptr) continue;
+            ++preset.retail_stat_arm_node_count;
+            preset.retail_armour += static_cast<int64_t>(
+                std::max(0, visual->simulation.maximum_integrity));
+            preset.retail_build_time_q5 += visual->simulation.retail_build_time_q5;
+            preset.retail_xenite_cost_q4 += visual->simulation.retail_xenite_cost_q4;
+            preset.retail_energy_cost_q4 += visual->simulation.retail_energy_cost_q4;
+            if (group.depth == 0U)
+                preset.root_maximum_integrity = visual->simulation.maximum_integrity;
         }
 
         for (auto& group : preset.model_variant_groups) {

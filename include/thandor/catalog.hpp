@@ -66,7 +66,12 @@ struct TechnologyPanelEntry {
     uint32_t row_index{};
     uint32_t technology_id{};
     TechnologyCategory category{TechnologyCategory::Category0};
+    uint32_t xenite_cost_q4{};
+    uint32_t energy_cost_q4{};
+    uint32_t research_duration_q5{};
     std::string title;
+    std::string special_features;
+    std::string description;
 };
 
 struct EffectPipelineReferenceInfo {
@@ -88,15 +93,6 @@ struct WeaponEffectPipelineInfo {
     std::vector<EffectPipelineReferenceInfo> terrain_impact_effects;
     std::vector<EffectPipelineReferenceInfo> target_class_impact_effects;
     std::string shot_sprite_path;
-};
-
-struct AssetTechnologyCostComponent {
-    uint32_t model_definition_id{};
-    uint32_t technology_id{};
-    std::string title;
-    uint32_t xenite_cost_q4{};
-    uint32_t energy_cost_q4{};
-    uint32_t research_duration_q5{};
 };
 
 struct EffectPipelineValidationSummary {
@@ -232,16 +228,17 @@ struct ArmyAssetPreset {
     // MDL +0x48 is max-aggregated over the resolved model hierarchy by the retail runtime.
     int32_t fog_uncover_radius_q12{};
     uint32_t fog_uncover_scan_steps{};
-    // MDL +0x60 is the initial/maximum model-node integrity. The total follows the runtime's
-    // recursive hierarchy aggregation, while root keeps the selected chassis/building value.
+    // Retail build-card statistics follow ArmyAssetRecord_RegisterAndRelocate and
+    // InGameSelectionDetailPanel_Rebuild exactly. Each ARM hierarchy node contributes its selected
+    // MDL once: +0x60 armour, +0x180 build time Q5, +0x184 Xenite Q4 and +0x18C energy Q4.
+    // The loader accumulates +0x180/+0x184 into ARM runtime-record +0x24/+0x28 before the UI
+    // applies >>5/>>4. Internal visual sprite nodes must not duplicate an owning MDL record.
     int32_t root_maximum_integrity{};
-    int64_t total_maximum_integrity{};
-    // Stock ARM +0x28 is the runtime purchase value but is zero in serialized stock records.
-    // These PCK-backed base-configuration costs are therefore retained as exact TEC component
-    // sums rather than mislabelled as a directly serialized ARM price.
-    std::vector<AssetTechnologyCostComponent> base_cost_components;
-    uint64_t base_xenite_cost_q4{};
-    uint64_t base_energy_cost_q4{};
+    int64_t retail_armour{};
+    uint64_t retail_energy_cost_q4{};
+    uint32_t retail_xenite_cost_q4{};
+    uint32_t retail_build_time_q5{};
+    uint32_t retail_stat_arm_node_count{};
     EffectPipelineValidationSummary effect_pipeline_validation;
     // Canonical browser placement ID. Stock maps also contain compatible active variants
     // (810 for energy and 814 for building material), but new placements use 811/815.

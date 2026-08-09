@@ -171,6 +171,14 @@ struct ModelRuntimeSimulationProfile {
     // variant replacement, and hierarchy aggregation all preserve this as the initial/maximum
     // model-node integrity value.
     int32_t maximum_integrity{};             // MDL +0x60
+    // ArmyAssetRecord_RegisterAndRelocate resolves each base MDL and adds these values into
+    // ARM runtime-record +0x24/+0x28. The hover card displays the accumulated values with >>5
+    // and >>4 respectively. They are construction time and Xenite, not animation fields.
+    uint32_t retail_build_time_q5{};          // MDL +0x180
+    uint32_t retail_xenite_cost_q4{};         // MDL +0x184
+    // InGameSelectionDetailPanel_Rebuild recursively sums this field once for the selected
+    // faction-unlocked MDL at each ARM hierarchy node, then displays the Q4 value with >> 4.
+    uint32_t retail_energy_cost_q4{};         // MDL +0x18C
     // Runtime class 3 uses these model-definition fields for its paired articulated contacts.
     // +0x54 lifts the root above the two foot contacts. +0xC0 is the Q12 numerator used to
     // derive each contact interpolation step; +0xC4 is the vertical contact lift/clearance term.

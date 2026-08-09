@@ -49,6 +49,9 @@ private:
 };
 
 const char* technology_category_name(TechnologyCategory category) noexcept;
+// Retail research cards render categories 1..3 as A..C. Category zero means that no weapon
+// category letter is displayed for the technology.
+const char* technology_category_retail_label(TechnologyCategory category) noexcept;
 
 // Removes rich-text command words from the short title path. It deliberately does not attempt to
 // render command payloads; those remain available through TechnologyRecord::detail as source text.

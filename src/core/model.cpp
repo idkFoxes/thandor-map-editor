@@ -525,6 +525,11 @@ std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::b
                 visual.simulation.fog_uncover_radius_q12 = read_i32(data, offset + 0x48U);
             if (size >= 0x64U)
                 visual.simulation.maximum_integrity = read_i32(data, offset + 0x60U);
+            if (size >= 0x190U) {
+                visual.simulation.retail_build_time_q5 = read_u32(data, offset + 0x180U);
+                visual.simulation.retail_xenite_cost_q4 = read_u32(data, offset + 0x184U);
+                visual.simulation.retail_energy_cost_q4 = read_u32(data, offset + 0x18CU);
+            }
             if (size >= 0x58U)
                 visual.simulation.articulated_root_height_q12 = read_i32(data, offset + 0x54U);
         }

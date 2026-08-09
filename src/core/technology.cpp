@@ -59,6 +59,16 @@ const char* technology_category_name(TechnologyCategory category) noexcept {
     return "unknown category";
 }
 
+const char* technology_category_retail_label(TechnologyCategory category) noexcept {
+    switch (category) {
+        case TechnologyCategory::Category0: return "-";
+        case TechnologyCategory::Category1: return "A";
+        case TechnologyCategory::Category2: return "B";
+        case TechnologyCategory::Category3: return "C";
+    }
+    return "?";
+}
+
 std::string normalize_technology_text(std::string value) {
     std::string normalized;
     normalized.reserve(value.size());
