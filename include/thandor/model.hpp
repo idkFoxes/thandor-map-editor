@@ -128,6 +128,9 @@ public:
     Vec3f local_bounds_max() const noexcept { return local_bounds_max_; }
     float bounding_radius() const noexcept { return bounding_radius_; }
     float placement_height_offset() const noexcept { return placement_height_offset_; }
+    // SPR +0xE0. Retail passes this signed Q12 value only to the render-flag 0x0800 scaled
+    // model-vertex lighting path; the separate 0x0200 direct-tint bypass remains unchanged.
+    int32_t lighting_scale_q12() const noexcept { return lighting_scale_q12_; }
     bool has_valid_header_bounds() const noexcept { return has_valid_header_bounds_; }
 
 private:
@@ -141,6 +144,7 @@ private:
     Vec3f local_bounds_max_{};
     float bounding_radius_{};
     float placement_height_offset_{};
+    int32_t lighting_scale_q12_{};
     bool has_valid_header_bounds_{};
 };
 
@@ -179,6 +183,13 @@ struct ModelRuntimeSimulationProfile {
     // InGameSelectionDetailPanel_Rebuild recursively sums this field once for the selected
     // faction-unlocked MDL at each ARM hierarchy node, then displays the Q4 value with >> 4.
     uint32_t retail_energy_cost_q4{};         // MDL +0x18C
+    // ArmyRuntime_EmitDamageThresholdEffect reads these four fields from the currently selected
+    // MDL. The strict comparison is current integrity percent < threshold. Emission walks
+    // model lookup key class 3 in index order and falls back to the model root if no point exists.
+    int32_t damage_effect_health_threshold_percent{}; // MDL +0x250
+    uint32_t damage_effect_id{};                      // MDL +0x254
+    uint32_t damage_effect_min_cooldown_ticks{};      // MDL +0x258
+    uint32_t damage_effect_random_cooldown_ticks{};   // MDL +0x25C
     // Runtime class 3 uses these model-definition fields for its paired articulated contacts.
     // +0x54 lifts the root above the two foot contacts. +0xC0 is the Q12 numerator used to
     // derive each contact interpolation step; +0xC4 is the vertical contact lift/clearance term.
@@ -262,6 +273,10 @@ struct ModelVisualRecord {
     // TechnologyId values from MDL +0x1C8 through +0x234. Their serialized indices are 1..28,
     // distributed over seven direction/branch controls and four panel rows.
     std::array<uint32_t, 28> technology_panel_ids{};
+    // ModelRuntimeHierarchy_ApplyFactionTechnologyVariantsRecursive scans these six IDs in
+    // serialized order and selects the first nonzero candidate whose candidate MDL +0x1C0
+    // technology is present in the faction's 256-bit runtime technology mask.
+    std::array<uint32_t, 6> faction_technology_variant_model_ids{}; // MDL +0x238..+0x24C
 };
 
 std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::byte> data,

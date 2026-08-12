@@ -102,7 +102,7 @@ int main(int argc, char** argv) try {
 
     ShotDefinitionRecord synthetic_laser;
     synthetic_laser.trajectory_mode = 0;
-    synthetic_laser.range_scale_d0_q12 = 8;
+    synthetic_laser.projectile_lifetime_ticks = 8U;
     synthetic_laser.launch_speed_q12 = 4500;
     SimulationProjectileState beam;
     beam.launch_position = {0.0F, 0.0F, 0.0F};
@@ -136,8 +136,8 @@ int main(int argc, char** argv) try {
     const auto* rocket = catalog.shot_definition(20U);
     if (!laser_turret || !rocket_turret || !laser || !rocket)
         throw std::runtime_error("stock turret or SHT records are missing");
-    if (laser->trajectory_mode != 0 || laser->range_scale_d0_q12 != 8 ||
-        laser->launch_speed_q12 != 4500 || laser->lifetime_ticks != 8U)
+    if (laser->trajectory_mode != 0 || laser->projectile_lifetime_ticks != 8U ||
+        laser->launch_speed_q12 != 4500)
         throw std::runtime_error("stock SHT 18 ray/beam geometry contract changed");
     if (rocket->trajectory_mode != 3 || rocket->sprite_path != "spr/schuesse/srmid0.spr")
         throw std::runtime_error("stock SHT 20 rocket contract changed");

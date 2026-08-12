@@ -25,8 +25,8 @@ int main(){
         ShotDefinitionRecord straight;
         straight.trajectory_mode=0;
         straight.launch_speed_q12=0x1000;
-        straight.range_scale_d0_q12=0x2000;
-        straight.range_scale_270_q12=0;
+        straight.projectile_lifetime_ticks=8U;
+        straight.trajectory_ramp_duration_ticks=0;
         straight.elevation_offset_angle16=0;
         require(shot_selection_range_q12(straight)>0,"straight shot range must be recovered");
 
@@ -54,7 +54,7 @@ int main(){
         profile.pitch_max_velocity_turn16=0x4000;profile.pitch_acceleration_turn16=0x4000;
         profile.pitch_min_turn16=-0x4000;profile.pitch_max_turn16=0x4000;profile.launch_attachment_count=2U;
         SimulationActorState actor;actor.position={0,0,0};actor.weapons.resize(2U);
-        ShotDefinitionRecord fast;fast.trajectory_mode=0;fast.launch_speed_q12=0x1000;fast.lifetime_ticks=64U;
+        ShotDefinitionRecord fast;fast.trajectory_mode=0;fast.launch_speed_q12=0x1000;fast.projectile_lifetime_ticks=64U;
         Vec3f target{4,0,0};
         // Two independent channels must fire and reload without sharing state.
         for(int i=0;i<3;++i){

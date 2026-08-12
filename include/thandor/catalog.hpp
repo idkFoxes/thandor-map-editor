@@ -108,6 +108,16 @@ struct EffectPipelineValidationSummary {
     bool ok() const noexcept { return issues.empty(); }
 };
 
+struct ModelFactionTechnologyReplacement {
+    uint32_t slot_index{};
+    uint32_t model_definition_id{};
+    uint32_t technology_unlock_id{};
+    std::string technology_title;
+    std::string model_source_path;
+    std::string sprite_path;
+    std::vector<ModelVisualNode> model_hierarchy;
+};
+
 struct ModelTechnologyVariant {
     uint32_t variant_index{};
     uint32_t model_definition_id{};
@@ -117,6 +127,11 @@ struct ModelTechnologyVariant {
     std::string linked_technology_title;
     std::string model_source_path;
     std::string sprite_path;
+    // Full owning MDL hierarchy for this ARM variant. FactionTechnologyMask256 chooses the ARM
+    // variant first, then the runtime scans faction_technology_replacements in ascending slot order
+    // and uses the first unlocked candidate, exactly matching game.exe.
+    std::vector<ModelVisualNode> model_hierarchy;
+    std::vector<ModelFactionTechnologyReplacement> faction_technology_replacements;
     std::vector<WeaponEffectPipelineInfo> weapon_pipelines;
 };
 
@@ -126,16 +141,6 @@ struct ArmyModelVariantGroup {
     uint32_t child_slot{};
     uint32_t depth{};
     std::vector<ModelTechnologyVariant> variants;
-};
-
-// Editor-only preview of one globally selected ARM model-technology level. LEV records do not
-// serialize this selection; the retail game resolves the active model from faction technologies.
-struct ArmyTechnologyLevelPreview {
-    uint32_t level_index{};
-    uint32_t root_model_definition_id{};
-    uint32_t technology_effect_id{};
-    std::string technology_effect_title;
-    std::vector<ModelVisualNode> resolved_model_hierarchy;
 };
 
 struct ArmyAssetPreset {
@@ -182,7 +187,6 @@ struct ArmyAssetPreset {
     uint32_t technology_branch_count{};
     std::array<std::string, 7> technology_branch_names{};
     std::vector<ArmyModelVariantGroup> model_variant_groups;
-    std::vector<ArmyTechnologyLevelPreview> technology_level_previews;
     std::vector<TechnologyPanelEntry> technology_panel_entries;
     PlacementVisualKind visual_kind{PlacementVisualKind::Standard};
     PlacementBrowserKind browser_kind{PlacementBrowserKind::Element};
@@ -200,6 +204,10 @@ struct ArmyAssetPreset {
     uint32_t timed_effect_id{};
     uint32_t timed_effect_interval_ticks{};
     uint32_t timed_effect_random_ticks{};
+    int32_t damage_effect_health_threshold_percent{};
+    uint32_t damage_effect_id{};
+    uint32_t damage_effect_min_cooldown_ticks{};
+    uint32_t damage_effect_random_cooldown_ticks{};
     // Compatibility summary of the selected root MDL animation profile. Runtime rendering uses
     // every parent ModelVisualNode::simulation recursively; these are not top-level ARM fields.
     // Rotation steps are turn16 units per 20 Hz simulation tick. The child[2] channel uses the
@@ -275,6 +283,17 @@ bool placement_uses_neutral_source_color(const ArmyAssetPreset& preset) noexcept
 // playable order (1 blue, 2 red, 3 green, 4 yellow, 5 orange, 6 brown, 7 purple).
 uint32_t default_faction_graphics_family(uint32_t faction_index) noexcept;
 const char* default_faction_color_name(uint32_t faction_index) noexcept;
+
+// Exact retail faction-technology model resolver. Each ARM hierarchy node starts at its first
+// serialized nonzero MDL, then later ARM variants replace it when their candidate MDL +0x1C0 bit
+// is set (last unlocked ARM candidate wins). The selected MDL then scans +0x238..+0x24C and
+// replaces itself with the first unlocked candidate. Child ARM nodes are attached recursively to
+// the deferred model placeholders selected by the owning MDL hierarchy.
+std::vector<ModelVisualNode> resolve_faction_technology_hierarchy(
+    const ArmyAssetPreset& preset, const FactionTechnologyMask256& technology_mask,
+    uint32_t* selected_root_model_definition_id = nullptr,
+    uint32_t* linked_runtime_count = nullptr,
+    uint32_t* deferred_attachment_count = nullptr);
 
 struct PlacementCompatibilityIssue {
     std::size_t placement_index{};

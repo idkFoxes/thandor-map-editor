@@ -12,6 +12,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_library(thandor_map_core
     src/core/binary.cpp
+    src/core/ai_knowledge.cpp
     src/core/pck.cpp
     src/core/field.cpp
     src/core/field_raycast.cpp
@@ -524,6 +525,13 @@ if(THANDOR_EDITOR_BUILD_TESTS)
     set_tests_properties(thandor_g372_target_toolchain_compile_regression_tests
                          PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
 
+    add_test(NAME thandor_ai_knowledge_panel_compile_regression_tests
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/editor_ai_knowledge_panel_compile_regression_tests.py
+                     --source ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(thandor_ai_knowledge_panel_compile_regression_tests
+                         PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
     add_test(NAME thandor_g390_vector_domain_compile_regression_tests
              COMMAND ${Python3_EXECUTABLE}
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/g390_vector_domain_compile_regression_tests.py
@@ -683,6 +691,61 @@ if(THANDOR_EDITOR_BUILD_TESTS)
     add_test(NAME thandor_g396_fog_economy_integrity_damage_effect_transparency_tests
              COMMAND thandor_g396_fog_economy_integrity_damage_effect_transparency_tests)
 
+    add_executable(thandor_g399_retail_pck_ui_statistic_parity_tests
+                   tests/g399_retail_pck_ui_statistic_parity_tests.cpp)
+    target_link_libraries(thandor_g399_retail_pck_ui_statistic_parity_tests
+                          PRIVATE thandor_map_core)
+    target_compile_definitions(thandor_g399_retail_pck_ui_statistic_parity_tests
+                               PRIVATE THANDOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME thandor_g399_retail_pck_ui_statistic_parity_tests
+             COMMAND thandor_g399_retail_pck_ui_statistic_parity_tests)
+
+    add_executable(thandor_g400_stock_faction_technology_damage_state_census
+                   tests/g400_stock_faction_technology_damage_state_census.cpp)
+    target_link_libraries(thandor_g400_stock_faction_technology_damage_state_census
+                          PRIVATE thandor_map_core)
+
+    add_executable(thandor_g400_faction_technology_damage_state_preview_tests
+                   tests/g400_faction_technology_damage_state_preview_tests.cpp)
+    target_link_libraries(thandor_g400_faction_technology_damage_state_preview_tests
+                          PRIVATE thandor_map_core)
+    target_compile_definitions(thandor_g400_faction_technology_damage_state_preview_tests
+                               PRIVATE THANDOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME thandor_g400_faction_technology_damage_state_preview_tests
+             COMMAND thandor_g400_faction_technology_damage_state_preview_tests)
+    add_test(NAME thandor_g400_editor_source_contract_tests
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/g400_editor_source_contract_tests.py
+                     --source ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(thandor_g400_editor_source_contract_tests
+                         PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
+    add_executable(thandor_g401_stock_post_v417_state_census
+                   tests/g401_stock_post_v417_state_census.cpp)
+    target_link_libraries(thandor_g401_stock_post_v417_state_census PRIVATE thandor_map_core)
+
+    add_executable(thandor_g401_post_v417_editor_state_tests
+                   tests/g401_post_v417_editor_state_tests.cpp)
+    target_link_libraries(thandor_g401_post_v417_editor_state_tests PRIVATE thandor_map_core)
+    target_compile_definitions(thandor_g401_post_v417_editor_state_tests PRIVATE
+                               THANDOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME thandor_g401_post_v417_editor_state_tests
+             COMMAND thandor_g401_post_v417_editor_state_tests)
+
+    add_test(NAME thandor_g401_post_v417_source_contract_tests
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/g401_post_v417_source_contract_tests.py
+                     --source ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(thandor_g401_post_v417_source_contract_tests
+                         PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
+    add_test(NAME thandor_g404_asset_tooltip_compact_two_column_tests
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/g404_asset_tooltip_compact_two_column_tests.py
+                     --source ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(thandor_g404_asset_tooltip_compact_two_column_tests
+                         PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
     add_test(NAME thandor_g363_full_authority_metadata_validation
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/validate_g363_full_authority_metadata.py
                      --source ${CMAKE_CURRENT_SOURCE_DIR})
@@ -752,6 +815,7 @@ if(THANDOR_EDITOR_BUILD_APP)
     add_executable(thandor-map-editor
         src/editor/main.cpp
         src/editor/editor_app.cpp
+        src/editor/ai_knowledge_panel.cpp
         src/editor/vulkan_context.cpp
         src/editor/terrain_renderer.cpp
     )

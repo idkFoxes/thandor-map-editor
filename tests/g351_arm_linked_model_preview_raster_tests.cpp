@@ -54,12 +54,18 @@ int main() {
     const auto catalog = read_text(root / "src/core/catalog.cpp");
     const auto editor = read_text(root / "src/editor/editor_app.cpp");
     const auto preview = read_text(root / "src/editor/asset_preview.hpp");
-    require(catalog.find("resolve_arm_linked_model_hierarchy") != std::string::npos,
-            "ARM linked model resolver is absent");
-    require(catalog.find("base_arm_model_definition_id") != std::string::npos,
-            "ARM base model-definition selector is absent");
+    require(catalog.find("resolve_faction_technology_hierarchy") != std::string::npos,
+            "exact faction-technology hierarchy resolver is absent");
+    require(catalog.find("executable keeps the last unlocked ARM candidate") != std::string::npos,
+            "ARM last-unlocked candidate rule is absent");
+    require(catalog.find("first unlocked MDL +0x238..+0x24C wins") != std::string::npos,
+            "MDL first-unlocked replacement rule is absent");
+    require(catalog.find("model_variant_groups") != std::string::npos,
+            "ARM model variant groups are absent");
     require(catalog.find("linked_arm_model_id") == std::string::npos,
             "obsolete ambiguous ARM linked-model selector name remains");
+    require(catalog.find("resolve_arm_linked_model_hierarchy") == std::string::npos,
+            "superseded level-index ARM resolver remains");
     require(editor.find("resolved_model_hierarchy") != std::string::npos,
             "editor does not render the resolved model hierarchy");
     require(editor.find("sample_wrapped_bilinear_argb") != std::string::npos,

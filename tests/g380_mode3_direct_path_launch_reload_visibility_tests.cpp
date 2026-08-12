@@ -58,9 +58,9 @@ int main(int argc, char** argv) try {
     const auto simulation_source = read_text(source / "src/core/simulation.cpp");
     const auto editor_source = read_text(source / "src/editor/editor_app.cpp");
 
-    require_token(simulation_source, "modelPitch-movementStateFlags");
+    require_token(simulation_source, "Retail keeps movement pitch and presentation/model pitch as separate state");
     require_token(simulation_source, "simulation_mode3_model_pitch_turn16");
-    require_token(simulation_source, "const float direct_distance=distance3(launch,target_position)");
+    require_token(simulation_source, "const float direct_distance = distance3(launch, target_position)");
     require_token(editor_source, "simulation_mode3_model_pitch_turn16");
     require_token(editor_source, "simulation_class9_render_mesh_mask");
     reject_token(editor_source,
@@ -71,9 +71,9 @@ int main(int argc, char** argv) try {
     ShotDefinitionRecord mode3;
     mode3.trajectory_mode = 3;
     mode3.launch_speed_q12 = 4096;
-    mode3.range_scale_270_q12 = 20;
+    mode3.trajectory_ramp_duration_ticks = 20;
     mode3.elevation_offset_angle16 = 6401;
-    mode3.lifetime_ticks = 80U;
+    mode3.projectile_lifetime_ticks = 80U;
     SimulationWeaponProfile synthetic_weapon;
     synthetic_weapon.shot_definition_id = 20U;
     synthetic_weapon.reload_ticks = 400U;
@@ -156,7 +156,7 @@ int main(int argc, char** argv) try {
     if (!rocket_turret || !rocket)
         throw std::runtime_error("stock asset 352 or SHT 20 is missing");
     if (rocket->trajectory_mode != 3 || rocket->launch_speed_q12 != 750 ||
-        rocket->range_scale_270_q12 != 20 || rocket->elevation_offset_angle16 != 6401)
+        rocket->trajectory_ramp_duration_ticks != 20 || rocket->elevation_offset_angle16 != 6401)
         throw std::runtime_error("stock mode-3 rocket parameters changed");
     if (rocket_turret->simulation_weapon_profiles.size() != 1U)
         throw std::runtime_error("stock asset 352 weapon profile count changed");

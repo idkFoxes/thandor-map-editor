@@ -45,25 +45,37 @@ struct ShotDefinitionRecord {
     std::array<int32_t, 8> target_impact_damage_q12{};
     uint32_t shading_color_argb{};
     int32_t shading_transition_ticks{};
-    uint32_t state_tint_argb{};
-    // SHT +0xD0 is consumed both as the runtime lifetime/range-scale scalar and by
-    // ShotDefinition_ComputeSelectionRange for non-ballistic trajectories. Preserve both
-    // semantic views without hiding the shared serialized field.
-    uint32_t lifetime_ticks{};
-    int32_t range_scale_d0_q12{};
+    // SHT +0x264 is the release/termination transition duration. It is distinct from
+    // the ordinary +0x260 shading transition and is used by projectile unlink/impact paths.
+    int32_t shading_release_transition_ticks{};
+    // SHT +0xD0 is a projectile-relative lifetime in simulation ticks. Multiplying this
+    // tick count by launchSpeedQ12 yields the direct-line distance used by retail range math.
+    uint32_t projectile_lifetime_ticks{};
     // Projectile texture animation is independent from effect animation. The runtime adds
     // 0x10 per simulation tick to a Q4 accumulator and wraps the SPR subresource base by
     // the serialized frame count at SHT +0x1DC.
     uint32_t animation_threshold_q4{};
     uint32_t animation_frame_count{};
     uint32_t secondary_effect_interval_ticks{};
-    int32_t range_scale_270_q12{};
+    // SHT +0x270 is a trajectory-ramp duration in ticks. Modes 2 and 3 use it to
+    // progressively install the current movement speed; it is not a Q12 distance scalar.
+    uint32_t trajectory_ramp_duration_ticks{};
+    // Mode 2 switches from its launch/ramp phase when projectile age reaches +0x274.
+    uint32_t fixed_range_transition_age_threshold_ticks{};
     int32_t elevation_offset_angle16{};
     int32_t mode2_selection_range_q12{};
+    int32_t terrain_grid_mask_index{};
+    uint32_t state_tint_argb{};
+    uint32_t positioned_sound_gain_q15{};
+    uint32_t positioned_sound_maximum_distance_q12{};
     uint32_t mode3_lead_disabled{};
     std::array<uint32_t, 31> terrain_impact_effect_ids{};
-    // SHT +0x1E0 is a parallel 31-entry material-index table retained exactly.
-    // Most stock records use -1; it must not be confused with the effect pointer array.
+    // SHT +0xE0..+0x15B is a 31-entry parallel owner/address-storage array passed
+    // by address when the corresponding terrain-impact EFF is spawned. Payload semantics
+    // remain opaque, so the editor preserves these values without treating them as pointers.
+    std::array<uint32_t, 31> terrain_impact_effect_owner_slots{};
+    // SHT +0x1E0 is a signed 31-entry terrain-material reference array. Negative values are
+    // valid sentinels; non-negative values must be below the retail 26-material limit.
     std::array<int32_t, 31> terrain_material_indices{};
     std::string sprite_path;
 
@@ -84,6 +96,17 @@ struct ShotDefinitionRecord {
 // target-selection information. The result remains in the game's Q12 distance domain.
 int32_t shot_selection_range_q12(const ShotDefinitionRecord& definition) noexcept;
 float shot_selection_range_world(const ShotDefinitionRecord& definition) noexcept;
+
+struct ShotTerrainMaterialValidation {
+    uint32_t sentinel_count{};
+    uint32_t valid_reference_count{};
+    uint32_t invalid_reference_count{};
+};
+
+// V415 validation: negative entries are sentinels; non-negative entries must fit the 26-material
+// terrain texture domain. This validates references only and does not remap impact EFF selection.
+ShotTerrainMaterialValidation validate_shot_terrain_material_references(
+    const ShotDefinitionRecord& definition, uint32_t loaded_material_count = 26U) noexcept;
 
 class ShotAsset {
 public:
@@ -208,6 +231,45 @@ ResourceEmitterSchedule build_resource_emitter_schedule(
     std::span<const ResourceEmitterTiming> emitters, uint32_t primary_rng_seed,
     uint32_t preferred_cycle_ticks = 2048U, uint32_t maximum_pulses = 256U);
 
+struct DamageEffectTiming {
+    uint32_t base_cooldown_ticks{};
+    uint32_t random_cooldown_ticks{};
+    uint32_t attachment_count{};
+};
+
+struct DamageEffectPulse {
+    uint32_t spawn_tick{};
+    uint32_t attachment_index{};
+    // ArmyRuntime_EmitDamageThresholdEffect consumes one 32-bit RNG value and splits it into
+    // runtime worldRotationAngle2=high16 and worldRotationAngle0=low16. A second RNG contributes
+    // worldRotationAngle1=(low13 + 0x1FFF). Effect transition kind 2 then integrates from the exact
+    // worldRotationAngle0/worldRotationAngle1 pair while angle1 eases toward 0x4000.
+    uint32_t world_rotation_angle0{};
+    uint32_t world_rotation_angle1{};
+    uint32_t world_rotation_angle2{};
+};
+
+struct DamageEffectSchedule {
+    uint32_t cycle_ticks{};
+    std::vector<DamageEffectPulse> pulses;
+};
+
+// Deterministic editor replay of ArmyRuntime_EmitDamageThresholdEffect once the preview integrity
+// is below MDL +0x250. The runtime emits immediately when its cooldown is nonpositive, sets
+// cooldown to +0x258 + RNG % +0x25C (drawing RNG only when +0x25C is nonzero), advances
+// model lookup key class 3 sequentially, and consumes two further RNG draws for effect orientation. LEV has no live RNG/cooldown state, so the editor
+// seeds a repeatable preview schedule without changing PCK data.
+DamageEffectSchedule build_damage_effect_schedule(
+    DamageEffectTiming timing, uint32_t primary_rng_seed,
+    uint32_t preferred_cycle_ticks = 2048U, uint32_t maximum_pulses = 256U);
+// Exact class-3 lookup-index form. currentSelectionMetric4 starts at zero; a missing current key
+// resets it to -1 and retries key zero, exactly matching ArmyRuntime_EmitDamageThresholdEffect.
+// The returned attachment_index is the packed lookup key index, not an ordinal vector slot.
+DamageEffectSchedule build_damage_effect_schedule_for_attachment_keys(
+    DamageEffectTiming timing, std::span<const uint32_t> attachment_key_indices,
+    uint32_t primary_rng_seed, uint32_t preferred_cycle_ticks = 2048U,
+    uint32_t maximum_pulses = 256U);
+
 // EffectModelRuntimeMaintenance adds 0x10 to the Q4 frame accumulator once per 20 Hz update and
 // advances at most one texture frame per update. These helpers preserve that bounded recurrence.
 uint32_t effect_frame_index_at_age(const EffectDefinitionRecord& definition,
@@ -220,9 +282,21 @@ uint32_t effect_tick_for_completed_frames(const EffectDefinitionRecord& definiti
 uint8_t effect_alpha_at_age(const EffectDefinitionRecord& definition,
                             uint32_t age_ticks) noexcept;
 
-// Transition state 2 uses a randomized azimuth/elevation and moves the model every 20 Hz update.
-// The elevation is smoothed toward vertical after every movement step. The editor returns the
-// cumulative world-space displacement without changing the source EFF or LEV data.
+// Transition state 2 calls the retail fixed-angle vector builder with runtime
+// {worldRotationAngle0, worldRotationAngle1, EFF +0x20} every 20 Hz update, then eases
+// worldRotationAngle1 toward 0x4000 with (angle*63 + 0x4000) >> 6. This overload is the exact
+// angle-state form used by damage-state effects and other callers that know the runtime angles.
+std::array<float, 3> effect_transition2_displacement_at_age_angles(
+    const EffectDefinitionRecord& definition, uint32_t age_ticks,
+    uint32_t world_rotation_angle0, uint32_t world_rotation_angle1) noexcept;
+// The transform rebuild in transition kind 2 happens before the runtime stores the eased angle1,
+// so the rendered pose after N maintenance updates uses N-1 easing steps (zero at ages 0 and 1).
+uint32_t effect_transition2_world_rotation_angle1_at_pose_age(
+    const EffectDefinitionRecord& definition, uint32_t age_ticks,
+    uint32_t initial_world_rotation_angle1) noexcept;
+
+// Deterministic compatibility seed form used by older editor-only preview call sites. New binary-
+// grounded call sites should use effect_transition2_displacement_at_age_angles instead.
 std::array<float, 3> effect_transition2_displacement_at_age(
     const EffectDefinitionRecord& definition, uint32_t age_ticks,
     uint32_t orientation_random) noexcept;

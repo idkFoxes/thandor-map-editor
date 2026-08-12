@@ -98,7 +98,7 @@ int main() try {
     require(shot.definition_id == 28U && shot.trajectory_mode == 1 &&
             shot.launch_speed_q12 == 450 && shot.primary_effect_id == 31U &&
             shot.secondary_effect_id == 111U && shot.terrain_impact_effect_id(0U) == 2U &&
-            shot.secondary_effect_interval_ticks == 1U && shot.lifetime_ticks == 900U &&
+            shot.secondary_effect_interval_ticks == 1U && shot.projectile_lifetime_ticks == 900U &&
             shot.ballistic_divisor_q12 == 4,
             "Shot 28 visual-chain fields were parsed from the wrong offsets");
 

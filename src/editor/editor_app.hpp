@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai_knowledge_panel.hpp"
 #include "asset_preview.hpp"
 #include "game_cursor.hpp"
 #include "model_transform.hpp"
@@ -41,6 +42,7 @@ private:
         std::vector<std::byte> field;
         std::vector<std::byte> level;
         std::vector<thandor::PlacementTag> tags;
+        std::array<thandor::FactionTechnologyMask256, 8> faction_technology_masks;
         std::string map_name;
         std::string display_name;
         std::vector<std::byte> scenario_record;
@@ -56,16 +58,13 @@ private:
         float rotation_screen_angle_start{};
     };
 
-    struct PendingTechnologyPlacement {
-        uint32_t cell_x{};
-        uint32_t cell_y{};
-        uint32_t asset_id{};
-        PreviewVec2 popup_screen_position{};
-    };
 
     GLFWwindow* window_{};
     VulkanContext& vulkan_;
     thandor::AssetCatalog catalog_;
+    std::optional<thandor::AiKnowledgeData> ai_knowledge_;
+    std::string ai_knowledge_load_error_;
+    AiKnowledgeUiState ai_knowledge_ui_;
     TerrainRenderer renderer_;
     std::unique_ptr<thandor::MapDocument> document_;
     std::size_t current_group_{};
@@ -200,6 +199,18 @@ private:
         bool owner_is_building{};
         float visibility_radius{24.0F};
     };
+    struct DamageEffectControllerPreview {
+        uint32_t effect_id{};
+        std::size_t placement_index{std::numeric_limits<std::size_t>::max()};
+        uint32_t model_node_index{};
+        int32_t health_threshold_percent{};
+        thandor::DamageEffectTiming timing;
+        std::vector<std::pair<uint32_t,Vec3f>> local_type3_attachments;
+        Vec3f root_position{};
+        ModelHierarchyTransform root_orientation{};
+        bool owner_is_building{};
+        float visibility_radius{24.0F};
+    };
     struct DynamicSceneCpu {
         std::vector<ObjectVertex> vertices;
         std::vector<uint32_t> indices;
@@ -216,6 +227,7 @@ private:
         std::vector<uint32_t> receiver_indices;
     };
     std::vector<TimedEffectControllerPreview> timed_effect_controllers_;
+    std::vector<DamageEffectControllerPreview> damage_effect_controllers_;
     std::vector<std::size_t> animated_building_placements_;
     std::vector<std::size_t> animated_unit_placements_;
     std::vector<std::size_t> continuous_radar_placements_;
@@ -263,7 +275,8 @@ private:
     GizmoHandle gizmo_hovered_{GizmoHandle::None};
     GizmoDragState gizmo_drag_{};
     std::optional<uint32_t> drag_preview_asset_id_;
-    std::optional<PendingTechnologyPlacement> pending_technology_placement_;
+    mutable std::unordered_map<std::string, std::vector<thandor::ModelVisualNode>>
+        faction_technology_hierarchy_cache_;
     std::unordered_map<uint64_t, AssetPreviewMesh> asset_preview_cache_;
     std::unordered_map<uint64_t, thandor::RgbaImage> asset_preview_texture_cache_;
     std::string status_;
@@ -317,6 +330,7 @@ private:
     void apply_flat_water_selection(bool enabled, bool checkpoint_if_needed = true);
     void adjust_water_selection_level(float delta);
     void draw_global_faction_selector(const char* widget_id);
+    void draw_faction_research_mask_editor(uint32_t faction_index, const char* widget_id);
     void draw_faction_camera_start_cards();
     void draw_simulation_target_card();
     void draw_ingame_selection_panel();
@@ -336,6 +350,7 @@ private:
     void issue_context_order_at_pointer(float mouse_x,float mouse_y);
     void clear_selected_simulation_order();
     float terrain_height_near(float world_x, float world_y) const;
+    const thandor::SpriteAsset& cached_sprite(const std::string& path);
     PlacementContactPose placement_contact_pose(const thandor::ArmyAssetPreset& preset,
                                                  float world_x, float world_y,
                                                  float sprite_height_offset) const;
@@ -348,11 +363,7 @@ private:
     const thandor::ArmyAssetPreset* terrain_overlay_profile() const noexcept;
     std::span<const thandor::ModelVisualNode> placement_hierarchy(
         const thandor::ArmyAssetPreset& preset, std::size_t placement_index) const noexcept;
-    const thandor::ArmyTechnologyLevelPreview* technology_level_preview(
-        const thandor::ArmyAssetPreset& preset, uint32_t level_index) const noexcept;
-    void draw_technology_placement_popup();
-    void add_asset_placement(uint32_t x, uint32_t y, uint32_t asset_id,
-                             uint32_t technology_level = 0U);
+    void add_asset_placement(uint32_t x, uint32_t y, uint32_t asset_id);
     void load_map(std::size_t group_index);
     void load_map_from_path(const std::filesystem::path& path);
     void save_project(const std::filesystem::path& path);

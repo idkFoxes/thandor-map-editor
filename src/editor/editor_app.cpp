@@ -38,6 +38,27 @@ struct AssetDragPayload { uint32_t registry_id{}; };
 constexpr float kTurn16ToRadians = 2.0F * std::numbers::pi_v<float> / 65536.0F;
 constexpr float kRadiansToTurn16 = 65536.0F / (2.0F * std::numbers::pi_v<float>);
 
+uint64_t technology_mask_hash(const thandor::FactionTechnologyMask256& mask) noexcept {
+    uint64_t hash = 1469598103934665603ULL;
+    for (uint32_t word : mask) {
+        hash ^= word;
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
+std::string technology_hierarchy_cache_key(
+    uint32_t registry_id, uint32_t faction_index,
+    const thandor::FactionTechnologyMask256& mask) {
+    std::string key = std::to_string(registry_id) + ":" + std::to_string(faction_index);
+    char word_text[16]{};
+    for (uint32_t word : mask) {
+        std::snprintf(word_text, sizeof(word_text), ":%08X", word);
+        key += word_text;
+    }
+    return key;
+}
+
 uint16_t radians_to_turn16(float radians) noexcept {
     const long long turns = std::llround(static_cast<double>(radians) * kRadiansToTurn16);
     return static_cast<uint16_t>(turns & 0xFFFFLL);
@@ -403,6 +424,14 @@ EditorApp::EditorApp(GLFWwindow* window,VulkanContext& vulkan,std::filesystem::p
     }
     game_cursor_=GameCursorAsset::parse(catalog_.load("engine/mouse.gfx"),
                                         catalog_.load("engine/mouse.dat"));
+    try {
+        const auto ki_image = catalog_.load("engine/ki.dat");
+        ai_knowledge_ = thandor::AiKnowledgeData::parse(ki_image);
+    } catch (const std::exception& error) {
+        // KI.DAT is optional editor diagnostics. Missing/modded AI data must not prevent map work.
+        ai_knowledge_.reset();
+        ai_knowledge_load_error_ = error.what();
+    }
     if(catalog_.map_groups().empty())throw std::runtime_error("no paired LEV/FLD maps were found in the game PCK archives");
     load_scenario_catalog_labels();
     template_group_=0;load_map(0);
@@ -436,7 +465,7 @@ void EditorApp::frame(){
         simulation_static_replacement_dirty_=false;
         rebuild_objects();
     }
-    draw_main_menu();draw_left_panel();draw_right_panel();draw_status_bar();draw_new_map_dialog();draw_load_map_dialog();draw_save_map_dialog();update_canvas_interaction();draw_technology_placement_popup();
+    draw_main_menu();draw_left_panel();draw_right_panel();draw_status_bar();draw_new_map_dialog();draw_load_map_dialog();draw_save_map_dialog();update_canvas_interaction();
     draw_water_selection_overlay();draw_placement_markers();draw_transform_gizmo();draw_drag_drop_preview();draw_game_cursor();ImGui::Render();
     const bool enabled_timed_effect_animation=animate_timed_effects_&&
         std::any_of(timed_effect_controllers_.begin(),timed_effect_controllers_.end(),
@@ -448,7 +477,8 @@ void EditorApp::frame(){
         (animate_units_ && !animated_unit_placements_.empty()) ||
         !continuous_radar_placements_.empty() ||
         (simulation_mode_ && (!simulation_actor_placements_.empty() || !simulation_projectiles_.empty())) ||
-        fog_preview_mode_!=0 || enabled_timed_effect_animation;
+        fog_preview_mode_!=0 || enabled_timed_effect_animation ||
+        (animate_timed_effects_ && !damage_effect_controllers_.empty());
     const bool dynamic_geometry_present = !dynamic_scene_cpu_.indices.empty() ||
         !dynamic_scene_cpu_.shading_emitters.empty();
     // A UI order can create the first transient simulation actor after the frame-start static
@@ -683,12 +713,59 @@ void EditorApp::draw_global_faction_selector(const char* widget_id){
         selected_faction_=static_cast<uint32_t>(std::clamp(faction,0,7));
         asset_preview_cache_.clear();
         asset_preview_texture_cache_.clear();
-        rebuild_objects();
     }
     ImGui::TextDisabled("Preview and new placements: army%u.gfx / army%u.pal (%s)",
         thandor::default_faction_graphics_family(selected_faction_),
         thandor::default_faction_graphics_family(selected_faction_),
         thandor::default_faction_color_name(selected_faction_));
+    draw_faction_research_mask_editor(selected_faction_,"research-mask");
+    ImGui::PopID();
+}
+
+void EditorApp::draw_faction_research_mask_editor(uint32_t faction_index,const char* widget_id){
+    if(!document_)return;
+    faction_index=std::min(faction_index,7U);
+    auto& mask=document_->faction_technology_mask(faction_index);
+    const uint32_t unlocked=thandor::faction_technology_unlocked_count(mask);
+    ImGui::PushID(widget_id);
+    ImGui::TextDisabled("Faction %u runtime research mask: %u / 256 bits set",faction_index,unlocked);
+    if(ImGui::Button("Clear research")){
+        checkpoint();mask.fill(0U);document_->mark_dirty();
+        faction_technology_hierarchy_cache_.clear();asset_preview_cache_.clear();
+        reset_simulation(true);rebuild_objects();
+        status_="Cleared faction "+std::to_string(faction_index)+" 256-bit research preview mask.";
+    }
+    ImGui::SameLine();
+    if(ImGui::Button("Unlock all")){
+        checkpoint();mask.fill(0xFFFFFFFFU);document_->mark_dirty();
+        faction_technology_hierarchy_cache_.clear();asset_preview_cache_.clear();
+        reset_simulation(true);rebuild_objects();
+        status_="Enabled all 256 faction research bits for runtime model preview.";
+    }
+    if(ImGui::TreeNode("Research state (exact 256-bit mask)")){
+        ImGui::TextWrapped("ARM chooses the last unlocked of eight linked MDLs. The selected MDL then chooses the first unlocked replacement at +0x238..+0x24C. This state belongs to the faction, not to an individual placement.");
+        ImGui::BeginChild("technology-mask-scroll",{0.0F,190.0F},true);
+        for(const auto& technology:catalog_.technologies()){
+            const uint32_t id=technology.technology_id;
+            if(id>=256U)continue;
+            bool bit=thandor::faction_technology_unlocked(mask,id);
+            std::string label="TEC "+std::to_string(id);
+            if(!technology.title.empty())label+=" · "+technology.title;
+            ImGui::PushID(static_cast<int>(id));
+            if(ImGui::Checkbox(label.c_str(),&bit)){
+                checkpoint();
+                thandor::set_faction_technology_unlocked(mask,id,bit);
+                document_->mark_dirty();
+                faction_technology_hierarchy_cache_.clear();asset_preview_cache_.clear();
+                reset_simulation(true);rebuild_objects();
+                status_=std::string(bit?"Unlocked ":"Locked ")+"TEC "+std::to_string(id)+
+                    " for faction "+std::to_string(faction_index)+" preview.";
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndChild();
+        ImGui::TreePop();
+    }
     ImGui::PopID();
 }
 
@@ -968,166 +1045,232 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
             ?"dependency chain loaded"
             :catalog_.placement_compatibility_diagnostic(preset,document_->level());
 
+        const float tooltip_width=std::clamp(ImGui::GetIO().DisplaySize.x*0.72F,720.0F,980.0F);
+        ImGui::SetNextWindowSizeConstraints(ImVec2(tooltip_width,0.0F),ImVec2(tooltip_width,10000.0F));
         ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX()+650.0F);
         ImGui::Text("%s · ARM %u",thandor::placement_browser_kind_name(preset.browser_kind),
             preset.registry_id);
         ImGui::TextColored(ImVec4(0.86F,0.93F,0.96F,1.0F),"%s",preset.display_name.c_str());
-        ImGui::Text("Localized PCK name: %s",preset.localized_name.empty()?"unavailable":preset.localized_name.c_str());
-        ImGui::TextDisabled("Name source: %s · resource 0x%08X (page 0x%02X, index %u, MDL +0x04=%u)",
-            localized_source.c_str(),preset.name_text_resource_id,thandor::kArmyAssetNameTextPage,
-            localized_index,preset.model_name_text_offset);
-        ImGui::Text("ARM: %s",preset.source_path.c_str());
-        ImGui::Text("Base MDL %u: %s",preset.model_definition_id,preset.model_source_path.c_str());
-        ImGui::Text("SPR: %s",preset.sprite_path.empty()?"marker only":preset.sprite_path.c_str());
-        ImGui::TextDisabled("Runtime class %u · current LEV: %s",preset.runtime_model_class_id,
-            level_diagnostic.c_str());
-        ImGui::TextDisabled("Canonical ID %u · compatible IDs %s · stock placements %u",
-            thandor::canonical_placement_registry_id(preset),
-            compatible_ids.empty()?"same ID only":compatible_ids.c_str(),preset.stock_placement_count);
+        ImGui::Separator();
 
-        ImGui::SeparatorText("PCK gameplay values");
-        if(preset.fog_uncover_radius_q12>0){
-            ImGui::Text("Fog uncover radius: %.3f world units",thandor::q12_to_float(
-                preset.fog_uncover_radius_q12));
-            ImGui::TextDisabled("MDL +0x48 max over resolved hierarchy: %d Q12 · terrain wedge scan %u steps (radius / 0x240)",
-                preset.fog_uncover_radius_q12,preset.fog_uncover_scan_steps);
-        }else ImGui::TextDisabled("Fog uncover radius: no nonzero MDL +0x48 value");
-        ImGui::SeparatorText("Retail build card");
-        ImGui::Text("Armour / HP: %lld",static_cast<long long>(preset.retail_armour));
-        ImGui::Text("Energy: %llu MWh",
-            static_cast<unsigned long long>(preset.retail_energy_cost_q4 >> 4U));
-        ImGui::Text("Xenite: %u T",preset.retail_xenite_cost_q4 >> 4U);
-        ImGui::Text("Time: %u T",preset.retail_build_time_q5 >> 5U);
-        ImGui::TextDisabled("Retail formatting: one selected MDL per ARM node; armour = sum +0x60; time = sum +0x180 >> 5; Xenite = sum +0x184 >> 4; energy = sum +0x18C >> 4.");
-        ImGui::TextDisabled("Raw PCK: armour nodes %u · root MDL integrity %d · energy Q4 %llu · Xenite Q4 %u · time Q5 %u",
-            preset.retail_stat_arm_node_count,preset.root_maximum_integrity,
-            static_cast<unsigned long long>(preset.retail_energy_cost_q4),
-            preset.retail_xenite_cost_q4,preset.retail_build_time_q5);
+        if(ImGui::BeginTable("##asset_tooltip_columns",2,
+            ImGuiTableFlags_SizingStretchProp|ImGuiTableFlags_BordersInnerV|ImGuiTableFlags_NoSavedSettings)){
+            ImGui::TableSetupColumn("Stats / weapons",ImGuiTableColumnFlags_WidthStretch,1.0F);
+            ImGui::TableSetupColumn("Research / models",ImGuiTableColumnFlags_WidthStretch,1.0F);
+            ImGui::TableNextRow();
 
-        std::unordered_set<uint32_t> displayed_damage_shots;
-        for(const auto& weapon:preset.simulation_weapon_profiles){
-            if(!displayed_damage_shots.insert(weapon.shot_definition_id).second)continue;
-            const auto* shot=catalog_.shot_definition(weapon.shot_definition_id);
-            if(!shot)continue;
-            const auto [damage_min,damage_max]=std::minmax_element(
-                shot->target_impact_damage_q12.begin(),shot->target_impact_damage_q12.end());
-            ImGui::Text("SHT %u damage: %.3f..%.3f Q12-decoded · range %.3f · reload %u ticks",
-                shot->definition_id,thandor::q12_to_float(*damage_min),
-                thandor::q12_to_float(*damage_max),thandor::shot_selection_range_world(*shot),
-                weapon.reload_ticks);
-            std::string damage_classes;
-            for(uint32_t impact_class=0U;impact_class<shot->target_impact_damage_q12.size();++impact_class){
-                if(!damage_classes.empty())damage_classes+=" · ";
-                damage_classes+=std::to_string(impact_class)+":"+
-                    std::to_string(shot->target_impact_damage_q12[impact_class]);
-            }
-            ImGui::TextDisabled("target-class damage raw (+0xB0): %s",damage_classes.c_str());
-        }
-
-        const auto& pipeline_validation=preset.effect_pipeline_validation;
-        ImGui::Text("Effect pipeline: %s · %u weapon pipelines · %u SHT · %u EFF · %u SPR · depth %u",
-            pipeline_validation.ok()?"validated":"FAILED",pipeline_validation.weapon_pipeline_count,
-            pipeline_validation.shot_reference_count,pipeline_validation.effect_reference_count,
-            pipeline_validation.sprite_reference_count,pipeline_validation.maximum_effect_depth);
-        for(const auto& issue:pipeline_validation.issues)
-            ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),"%s",issue.c_str());
-
-        if(!preset.loadout_name.empty()||!preset.technology_panel_entries.empty()||
-           !preset.model_variant_groups.empty()){
-            ImGui::SeparatorText("Research / model variants");
-            if(!preset.loadout_name.empty())ImGui::Text("Loadout: %s",preset.loadout_name.c_str());
-            if(!preset.technology_summary.empty())ImGui::Text("Panel: %s",preset.technology_summary.c_str());
-            if(preset.linked_technology_id!=0U){
-                ImGui::Text("Linked auto-unlock TEC %u (+0x1C4): %s",preset.linked_technology_id,
-                    preset.linked_technology_title.empty()?"unnamed":preset.linked_technology_title.c_str());
-            }
-            for(uint32_t branch=0U;branch<preset.technology_branch_names.size();++branch){
-                if(!preset.technology_branch_names[branch].empty())
-                    ImGui::TextDisabled("branch %u: %s",branch+1U,
-                        preset.technology_branch_names[branch].c_str());
-            }
-            for(const auto& entry:preset.technology_panel_entries){
-                ImGui::Text("TEC %u · %s",entry.technology_id,
-                    entry.title.empty()?"unnamed":entry.title.c_str());
-                ImGui::TextDisabled("table index %u · branch %u · panel row %u · Xenite %uT · Energy %uMWh · Time %uT · weapon category %s",
-                    entry.serialized_index,entry.direction_index+1U,entry.row_index+1U,
-                    entry.xenite_cost_q4 >> 4U,entry.energy_cost_q4 >> 4U,
-                    entry.research_duration_q5 >> 5U,
-                    thandor::technology_category_retail_label(entry.category));
-                if(!entry.special_features.empty())
-                    ImGui::TextDisabled("special features: %s",entry.special_features.c_str());
-                if(!entry.description.empty()){
-                    ImGui::PushTextWrapPos(ImGui::GetCursorPosX()+600.0F);
-                    ImGui::TextDisabled("%s",entry.description.c_str());
-                    ImGui::PopTextWrapPos();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX()+ImGui::GetContentRegionAvail().x);
+            ImGui::SeparatorText("Identity");
+            ImGui::Text("Localized PCK name: %s",preset.localized_name.empty()?"unavailable":preset.localized_name.c_str());
+            ImGui::TextDisabled("Name source: %s · resource 0x%08X · p%u #%u · MDL name %u",
+                localized_source.c_str(),preset.name_text_resource_id,thandor::kArmyAssetNameTextPage,
+                localized_index,preset.model_name_text_offset);
+            ImGui::Text("ARM: %s",preset.source_path.c_str());
+            ImGui::Text("MDL %u: %s",preset.model_definition_id,preset.model_source_path.c_str());
+            ImGui::Text("SPR: %s",preset.sprite_path.empty()?"marker only":preset.sprite_path.c_str());
+            if(!preset.sprite_path.empty()){
+                try{
+                    const auto& sprite=cached_sprite(preset.sprite_path);
+                    std::size_t scaled_lighting_triangles=0U;
+                    std::size_t total_triangles=0U;
+                    for(const auto& lod:sprite.lod_groups()){
+                        total_triangles+=lod.mesh.indices.size()/3U;
+                        for(std::size_t triangle=0;triangle+2U<lod.mesh.indices.size();triangle+=3U){
+                            const auto vertex_index=lod.mesh.indices[triangle];
+                            if(vertex_index<lod.mesh.vertices.size()&&
+                               (lod.mesh.vertices[vertex_index].render_flags&0x0800U)!=0U){
+                                ++scaled_lighting_triangles;
+                            }
+                        }
+                    }
+                    ImGui::TextDisabled("SPR light %.3f · scaled tris %zu/%zu",
+                        thandor::q12_to_float(sprite.lighting_scale_q12()),scaled_lighting_triangles,
+                        total_triangles);
+                }catch(const std::exception& error){
+                    ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),"SPR: %s",error.what());
                 }
             }
-            for(const auto& group:preset.model_variant_groups){
-                ImGui::Text("ARM node +0x%X · depth %u · child slot %u%s",group.arm_node_offset,
-                    group.depth,group.child_slot,group.depth==0U?" · chassis/root":" · attachment branch");
-                for(const auto& variant:group.variants){
-                    ImGui::BulletText("variant %u · MDL %u · unlock TEC %u%s%s · linked TEC %u%s%s",
-                        variant.variant_index,variant.model_definition_id,variant.technology_unlock_id,
-                        variant.technology_title.empty()?"":" · ",
-                        variant.technology_title.empty()?"":variant.technology_title.c_str(),
-                        variant.linked_technology_id,
-                        variant.linked_technology_title.empty()?"":" · ",
-                        variant.linked_technology_title.empty()?"":variant.linked_technology_title.c_str());
-                    for(const auto& pipeline:variant.weapon_pipelines){
-                        const auto describe_effect=[](const thandor::EffectPipelineReferenceInfo& effect){
-                            if(effect.effect_definition_id==0U)return std::string("none");
-                            std::string text=std::to_string(effect.effect_definition_id)+" "+
-                                thandor::effect_lifecycle_transition_kind_name(effect.transition_kind);
-                            if(!effect.sprite_path.empty())text+=" "+effect.sprite_path;
-                            return text;
-                        };
-                        const auto describe_effects=[&](
-                            const std::vector<thandor::EffectPipelineReferenceInfo>& effects){
-                            std::string text;
-                            for(const auto& effect:effects){
-                                if(!text.empty())text+="; ";
-                                text+=describe_effect(effect);
-                            }
-                            return text.empty()?std::string("none"):text;
-                        };
-                        const std::string terrain_effects=describe_effects(
-                            pipeline.terrain_impact_effects);
-                        const std::string target_effects=describe_effects(
-                            pipeline.target_class_impact_effects);
-                        ImGui::TextDisabled("    kind-2 launch ×%u mask 0x%02X · SHT %u %s · %s",
-                            pipeline.launch_attachment_count,pipeline.launch_attachment_selector_mask,
-                            pipeline.shot_definition_id,
-                            thandor::shot_trajectory_mode_name(pipeline.trajectory_kind),
-                            pipeline.shot_sprite_path.c_str());
-                        ImGui::TextDisabled("      primary EFF: %s",describe_effect(pipeline.primary_effect).c_str());
-                        ImGui::TextDisabled("      launch EFF: %s",describe_effect(pipeline.launch_effect).c_str());
-                        ImGui::TextDisabled("      secondary EFF: %s",describe_effect(pipeline.secondary_effect).c_str());
-                        ImGui::TextDisabled("      terrain impact EFF: %s",terrain_effects.c_str());
-                        ImGui::TextDisabled("      target-class impact EFF: %s",target_effects.c_str());
+            ImGui::TextDisabled("Class %u · LEV %s",preset.runtime_model_class_id,level_diagnostic.c_str());
+            ImGui::TextDisabled("Canonical %u · compatible %s · stock %u",
+                thandor::canonical_placement_registry_id(preset),
+                compatible_ids.empty()?"same ID":compatible_ids.c_str(),preset.stock_placement_count);
+
+            ImGui::SeparatorText("PCK gameplay values");
+            if(preset.fog_uncover_radius_q12>0){
+                ImGui::Text("Fog %.3f · scan %u",thandor::q12_to_float(preset.fog_uncover_radius_q12),
+                    preset.fog_uncover_scan_steps);
+                ImGui::TextDisabled("MDL +0x48 %d Q12",preset.fog_uncover_radius_q12);
+            }else ImGui::TextDisabled("Fog: none");
+            ImGui::SeparatorText("Retail build card");
+            ImGui::Text("HP %lld · Energy %llu MWh · Xenite %u T · Time %u T",
+                static_cast<long long>(preset.retail_armour),
+                static_cast<unsigned long long>(preset.retail_energy_cost_q4 >> 4U),
+                preset.retail_xenite_cost_q4 >> 4U,preset.retail_build_time_q5 >> 5U);
+            ImGui::TextDisabled("Raw: %u ARM nodes · root HP %d · E %lluQ4 · X %uQ4 · T %uQ5",
+                preset.retail_stat_arm_node_count,preset.root_maximum_integrity,
+                static_cast<unsigned long long>(preset.retail_energy_cost_q4),
+                preset.retail_xenite_cost_q4,preset.retail_build_time_q5);
+
+            ImGui::SeparatorText("Weapons");
+            std::unordered_set<uint32_t> displayed_damage_shots;
+            for(const auto& weapon:preset.simulation_weapon_profiles){
+                if(!displayed_damage_shots.insert(weapon.shot_definition_id).second)continue;
+                const auto* shot=catalog_.shot_definition(weapon.shot_definition_id);
+                if(!shot)continue;
+                const auto [damage_min,damage_max]=std::minmax_element(
+                    shot->target_impact_damage_q12.begin(),shot->target_impact_damage_q12.end());
+                ImGui::Text("SHT %u · dmg %.3f..%.3f · range %.3f · reload %ut",
+                    shot->definition_id,thandor::q12_to_float(*damage_min),
+                    thandor::q12_to_float(*damage_max),thandor::shot_selection_range_world(*shot),
+                    weapon.reload_ticks);
+                std::string damage_classes;
+                for(uint32_t impact_class=0U;impact_class<shot->target_impact_damage_q12.size();++impact_class){
+                    if(!damage_classes.empty())damage_classes+=" · ";
+                    damage_classes+=std::to_string(impact_class)+":"+
+                        std::to_string(shot->target_impact_damage_q12[impact_class]);
+                }
+                ImGui::TextDisabled("target-class damage raw (+0xB0): %s",damage_classes.c_str());
+                ImGui::TextDisabled("Timing: life %ut · ramp %ut · fixed %ut · shade %dt",
+                    shot->projectile_lifetime_ticks,shot->trajectory_ramp_duration_ticks,
+                    shot->fixed_range_transition_age_threshold_ticks,shot->shading_release_transition_ticks);
+                ImGui::TextDisabled("Sound: mask %d · gain %.3fx · max %.3f",
+                    shot->terrain_grid_mask_index,thandor::q15_gain_to_float(shot->positioned_sound_gain_q15),
+                    thandor::q12_to_float(static_cast<int32_t>(shot->positioned_sound_maximum_distance_q12)));
+                const auto terrain_references=thandor::validate_shot_terrain_material_references(
+                    *shot,static_cast<uint32_t>(loaded_material_count_));
+                if(terrain_references.invalid_reference_count==0U){
+                    ImGui::TextDisabled("Terrain refs: %u ok · %u sentinel",
+                        terrain_references.valid_reference_count,terrain_references.sentinel_count);
+                }else{
+                    ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),
+                        "Terrain refs: %u ok · %u sentinel · %u INVALID",
+                        terrain_references.valid_reference_count,terrain_references.sentinel_count,
+                        terrain_references.invalid_reference_count);
+                }
+            }
+
+            const auto& pipeline_validation=preset.effect_pipeline_validation;
+            ImGui::Text("Effect pipeline: %s · W%u S%u E%u P%u · depth %u",
+                pipeline_validation.ok()?"validated":"FAILED",pipeline_validation.weapon_pipeline_count,
+                pipeline_validation.shot_reference_count,pipeline_validation.effect_reference_count,
+                pipeline_validation.sprite_reference_count,pipeline_validation.maximum_effect_depth);
+            for(const auto& issue:pipeline_validation.issues)
+                ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),"%s",issue.c_str());
+            ImGui::PopTextWrapPos();
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX()+ImGui::GetContentRegionAvail().x);
+            if(!preset.loadout_name.empty()||!preset.technology_panel_entries.empty()||
+               !preset.model_variant_groups.empty()){
+                ImGui::SeparatorText("Research / model variants");
+                if(document_){
+                    const uint32_t preview_faction=std::min(selected_faction_,7U);
+                    const auto& preview_mask=document_->faction_technology_mask(preview_faction);
+                    uint32_t selected_root=0U;
+                    uint32_t linked_count=0U;
+                    uint32_t deferred_count=0U;
+                    const auto exact_hierarchy=thandor::resolve_faction_technology_hierarchy(
+                        preset,preview_mask,&selected_root,&linked_count,&deferred_count);
+                    ImGui::Text("Faction %u · research %u/256 · root MDL %u",preview_faction,
+                        thandor::faction_technology_unlocked_count(preview_mask),selected_root);
+                    ImGui::TextDisabled("Runtime: %zu MDL · %u ARM · %u deferred",exact_hierarchy.size(),
+                        linked_count,deferred_count);
+                }
+                if(!preset.loadout_name.empty())ImGui::Text("Loadout: %s",preset.loadout_name.c_str());
+                if(!preset.technology_summary.empty())ImGui::Text("Panel: %s",preset.technology_summary.c_str());
+                if(preset.linked_technology_id!=0U){
+                    ImGui::Text("Linked auto-unlock TEC %u (+0x1C4): %s",preset.linked_technology_id,
+                        preset.linked_technology_title.empty()?"unnamed":preset.linked_technology_title.c_str());
+                }
+                std::string branch_summary;
+                for(uint32_t branch=0U;branch<preset.technology_branch_names.size();++branch){
+                    if(preset.technology_branch_names[branch].empty())continue;
+                    if(!branch_summary.empty())branch_summary+=" · ";
+                    branch_summary+="B"+std::to_string(branch+1U)+" "+preset.technology_branch_names[branch];
+                }
+                if(!branch_summary.empty())ImGui::TextDisabled("%s",branch_summary.c_str());
+                for(const auto& entry:preset.technology_panel_entries){
+                    ImGui::Text("TEC %u %s · B%u/R%u · X%u E%u T%u · %s",
+                        entry.technology_id,entry.title.empty()?"unnamed":entry.title.c_str(),
+                        entry.direction_index+1U,entry.row_index+1U,entry.xenite_cost_q4 >> 4U,
+                        entry.energy_cost_q4 >> 4U,entry.research_duration_q5 >> 5U,
+                        thandor::technology_category_retail_label(entry.category));
+                    if(!entry.special_features.empty())
+                        ImGui::TextDisabled("special features: %s",entry.special_features.c_str());
+                }
+                for(const auto& group:preset.model_variant_groups){
+                    ImGui::Text("ARM node +0x%X · d%u s%u · %s",group.arm_node_offset,group.depth,
+                        group.child_slot,group.depth==0U?"root":"attachment");
+                    for(const auto& variant:group.variants){
+                        ImGui::BulletText("V%u · MDL %u · unlock TEC %u%s%s · link TEC %u%s%s",
+                            variant.variant_index,variant.model_definition_id,variant.technology_unlock_id,
+                            variant.technology_title.empty()?"":" ",
+                            variant.technology_title.empty()?"":variant.technology_title.c_str(),
+                            variant.linked_technology_id,
+                            variant.linked_technology_title.empty()?"":" ",
+                            variant.linked_technology_title.empty()?"":variant.linked_technology_title.c_str());
+                        for(const auto& replacement:variant.faction_technology_replacements){
+                            ImGui::TextDisabled("Repl +0x%03X · MDL %u · TEC %u%s%s",
+                                0x238U+replacement.slot_index*4U,replacement.model_definition_id,
+                                replacement.technology_unlock_id,
+                                replacement.technology_title.empty()?"":" ",
+                                replacement.technology_title.empty()?"":replacement.technology_title.c_str());
+                        }
+                        for(const auto& pipeline:variant.weapon_pipelines){
+                            const auto effect_id=[](const thandor::EffectPipelineReferenceInfo& effect){
+                                return effect.effect_definition_id;
+                            };
+                            ImGui::TextDisabled("kind-2 launch ×%u · SHT %u %s · EFF P%u/L%u/S%u · hit %zu/%zu",
+                                pipeline.launch_attachment_count,pipeline.shot_definition_id,
+                                thandor::shot_trajectory_mode_name(pipeline.trajectory_kind),
+                                effect_id(pipeline.primary_effect),effect_id(pipeline.launch_effect),
+                                effect_id(pipeline.secondary_effect),pipeline.terrain_impact_effects.size(),
+                                pipeline.target_class_impact_effects.size());
+                        }
                     }
                 }
             }
-        }
 
-        ImGui::SeparatorText("Visual/effect evidence");
-        ImGui::TextDisabled("Resolved model nodes %zu · linked ARM models %u · deferred MDL attachments %u",
-            preset.resolved_model_hierarchy.empty()?preset.model_hierarchy.size():preset.resolved_model_hierarchy.size(),
-            preset.linked_model_runtime_count,preset.deferred_model_attachment_count);
-        ImGui::TextDisabled("Timed EFF %u every %u..%u ticks · shared-sprite EFF %s",
-            preset.timed_effect_id,preset.timed_effect_interval_ticks,
-            preset.timed_effect_interval_ticks+
-                (preset.timed_effect_random_ticks==0?0:preset.timed_effect_random_ticks-1),
-            shared_sprite_effect_ids.empty()?"none":shared_sprite_effect_ids.c_str());
-        try{
-            const auto& preview=asset_preview(preset);
-            ImGui::TextDisabled("Textured triangles %zu · raster pixels %zu / %u×%u",
-                preview.textured_source_triangle_count,preview.covered_pixel_count,
-                preview.raster_width,preview.raster_height);
-        }catch(const std::exception& error){
-            ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),"Preview unavailable: %s",error.what());
+            ImGui::SeparatorText("Visual/effect evidence");
+            ImGui::TextDisabled("Models %zu · linked ARM %u · deferred %u",
+                preset.resolved_model_hierarchy.empty()?preset.model_hierarchy.size():preset.resolved_model_hierarchy.size(),
+                preset.linked_model_runtime_count,preset.deferred_model_attachment_count);
+            ImGui::TextDisabled("Timed EFF %u · %u..%ut · shared %s",preset.timed_effect_id,
+                preset.timed_effect_interval_ticks,preset.timed_effect_interval_ticks+
+                    (preset.timed_effect_random_ticks==0?0:preset.timed_effect_random_ticks-1),
+                shared_sprite_effect_ids.empty()?"none":shared_sprite_effect_ids.c_str());
+            if(document_){
+                const auto& preview_mask=document_->faction_technology_mask(std::min(selected_faction_,7U));
+                const auto exact_hierarchy=thandor::resolve_faction_technology_hierarchy(preset,preview_mask);
+                bool damage_rule=false;
+                for(std::size_t node_index=0U;node_index<exact_hierarchy.size();++node_index){
+                    const auto& node=exact_hierarchy[node_index];
+                    const bool runtime_root=node.parent_index==std::numeric_limits<uint32_t>::max()||
+                        (node.parent_index<exact_hierarchy.size()&&
+                         exact_hierarchy[node.parent_index].model_definition_id!=node.model_definition_id);
+                    if(!runtime_root||node.simulation.damage_effect_id==0U||
+                       node.simulation.damage_effect_health_threshold_percent<=0)continue;
+                    ImGui::TextDisabled("Damage MDL %u · EFF %u < %d%% · cd %u + rng %u",
+                        node.model_definition_id,node.simulation.damage_effect_id,
+                        node.simulation.damage_effect_health_threshold_percent,
+                        node.simulation.damage_effect_min_cooldown_ticks,
+                        node.simulation.damage_effect_random_cooldown_ticks);
+                    damage_rule=true;
+                }
+                if(!damage_rule)ImGui::TextDisabled("Damage EFF: none");
+            }
+            try{
+                const auto& preview=asset_preview(preset);
+                ImGui::TextDisabled("Preview: %zu tris · %zu px · %u×%u",
+                    preview.textured_source_triangle_count,preview.covered_pixel_count,
+                    preview.raster_width,preview.raster_height);
+            }catch(const std::exception& error){
+                ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),"Preview: %s",error.what());
+            }
+            ImGui::PopTextWrapPos();
+            ImGui::EndTable();
         }
-        ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
     ImGui::EndChild();
@@ -1522,6 +1665,7 @@ void EditorApp::draw_right_panel(){
             }catch(const std::exception& error){
                 ImGui::TextWrapped("Player/AI metadata unavailable: %s",error.what());
             }
+            draw_ai_knowledge_panel(ai_knowledge_, ai_knowledge_load_error_, ai_knowledge_ui_);
             ImGui::EndTabItem();
         }
         if(ImGui::BeginTabItem("Map")){
@@ -1857,6 +2001,39 @@ void EditorApp::draw_selected_object_editor(){
     const auto* preset=catalog_.army_preset(placement.army_asset_id);
     ImGui::TextWrapped("#%zu · %s · unknown LEV dwords %08X %08X %08X",index,
         preset?preset->display_name.c_str():"unresolved",placement.preserved_tail_dwords[0],placement.preserved_tail_dwords[1],placement.preserved_tail_dwords[2]);
+    if(preset!=nullptr){
+        draw_faction_research_mask_editor(std::min(placement.faction_index,7U),"selected-object-research");
+        auto& tags=document_->placement_tags();
+        const auto tag_it=std::find_if(tags.begin(),tags.end(),[&](const auto& tag){
+            return tag.placement_index==index;
+        });
+        if(tag_it!=tags.end()){
+            int integrity=static_cast<int>(tag_it->preview_integrity_percent);
+            if(ImGui::SliderInt("Integrity / damage preview %",&integrity,0,100)){
+                checkpoint();
+                tag_it->preview_integrity_percent=static_cast<uint32_t>(std::clamp(integrity,0,100));
+                document_->mark_dirty();animate_timed_effects_=true;
+                last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
+            }
+            const auto hierarchy=placement_hierarchy(*preset,index);
+            bool described=false;
+            for(std::size_t node_index=0U;node_index<hierarchy.size();++node_index){
+                const auto& node=hierarchy[node_index];
+                const bool runtime_root=node.parent_index==std::numeric_limits<uint32_t>::max()||
+                    (node.parent_index<hierarchy.size()&&
+                     hierarchy[node.parent_index].model_definition_id!=node.model_definition_id);
+                if(!runtime_root||node.simulation.damage_effect_id==0U||
+                   node.simulation.damage_effect_health_threshold_percent<=0)continue;
+                ImGui::TextDisabled("MDL %u damage EFF %u when integrity < %d%% · cooldown %u + RNG%%%u · attachment class 3",
+                    node.model_definition_id,node.simulation.damage_effect_id,
+                    node.simulation.damage_effect_health_threshold_percent,
+                    node.simulation.damage_effect_min_cooldown_ticks,
+                    node.simulation.damage_effect_random_cooldown_ticks);
+                described=true;
+            }
+            if(!described)ImGui::TextDisabled("Selected research-resolved MDL hierarchy has no damage-state EFF.");
+        }
+    }
     if(ImGui::Button("Center camera on selected",{-1.0F,0.0F})){
         camera_.target={placement.render_x(),placement.render_y(),terrain_height_near(placement.render_x(),placement.render_y())};
     }
@@ -2196,15 +2373,8 @@ void EditorApp::update_canvas_interaction(){
         const auto drag=*static_cast<const AssetDragPayload*>(payload->Data);
         drag_preview_asset_id_=drag.registry_id;
         if(ImGui::IsMouseReleased(ImGuiMouseButton_Left)&&mouse_in_canvas(io.MousePos.x,io.MousePos.y)){
-            if(const auto picked=pick_cell(io.MousePos.x,io.MousePos.y)) {
-                const auto* preset = catalog_.army_preset(drag.registry_id);
-                if (preset != nullptr && preset->technology_level_previews.size() > 1U)
-                    pending_technology_placement_ = PendingTechnologyPlacement{
-                        picked->first,picked->second,drag.registry_id,
-                        {io.MousePos.x,io.MousePos.y}};
-                else
-                    add_asset_placement(picked->first,picked->second,drag.registry_id,0U);
-            }
+            if(const auto picked=pick_cell(io.MousePos.x,io.MousePos.y))
+                add_asset_placement(picked->first,picked->second,drag.registry_id);
             drag_preview_asset_id_.reset();
             return;
         }
@@ -2613,6 +2783,14 @@ float EditorApp::terrain_height_near(float world_x,float world_y) const{
     return document_?document_->field().sample_terrain(world_x,world_y).height:0.0F;
 }
 
+const thandor::SpriteAsset& EditorApp::cached_sprite(const std::string& path){
+    auto found=sprite_cache_.find(path);
+    if(found==sprite_cache_.end()){
+        found=sprite_cache_.emplace(path,thandor::SpriteAsset::parse(catalog_.load(path))).first;
+    }
+    return found->second;
+}
+
 PlacementContactPose EditorApp::placement_contact_pose(
     const thandor::ArmyAssetPreset& preset,float world_x,float world_y,
     float sprite_height_offset) const{
@@ -2638,7 +2816,10 @@ AssetPreviewMesh& EditorApp::asset_preview(const thandor::ArmyAssetPreset& prese
     const bool neutral=thandor::placement_uses_neutral_source_color(preset);
     const uint32_t preview_faction=neutral?0U:
         thandor::default_faction_graphics_family(selected_faction_);
-    const uint64_t cache_key=static_cast<uint64_t>(preview_faction)<<32U|preset.registry_id;
+    const auto& research_mask=document_?document_->faction_technology_mask(selected_faction_):
+        thandor::FactionTechnologyMask256{};
+    const uint64_t cache_key=(technology_mask_hash(research_mask)*0x9E3779B185EBCA87ULL)^
+        (static_cast<uint64_t>(preview_faction)<<32U)^preset.registry_id;
     if(const auto found=asset_preview_cache_.find(cache_key);found!=asset_preview_cache_.end())return found->second;
 
     AssetPreviewMesh preview{};
@@ -2672,17 +2853,15 @@ AssetPreviewMesh& EditorApp::asset_preview(const thandor::ArmyAssetPreset& prese
         }
         return found->second;
     };
-    const auto load_sprite=[&](const std::string& path)->const thandor::SpriteAsset&{
-        auto found=sprite_cache_.find(path);
-        if(found==sprite_cache_.end())
-            found=sprite_cache_.emplace(path,thandor::SpriteAsset::parse(catalog_.load(path))).first;
-        return found->second;
-    };
 
     std::vector<thandor::ModelVisualNode> fallback_nodes;
-    std::span<const thandor::ModelVisualNode> hierarchy = preset.resolved_model_hierarchy.empty()
-        ? std::span<const thandor::ModelVisualNode>(preset.model_hierarchy)
-        : std::span<const thandor::ModelVisualNode>(preset.resolved_model_hierarchy);
+    std::vector<thandor::ModelVisualNode> researched_nodes=
+        thandor::resolve_faction_technology_hierarchy(preset,research_mask);
+    std::span<const thandor::ModelVisualNode> hierarchy = !researched_nodes.empty()
+        ? std::span<const thandor::ModelVisualNode>(researched_nodes)
+        : (preset.resolved_model_hierarchy.empty()
+            ? std::span<const thandor::ModelVisualNode>(preset.model_hierarchy)
+            : std::span<const thandor::ModelVisualNode>(preset.resolved_model_hierarchy));
     if(hierarchy.empty()){
         thandor::ModelVisualNode fallback;
         fallback.parent_index=std::numeric_limits<uint32_t>::max();
@@ -2716,7 +2895,7 @@ AssetPreviewMesh& EditorApp::asset_preview(const thandor::ArmyAssetPreset& prese
                 instance.transform=compose_model_transform(parent.transform,local);
             }
         }
-        if(node_active)instance.sprite=&load_sprite(node.sprite_path);
+        if(node_active)instance.sprite=&cached_sprite(node.sprite_path);
         active.push_back(node_active);
         instances.push_back(instance);
     }
@@ -2826,6 +3005,26 @@ void EditorApp::draw_placement_markers(){
     const auto vp=camera_.view_projection(io.DisplaySize.x/std::max(io.DisplaySize.y,1.0f));
     auto* draw=ImGui::GetBackgroundDrawList();
     const auto placements=document_->level().placements();
+    const auto draw_world_distance_ring=[&](Vec3f center,float radius,ImU32 color,float thickness){
+        if(!std::isfinite(radius)||radius<=0.0F)return;
+        constexpr int kSegments=64;
+        std::optional<ImVec2> previous;
+        for(int segment=0;segment<=kSegments;++segment){
+            const float angle=static_cast<float>(segment)*
+                (2.0F*std::numbers::pi_v<float>/static_cast<float>(kSegments));
+            const float x=center.x+std::cos(angle)*radius;
+            const float y=center.y+std::sin(angle)*radius;
+            const Vec3f point{x,y,terrain_height_near(x,y)+0.04F};
+            float sx,sy,depth;
+            if(project_to_screen(point,vp,io.DisplaySize.x,io.DisplaySize.y,sx,sy,depth)){
+                const ImVec2 current{sx,sy};
+                if(previous)draw->AddLine(*previous,current,color,thickness);
+                previous=current;
+            }else{
+                previous.reset();
+            }
+        }
+    };
     for(std::size_t i=0;i<placements.size();++i){
         const auto& placement=placements[i];
         const auto* preset=catalog_.army_preset(placement.army_asset_id);
@@ -2967,6 +3166,32 @@ void EditorApp::draw_placement_markers(){
             draw->AddLine({ax,ay},{bx,by},IM_COL32(80,235,135,205),2.0F);
         draw_attack_marker(target,"Production drive point",IM_COL32(80,235,135,245));
     }
+    if (ai_knowledge_ && ai_knowledge_ui_.show_distance_overlay) {
+        const auto* semantic = thandor::find_ai_knowledge_semantic(
+            ai_knowledge_ui_.distance_parameter_index);
+        if (semantic && semantic->domain == thandor::AiKnowledgeValueDomain::Q12Distance) {
+            const float radius = std::abs(thandor::q12_to_float(
+                ai_knowledge_->signed_raw(semantic->index)));
+
+            const auto draw_ai_distance_ring = [&](std::size_t placement_index) {
+                if (placement_index >= placements.size()) return;
+
+                Vec3f center = placement_command_target_point(placement_index);
+                center.z = terrain_height_near(center.x, center.y);
+                draw_world_distance_ring(
+                    center, radius, IM_COL32(120, 175, 255, 155), 1.25F);
+            };
+
+            if (ai_knowledge_ui_.show_distance_for_all_placements) {
+                for (std::size_t placement_index = 0;
+                     placement_index < placements.size(); ++placement_index) {
+                    draw_ai_distance_ring(placement_index);
+                }
+            } else if (selected_placement_) {
+                draw_ai_distance_ring(*selected_placement_);
+            }
+        }
+    }
     if(simulation_show_ranges_&&selected_placement_&&
        *selected_placement_<placements.size()){
         const auto index=*selected_placement_;
@@ -2980,22 +3205,8 @@ void EditorApp::draw_placement_markers(){
                 preset->simulation_weapon_profiles.begin(),preset->simulation_weapon_profiles.end(),
                 [](const auto& left,const auto& right){return left.maximum_range_q12<right.maximum_range_q12;})
                 ->maximum_range_q12;
-            const float radius=thandor::q12_to_float(maximum_range_q12);
-            constexpr int segments=64;
-            std::optional<ImVec2> previous;
-            for(int segment=0;segment<=segments;++segment){
-                const float angle=static_cast<float>(segment)*(2.0F*std::numbers::pi_v<float>/segments);
-                float sx,sy,depth;
-                const Vec3f point{center.x+std::cos(angle)*radius,
-                                  center.y+std::sin(angle)*radius,
-                                  terrain_height_near(center.x+std::cos(angle)*radius,
-                                                      center.y+std::sin(angle)*radius)+0.04F};
-                if(project_to_screen(point,vp,io.DisplaySize.x,io.DisplaySize.y,sx,sy,depth)){
-                    const ImVec2 current{sx,sy};
-                    if(previous)draw->AddLine(*previous,current,IM_COL32(255,175,55,165),1.5F);
-                    previous=current;
-                }else previous.reset();
-            }
+            draw_world_distance_ring(center,thandor::q12_to_float(maximum_range_q12),
+                IM_COL32(255,175,55,165),1.5F);
         }
     }
     for(const auto& [index,state]:simulation_actor_states_){
@@ -3272,6 +3483,8 @@ void EditorApp::rebuild_objects(){
     dynamic_triangle_count_=0;
     dynamic_scene_build_milliseconds_=0.0;
     timed_effect_controllers_.clear();
+    damage_effect_controllers_.clear();
+    faction_technology_hierarchy_cache_.clear();
     animated_building_placements_.clear();
     animated_unit_placements_.clear();
     continuous_radar_placements_.clear();
@@ -3302,6 +3515,7 @@ void EditorApp::rebuild_objects(){
     std::vector<ObjectVertex> shadow_vertices;
     std::vector<uint32_t> shadow_indices;
     std::vector<TimedEffectControllerPreview> pending_timed_effects;
+    std::vector<DamageEffectControllerPreview> pending_damage_effects;
     std::vector<thandor::RgbaImage> texture_layers;
     std::unordered_map<uint64_t,uint32_t> layer_lookup;
     const auto& level_lighting=document_->level().lighting();
@@ -3363,12 +3577,6 @@ void EditorApp::rebuild_objects(){
         layer_lookup.emplace(key,layer);
         return layer;
     };
-    const auto load_cached_sprite=[&](const std::string& path)->const thandor::SpriteAsset&{
-        auto found=sprite_cache_.find(path);
-        if(found==sprite_cache_.end())
-            found=sprite_cache_.emplace(path,thandor::SpriteAsset::parse(catalog_.load(path))).first;
-        return found->second;
-    };
 
     std::unordered_set<uint32_t> preloaded_effect_ids;
     std::unordered_set<uint32_t> preloaded_shot_ids;
@@ -3378,7 +3586,7 @@ void EditorApp::rebuild_objects(){
         if(effect_id==0U||!preloaded_effect_ids.insert(effect_id).second)return;
         const auto* definition=catalog_.effect_definition(effect_id);
         if(definition==nullptr)throw std::runtime_error("timed effect is missing from the EFF registry");
-        const auto& sprite=load_cached_sprite(definition->sprite_path);
+        const auto& sprite=cached_sprite(definition->sprite_path);
         const auto& mesh=sprite.mesh();
         const uint32_t frame_count=std::max(1U,definition->runtime_value_0c);
         for(std::size_t triangle=0;triangle+2U<mesh.indices.size();triangle+=3U){
@@ -3407,7 +3615,7 @@ void EditorApp::rebuild_objects(){
         if(shot_id==0U||!preloaded_shot_ids.insert(shot_id).second)return;
         const auto* shot=catalog_.shot_definition(shot_id);
         if(!shot)throw std::runtime_error("weapon references a missing SHT definition");
-        const auto& sprite=load_cached_sprite(shot->sprite_path);
+        const auto& sprite=cached_sprite(shot->sprite_path);
         const auto& mesh=sprite.mesh();
         for(std::size_t triangle=0;triangle+2U<mesh.indices.size();triangle+=3U){
             const auto& vertex=mesh.vertices.at(mesh.indices[triangle]);
@@ -3522,13 +3730,6 @@ void EditorApp::rebuild_objects(){
         }
         if(preset->sprite_path.empty()){++marker_only_object_count_;continue;}
         try{
-            const auto load_sprite=[&](const std::string& path)->const thandor::SpriteAsset&{
-                auto found=sprite_cache_.find(path);
-                if(found==sprite_cache_.end())
-                    found=sprite_cache_.emplace(path,
-                        thandor::SpriteAsset::parse(catalog_.load(path))).first;
-                return found->second;
-            };
             std::vector<thandor::ModelVisualNode> fallback_nodes;
             std::span<const thandor::ModelVisualNode> hierarchy =
                 placement_hierarchy(*preset, placement_index);
@@ -3554,7 +3755,7 @@ void EditorApp::rebuild_objects(){
                 instance.node=&node;
                 instance.root=node.parent_index==std::numeric_limits<uint32_t>::max();
                 bool node_active=node.creates_runtime_node()&&!node.sprite_path.empty();
-                const thandor::SpriteAsset* node_sprite=node_active?&load_sprite(node.sprite_path):nullptr;
+                const thandor::SpriteAsset* node_sprite=node_active?&cached_sprite(node.sprite_path):nullptr;
                 if(instance.root){
                     const auto contact=placement_contact_pose(*preset,placement.render_x(),
                         placement.render_y(),node_sprite?node_sprite->placement_height_offset():0.0F);
@@ -3738,6 +3939,45 @@ void EditorApp::rebuild_objects(){
                     preset->browser_kind==thandor::PlacementBrowserKind::Building;
                 pending_timed_effects.push_back(std::move(pending));
                 ++timed_effect_controller_count_;
+            }
+
+            // ArmyRuntime_EmitDamageThresholdEffect is owned by the selected MDL runtime, not by
+            // the top-level ARM record. Build one controller for each resolved MDL runtime root.
+            // Child mesh nodes inside the same MDL copy the same profile and must not duplicate it.
+            for(std::size_t node_index=0U;node_index<hierarchy.size();++node_index){
+                if(node_index>=active.size()||!active[node_index]||instances[node_index].sprite==nullptr)continue;
+                const auto& node=hierarchy[node_index];
+                const bool runtime_definition_root=node.parent_index==std::numeric_limits<uint32_t>::max()||
+                    (node.parent_index<hierarchy.size()&&
+                     hierarchy[node.parent_index].model_definition_id!=node.model_definition_id);
+                if(!runtime_definition_root||node.simulation.damage_effect_id==0U||
+                   node.simulation.damage_effect_health_threshold_percent<=0)continue;
+                const auto* damage_definition=catalog_.effect_definition(node.simulation.damage_effect_id);
+                if(damage_definition==nullptr)
+                    throw std::runtime_error("MDL damage-state effect is missing from the EFF registry");
+                preload_effect_textures(damage_definition->definition_id);
+                DamageEffectControllerPreview damage;
+                damage.effect_id=damage_definition->definition_id;
+                damage.placement_index=placement_index;
+                damage.model_node_index=static_cast<uint32_t>(node_index);
+                damage.health_threshold_percent=node.simulation.damage_effect_health_threshold_percent;
+                damage.timing={node.simulation.damage_effect_min_cooldown_ticks,
+                    node.simulation.damage_effect_random_cooldown_ticks,0U};
+                damage.root_position=instances[node_index].transform.translation;
+                damage.root_orientation=instances[node_index].transform;
+                std::vector<std::pair<uint32_t,Vec3f>> indexed_points;
+                for(const auto& lookup:instances[node_index].sprite->lookup_records())
+                    if(lookup.key_class().value()==3U)
+                        indexed_points.emplace_back(lookup.key_index().value(),lookup.local_translation);
+                std::sort(indexed_points.begin(),indexed_points.end(),
+                    [](const auto& left,const auto& right){return left.first<right.first;});
+                for(const auto& [attachment_index,point]:indexed_points)
+                    damage.local_type3_attachments.emplace_back(attachment_index,point);
+                damage.timing.attachment_count=
+                    static_cast<uint32_t>(damage.local_type3_attachments.size());
+                damage.owner_is_building=
+                    preset->browser_kind==thandor::PlacementBrowserKind::Building;
+                pending_damage_effects.push_back(std::move(damage));
             }
             bool emitted_object=false;
             bool emitted_body=false;
@@ -3927,6 +4167,7 @@ void EditorApp::rebuild_objects(){
         }
     }
     timed_effect_controllers_=std::move(pending_timed_effects);
+    damage_effect_controllers_=std::move(pending_damage_effects);
     for(auto& bounds:placement_pick_bounds_)bounds.pad(0.20F);
 
     if(terrain_compatibility_overlay_!=0){
@@ -4406,6 +4647,18 @@ void EditorApp::update_simulation(uint32_t presentation_tick){
     }
     for(uint32_t step=0;step<steps;++step){
         const uint32_t tick=first_tick+step;
+        // Entity-targeted mode-2 shots re-read their target position every processed retail tick.
+        // Keep that target refresh separate from actor firing so projectile motion remains readable
+        // and existing in-flight shots still follow a moving target after the shooter stops.
+        for(auto& projectile:simulation_projectiles_){
+            if(!projectile.live_target_placement_index)continue;
+            const auto target_index=*projectile.live_target_placement_index;
+            if(target_index>=placements.size())continue;
+            const auto* shot=catalog_.shot_definition(projectile.shot_definition_id);
+            if(!shot)continue;
+            thandor::simulation_update_projectile_live_target(
+                projectile,*shot,placement_command_target_point(target_index));
+        }
         for(std::size_t index=0;index<placements.size();++index){
             const auto& placement=placements[index];
             const auto* preset=catalog_.army_preset(placement.army_asset_id);
@@ -4500,9 +4753,15 @@ void EditorApp::update_simulation(uint32_t presentation_tick){
                 transforms=simulation_hierarchy_transforms(index,*preset,actor);
                 launch_points=simulation_weapon_launch_points(index,weapon,weapon_state,transforms);
                 if(launch_points.empty())continue;
+                std::optional<std::size_t> live_target_placement_index;
+                if(const auto target_placement=simulation_attack_placement_targets_.find(index);
+                   target_placement!=simulation_attack_placement_targets_.end()&&
+                   target_placement->second<placements.size()){
+                    live_target_placement_index=target_placement->second;
+                }
                 auto volley=thandor::simulation_create_volley(index,weapon_index,weapon,
                     launch_points,*target,*shot,tick,next_simulation_projectile_serial_,
-                    result.fired_attachment_selector);
+                    result.fired_attachment_selector,live_target_placement_index);
                 if(!volley.empty()){
                     std::optional<uint32_t> target_impact_class;
                     if(const auto target_placement=simulation_attack_placement_targets_.find(index);
@@ -4711,12 +4970,6 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
     };
     const auto effect_layer=[&](uint32_t subresource){return layer_for_key(kEffectLayerNamespace|subresource);};
     const auto untextured_layer=[&](){return layer_for_key(kUntexturedLayerKey);};
-    const auto load_sprite=[&](const std::string& path)->const thandor::SpriteAsset&{
-        auto found=sprite_cache_.find(path);
-        if(found==sprite_cache_.end())found=sprite_cache_.emplace(path,
-            thandor::SpriteAsset::parse(catalog_.load(path))).first;
-        return found->second;
-    };
     const auto projectile_model_pose=[&](const thandor::SimulationProjectileState& projectile,
                                           const thandor::ShotDefinitionRecord& shot,
                                           uint32_t age_ticks,Vec3f position,Vec3f next_position){
@@ -4754,9 +5007,10 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
         next.draw_runs.push_back(ObjectDrawRun{blend,two_sided,first_index,3U,sort_group});
     };
 
+    using EffectRuntimeAngles=std::array<uint32_t,3>; // {worldRotationAngle0,1,2}
     using EffectAppendFn=std::function<bool(const thandor::EffectDefinitionRecord&,Vec3f,
         uint32_t,float,uint32_t,const ModelHierarchyTransform*,std::optional<uint32_t>,uint32_t,
-        uint32_t,std::optional<float>)>;
+        uint32_t,std::optional<float>,std::optional<EffectRuntimeAngles>)>;
     using LinkedShotAppendFn=std::function<bool(const thandor::ShotDefinitionRecord&,Vec3f,Vec3f,
         uint32_t,uint32_t,uint32_t,uint32_t)>;
     EffectAppendFn append_effect_visual_recursive;
@@ -4773,16 +5027,28 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                                          const ModelHierarchyTransform* authored_orientation,
                                          std::optional<uint32_t> forced_frame,
                                          uint32_t texture_faction,uint32_t recursion_depth,
-                                         std::optional<float> mode0_beam_length)->bool{
+                                         std::optional<float> mode0_beam_length,
+                                         std::optional<EffectRuntimeAngles> exact_runtime_angles)->bool{
         const uint32_t lifetime=std::max(1U,thandor::effect_lifetime_ticks(definition));
-        const auto& sprite=load_sprite(definition.sprite_path);
+        const auto& sprite=cached_sprite(definition.sprite_path);
         const auto& mesh=sprite.mesh();
         if(mesh.indices.size()%3U!=0U)throw std::runtime_error("EFF preview mesh is not triangle aligned");
         const Vec3f base_position=position;
-        ModelHierarchyTransform base_authored=authored_orientation!=nullptr
-            ?*authored_orientation
-            :placement_root_transform(position.x,position.y,position.z,yaw_radians);
-        if((definition.creation_flags&1U)!=0U){
+        ModelHierarchyTransform base_authored;
+        if(exact_runtime_angles){
+            // EffectRuntimePool_CreateInstanceFromDefinitionCf stores the runtime fields as
+            // {worldRotationAngle0=arg2, worldRotationAngle1=arg1, worldRotationAngle2=arg0} and
+            // rebuilds the root transform directly in world space. Damage-state effects pass
+            // explicit binary-derived angles here rather than inheriting their army parent's basis.
+            base_authored=fixed_model_rotation_basis((*exact_runtime_angles)[2],
+                (*exact_runtime_angles)[1],(*exact_runtime_angles)[0]);
+            base_authored.translation=position;
+        }else{
+            base_authored=authored_orientation!=nullptr
+                ?*authored_orientation
+                :placement_root_transform(position.x,position.y,position.z,yaw_radians);
+        }
+        if((definition.creation_flags&1U)!=0U&&!exact_runtime_angles){
             uint32_t random=orientation_random*1664525U+1013904223U+definition.definition_id;
             const auto random_basis=fixed_model_rotation_basis(random&0xFFFFU,
                 (random>>16U)&0xFFFFU,0U);
@@ -4796,9 +5062,18 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
             const float start_scale=thandor::q12_to_float(definition.model_scale_x_q12);
             const float end_scale=thandor::q12_to_float(definition.model_scale_y_q12);
             const float scale=start_scale+(end_scale-start_scale)*progress;
-            const auto displacement=thandor::effect_transition2_displacement_at_age(
-                definition,pose_age,orientation_random);
+            const auto displacement=exact_runtime_angles
+                ?thandor::effect_transition2_displacement_at_age_angles(definition,pose_age,
+                    (*exact_runtime_angles)[0],(*exact_runtime_angles)[1])
+                :thandor::effect_transition2_displacement_at_age(definition,pose_age,
+                    orientation_random);
             ModelHierarchyTransform pose=base_authored;
+            if(exact_runtime_angles&&definition.transition_kind==2U){
+                const uint32_t pose_angle1=thandor::effect_transition2_world_rotation_angle1_at_pose_age(
+                    definition,pose_age,(*exact_runtime_angles)[1]);
+                pose=fixed_model_rotation_basis((*exact_runtime_angles)[2],pose_angle1,
+                    (*exact_runtime_angles)[0]);
+            }
             pose.translation=add(base_position,Vec3f{displacement[0],displacement[1],displacement[2]});
             return std::pair<ModelHierarchyTransform,float>{pose,scale};
         };
@@ -4904,7 +5179,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                         child_orientation.translation=*emitter;
                         emitted|=append_effect_visual_recursive(*child,*emitter,age_ticks-spawn_tick,
                             yaw_radians,orientation_random+spawn_tick,&child_orientation,std::nullopt,
-                            texture_faction,recursion_depth+1U,std::nullopt);
+                            texture_faction,recursion_depth+1U,std::nullopt,std::nullopt);
                     }
                 }
             }
@@ -4924,7 +5199,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                         upright.translation=*emitter;
                         emitted|=append_effect_visual_recursive(*child,*emitter,age_ticks-spawn,0.0F,
                             orientation_random+spawn,&upright,std::nullopt,texture_faction,
-                            recursion_depth+1U,std::nullopt);
+                            recursion_depth+1U,std::nullopt,std::nullopt);
                     }
                     if(lifetime-spawn<interval)break;
                 }
@@ -4976,7 +5251,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
         const float yaw=thandor::turn16_to_radians(projectile.launch_yaw_turn16);
         const auto initial_orientation=shot_model_transform(origin,projectile.launch_yaw_turn16,
             projectile.launch_pitch_turn16);
-        const auto& shot_sprite=load_sprite(shot.sprite_path);
+        const auto& shot_sprite=cached_sprite(shot.sprite_path);
         Vec3f shot_emitter=origin;
         for(const auto& attachment:shot_sprite.lookup_records()){
             if(attachment.key_class().value()==3U){
@@ -4989,7 +5264,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
             ModelHierarchyTransform launch_orientation=initial_orientation;
             launch_orientation.translation=shot_emitter;
             emitted|=append_effect_visual_recursive(*launch,shot_emitter,age_ticks,yaw,stable_seed,
-                &launch_orientation,std::nullopt,texture_faction,recursion_depth+1U,std::nullopt);
+                &launch_orientation,std::nullopt,texture_faction,recursion_depth+1U,std::nullopt,std::nullopt);
         }
         const bool flight_visible=shot.trajectory_mode==0
             ?age_ticks<projectile.lifetime_ticks:age_ticks<projectile.travel_ticks;
@@ -5001,7 +5276,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                 position,next_position);
             thandor::EffectDefinitionRecord flight;
             flight.definition_id=0x80000000U|shot.definition_id;
-            flight.runtime_value_0c=std::max(1U,shot.lifetime_ticks);
+            flight.runtime_value_0c=std::max(1U,shot.projectile_lifetime_ticks);
             flight.frame_advance_threshold_q4=16U;
             flight.state_tint_argb=shot.state_tint_argb==0U?0xFFFFFFFFU:shot.state_tint_argb;
             flight.model_scale_x_q12=0x1000;flight.model_scale_y_q12=0x1000;
@@ -5011,7 +5286,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                 :std::nullopt;
             emitted|=append_effect_visual_recursive(flight,position,age_ticks,yaw,stable_seed,
                 &flight_orientation,thandor::simulation_shot_frame_index(shot,age_ticks),
-                texture_faction,recursion_depth+1U,beam_length);
+                texture_faction,recursion_depth+1U,beam_length,std::nullopt);
             if(const auto* trail=catalog_.effect_definition(shot.secondary_effect_id)){
                 const uint32_t interval=std::max(1U,shot.secondary_effect_interval_ticks);
                 for(uint32_t spawn=interval;spawn<=age_ticks;spawn+=interval){
@@ -5031,7 +5306,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                     consume_recursive_effect_spawn();
                     emitted|=append_effect_visual_recursive(*trail,trail_position,age_ticks-spawn,0.0F,
                         stable_seed+spawn,&upright,std::nullopt,texture_faction,
-                        recursion_depth+1U,std::nullopt);
+                        recursion_depth+1U,std::nullopt,std::nullopt);
                     if(age_ticks-spawn<interval)break;
                 }
             }
@@ -5042,7 +5317,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                 ModelHierarchyTransform upright=fixed_model_rotation_basis(0U,0x4000U,0U);
                 upright.translation=projectile.impact_position;
                 emitted|=append_effect_visual_recursive(*impact,projectile.impact_position,impact_age,0.0F,
-                    stable_seed,&upright,std::nullopt,texture_faction,recursion_depth+1U,std::nullopt);
+                    stable_seed,&upright,std::nullopt,texture_faction,recursion_depth+1U,std::nullopt,std::nullopt);
             }
         }
         return emitted;
@@ -5053,9 +5328,11 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                                          uint32_t orientation_random=0U,
                                          const ModelHierarchyTransform* authored_orientation=nullptr,
                                          std::optional<uint32_t> forced_frame=std::nullopt,
-                                         uint32_t texture_faction=0U)->bool{
+                                         uint32_t texture_faction=0U,
+                                         std::optional<EffectRuntimeAngles> exact_runtime_angles=std::nullopt)->bool{
         return append_effect_visual_recursive(definition,position,age_ticks,yaw_radians,
-            orientation_random,authored_orientation,forced_frame,texture_faction,0U,std::nullopt);
+            orientation_random,authored_orientation,forced_frame,texture_faction,0U,std::nullopt,
+            exact_runtime_angles);
     };
 
     const auto placements=document_->level().placements();
@@ -5164,7 +5441,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
             ModelHierarchyInstance instance{};instance.node=&node;
             instance.root=node.parent_index==std::numeric_limits<uint32_t>::max();
             bool node_active=node.creates_runtime_node()&&!node.sprite_path.empty();
-            const thandor::SpriteAsset* node_sprite=node_active?&load_sprite(node.sprite_path):nullptr;
+            const thandor::SpriteAsset* node_sprite=node_active?&cached_sprite(node.sprite_path):nullptr;
             if(instance.root){
                 uint32_t dynamic_root_yaw=root_yaw;
                 int32_t root_recoil_angle=0;
@@ -5482,6 +5759,70 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
         }
     }
 
+    if(animate_timed_effects_&&!damage_effect_controllers_.empty()){
+        for(std::size_t controller_index=0U;controller_index<damage_effect_controllers_.size();++controller_index){
+            const auto& source=damage_effect_controllers_[controller_index];
+            if(source.placement_index>=placements.size()||
+               source.placement_index>=document_->placement_tags().size())continue;
+            const auto& tag=document_->placement_tags()[source.placement_index];
+            if(static_cast<int32_t>(tag.preview_integrity_percent)>=source.health_threshold_percent)continue;
+            const auto& placement=placements[source.placement_index];
+            if(!placement_visible_in_canvas(source.root_position,source.visibility_radius)&&
+               !(source.placement_index<placement_pick_bounds_.size()&&
+                 bounds_visible_in_canvas(placement_pick_bounds_[source.placement_index],2.0F)))continue;
+            const auto* preset=catalog_.army_preset(placement.army_asset_id);
+            if(preset==nullptr)continue;
+            ModelHierarchyTransform runtime_transform=source.root_orientation;
+            thandor::SimulationActorState fallback_actor;
+            fallback_actor.position={placement.render_x(),placement.render_y(),
+                terrain_height_near(placement.render_x(),placement.render_y())};
+            fallback_actor.body_yaw_turn16=placement.orientation_turn16&0xFFFFU;
+            thandor::SimulationActorState* actor=&fallback_actor;
+            if(const auto live=simulation_actor_states_.find(source.placement_index);
+               live!=simulation_actor_states_.end())actor=&live->second;
+            const auto transforms=simulation_hierarchy_transforms(source.placement_index,*preset,*actor);
+            if(source.model_node_index<transforms.size())runtime_transform=transforms[source.model_node_index];
+            std::vector<std::pair<uint32_t,Vec3f>> attachments;
+            std::vector<uint32_t> attachment_keys;
+            attachments.reserve(source.local_type3_attachments.size());
+            attachment_keys.reserve(source.local_type3_attachments.size());
+            for(const auto& [key_index,local]:source.local_type3_attachments){
+                attachments.emplace_back(key_index,transform_point(runtime_transform,local));
+                attachment_keys.push_back(key_index);
+            }
+
+            const uint32_t stable_seed=resource_animation_rng_seed_^source.effect_id^
+                static_cast<uint32_t>(source.placement_index*0x9E3779B9U)^static_cast<uint32_t>(controller_index);
+            const auto schedule=thandor::build_damage_effect_schedule_for_attachment_keys(
+                source.timing,attachment_keys,stable_seed,2048U,128U);
+            if(schedule.cycle_ticks==0U)continue;
+            const auto* definition=catalog_.effect_definition(source.effect_id);
+            if(definition==nullptr)continue;
+            const uint32_t lifetime=std::max(1U,thandor::effect_lifetime_ticks(*definition));
+            for(const auto& pulse:schedule.pulses){
+                const uint32_t age=(current_presentation_tick_%schedule.cycle_ticks+
+                    schedule.cycle_ticks-pulse.spawn_tick%schedule.cycle_ticks)%schedule.cycle_ticks;
+                if(age>=lifetime)continue;
+                Vec3f origin=runtime_transform.translation;
+                if(!attachments.empty()){
+                    const auto found=std::find_if(attachments.begin(),attachments.end(),
+                        [&](const auto& entry){return entry.first==pulse.attachment_index;});
+                    if(found!=attachments.end())origin=found->second;
+                }
+                const EffectRuntimeAngles exact_angles{pulse.world_rotation_angle0,
+                    pulse.world_rotation_angle1,pulse.world_rotation_angle2};
+                ModelHierarchyTransform effect_orientation=fixed_model_rotation_basis(
+                    exact_angles[2],exact_angles[1],exact_angles[0]);
+                effect_orientation.translation=origin;
+                // The damage updater calls EffectRuntimePool_CreateInstanceFromDefinitionCf with
+                // creationFlags=0/owner=0 and three explicit random angles. These are world-space
+                // effect angles; they do not inherit the damaged army node's orientation.
+                append_effect_visual(*definition,origin,age,0.0F,0U,&effect_orientation,std::nullopt,
+                    thandor::default_faction_graphics_family(placement.faction_index),exact_angles);
+            }
+        }
+    }
+
     // Editor-only weapon test simulation. This follows the executable's separate runtime
     // objects: one launch EFF at the SHT kind-3 attachment, one SHT model, periodic secondary
     // EFF instances from that same attachment, and one nearest-surface impact EFF.
@@ -5498,7 +5839,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                     placements[projectile.owner_placement_index].faction_index):0U;
             const auto initial_orientation=shot_model_transform(projectile.launch_position,
                 projectile.launch_yaw_turn16,projectile.launch_pitch_turn16);
-            const auto& shot_sprite=load_sprite(shot->sprite_path);
+            const auto& shot_sprite=cached_sprite(shot->sprite_path);
             Vec3f shot_emitter=projectile.launch_position;
             for(const auto& attachment:shot_sprite.lookup_records()){
                 if(attachment.key_class().value()==3U){
@@ -5526,7 +5867,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                 // renderer stretches the authored local +Z geometry to the nearest ray distance.
                 thandor::EffectDefinitionRecord flight;
                 flight.definition_id=0x80000000U|projectile.shot_definition_id;
-                flight.runtime_value_0c=std::max(1U,shot->lifetime_ticks);
+                flight.runtime_value_0c=std::max(1U,shot->projectile_lifetime_ticks);
                 flight.frame_advance_threshold_q4=16U;
                 flight.state_tint_argb=shot->state_tint_argb==0U?0xFFFFFFFFU:shot->state_tint_argb;
                 flight.model_scale_x_q12=0x1000;flight.model_scale_y_q12=0x1000;
@@ -5536,7 +5877,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                     :std::nullopt;
                 append_effect_visual_recursive(flight,position,age,yaw,
                     static_cast<uint32_t>(projectile.serial),&flight_orientation,
-                    thandor::simulation_shot_frame_index(*shot,age),faction,0U,beam_length);
+                    thandor::simulation_shot_frame_index(*shot,age),faction,0U,beam_length,std::nullopt);
 
                 if(const auto* trail=catalog_.effect_definition(shot->secondary_effect_id)){
                     const uint32_t interval=std::max(1U,shot->secondary_effect_interval_ticks);
@@ -5571,7 +5912,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(){
                         kOneShotPreviewCycle,static_cast<float>(projectile.spawn_tick),
                         static_cast<float>(std::max(1,shot->shading_transition_ticks)),
                         static_cast<float>(projectile.travel_ticks),
-                        static_cast<float>(std::max(1,shot->shading_transition_ticks))});
+                        static_cast<float>(std::max(1,shot->shading_release_transition_ticks))});
                 }
             }
 
@@ -5723,8 +6064,8 @@ void EditorApp::aim_camera_at_faction_start_vehicle(uint32_t faction_index){
 }
 
 void EditorApp::center_camera(){if(!document_)return;const auto& f=document_->field();const auto& a=f.at(0,0);const auto& b=f.at(f.width()-1,f.height()-1);camera_.target={(thandor::q12_to_float(a.world_x_q12)+thandor::q12_to_float(b.world_x_q12))*0.5f,(thandor::q12_to_float(a.world_y_q12)+thandor::q12_to_float(b.world_y_q12))*0.5f,0};camera_.distance=std::max(15.0f,std::hypot(thandor::q12_to_float(b.world_x_q12-a.world_x_q12),thandor::q12_to_float(b.world_y_q12-a.world_y_q12))*0.9f);}
-EditorApp::Snapshot EditorApp::snapshot()const{return {document_->field().serialize(),document_->level().serialize(),std::vector<thandor::PlacementTag>(document_->placement_tags().begin(),document_->placement_tags().end()),document_->map_name(),document_->display_name(),document_->scenario_record_bytes(),document_->level_text_bytes()};}
-void EditorApp::restore(const Snapshot& s){document_->field()=thandor::FieldGrid::parse(s.field);document_->level()=thandor::LevelAsset::parse(s.level);document_->placement_tags()=s.tags;document_->set_map_name(s.map_name);document_->set_display_name(s.display_name);document_->restore_editor_metadata(s.scenario_record,s.level_text);document_->mark_dirty();selected_edit_index_.reset();refresh_scenario_text_buffers();load_materials();rebuild_mesh();}
+EditorApp::Snapshot EditorApp::snapshot()const{return {document_->field().serialize(),document_->level().serialize(),std::vector<thandor::PlacementTag>(document_->placement_tags().begin(),document_->placement_tags().end()),document_->faction_technology_masks(),document_->map_name(),document_->display_name(),document_->scenario_record_bytes(),document_->level_text_bytes()};}
+void EditorApp::restore(const Snapshot& s){document_->field()=thandor::FieldGrid::parse(s.field);document_->level()=thandor::LevelAsset::parse(s.level);document_->placement_tags()=s.tags;document_->faction_technology_masks()=s.faction_technology_masks;document_->set_map_name(s.map_name);document_->set_display_name(s.display_name);document_->restore_editor_metadata(s.scenario_record,s.level_text);document_->mark_dirty();selected_edit_index_.reset();faction_technology_hierarchy_cache_.clear();asset_preview_cache_.clear();reset_simulation(true);refresh_scenario_text_buffers();load_materials();rebuild_mesh();}
 void EditorApp::checkpoint(){if(!document_)return;undo_.push_back(snapshot());if(undo_.size()>64)undo_.erase(undo_.begin());redo_.clear();}
 void EditorApp::undo(){if(undo_.empty()||!document_)return;redo_.push_back(snapshot());auto s=std::move(undo_.back());undo_.pop_back();restore(s);status_="Undo";}
 void EditorApp::redo(){if(redo_.empty()||!document_)return;undo_.push_back(snapshot());auto s=std::move(redo_.back());redo_.pop_back();restore(s);status_="Redo";}
@@ -5771,69 +6112,25 @@ const thandor::ArmyAssetPreset* EditorApp::terrain_overlay_profile() const noexc
     return nullptr;
 }
 
-const thandor::ArmyTechnologyLevelPreview* EditorApp::technology_level_preview(
-    const thandor::ArmyAssetPreset& preset,uint32_t level_index)const noexcept{
-    const auto found=std::find_if(preset.technology_level_previews.begin(),
-        preset.technology_level_previews.end(),[&](const auto& preview){
-            return preview.level_index==level_index;
-        });
-    return found==preset.technology_level_previews.end()?nullptr:&*found;
-}
-
 std::span<const thandor::ModelVisualNode> EditorApp::placement_hierarchy(
     const thandor::ArmyAssetPreset& preset,std::size_t placement_index)const noexcept{
-    uint32_t level_index=0U;
-    if(document_&&placement_index<document_->placement_tags().size())
-        level_index=document_->placement_tags()[placement_index].technology_level;
-    if(const auto* preview=technology_level_preview(preset,level_index);
-       preview!=nullptr&&!preview->resolved_model_hierarchy.empty())
-        return preview->resolved_model_hierarchy;
-    if(!preset.resolved_model_hierarchy.empty())return preset.resolved_model_hierarchy;
-    return preset.model_hierarchy;
+    if(!document_||placement_index>=document_->level().placements().size()){
+        if(!preset.resolved_model_hierarchy.empty())return preset.resolved_model_hierarchy;
+        return preset.model_hierarchy;
+    }
+    const uint32_t faction=std::min(document_->level().placements()[placement_index].faction_index,7U);
+    const auto& mask=document_->faction_technology_mask(faction);
+    const std::string key=technology_hierarchy_cache_key(preset.registry_id,faction,mask);
+    if(const auto found=faction_technology_hierarchy_cache_.find(key);
+       found!=faction_technology_hierarchy_cache_.end())return found->second;
+    auto resolved=thandor::resolve_faction_technology_hierarchy(preset,mask);
+    if(resolved.empty())resolved=!preset.resolved_model_hierarchy.empty()?preset.resolved_model_hierarchy:
+        preset.model_hierarchy;
+    const auto inserted=faction_technology_hierarchy_cache_.emplace(key,std::move(resolved));
+    return inserted.first->second;
 }
 
-void EditorApp::draw_technology_placement_popup(){
-    static constexpr const char* kPopup="Select technology level##placement";
-    if(pending_technology_placement_&&!ImGui::IsPopupOpen(kPopup)){
-        const auto position=pending_technology_placement_->popup_screen_position;
-        const auto display=ImGui::GetIO().DisplaySize;
-        ImGui::SetNextWindowPos({std::clamp(position.x,0.0F,std::max(0.0F,display.x-320.0F)),
-                                 std::clamp(position.y,ImGui::GetFrameHeight(),
-                                            std::max(ImGui::GetFrameHeight(),display.y-260.0F))},
-                                ImGuiCond_Appearing);
-        ImGui::OpenPopup(kPopup);
-    }
-    if(!ImGui::BeginPopup(kPopup,ImGuiWindowFlags_AlwaysAutoResize))return;
-    const auto pending=*pending_technology_placement_;
-    const auto* preset=catalog_.army_preset(pending.asset_id);
-    if(preset==nullptr){
-        ImGui::TextUnformatted("The selected ARM record is no longer available.");
-        if(ImGui::Button("Close")){pending_technology_placement_.reset();ImGui::CloseCurrentPopup();}
-        ImGui::EndPopup();
-        return;
-    }
-    ImGui::TextUnformatted(preset->display_name.c_str());
-    ImGui::TextWrapped("Choose the editor preview level. The retail LEV stores no technology level; the game resolves it from the faction technology state.");
-    ImGui::Separator();
-    for(const auto& preview:preset->technology_level_previews){
-        std::string label="Level "+std::to_string(preview.level_index+1U)+
-            " · STR: "+preview.technology_effect_title;
-        if(ImGui::MenuItem(label.c_str())){
-            pending_technology_placement_.reset();
-            ImGui::CloseCurrentPopup();
-            add_asset_placement(pending.cell_x,pending.cell_y,pending.asset_id,preview.level_index);
-            break;
-        }
-    }
-    ImGui::Separator();
-    if(ImGui::Button("Cancel",{-1.0F,0.0F})){
-        pending_technology_placement_.reset();
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-}
-
-void EditorApp::add_asset_placement(uint32_t x,uint32_t y,uint32_t asset_id,uint32_t technology_level){
+void EditorApp::add_asset_placement(uint32_t x,uint32_t y,uint32_t asset_id){
     if(!document_||x>=document_->field().width()||y>=document_->field().height())return;
     const auto* preset=catalog_.army_preset(asset_id);
     if(preset==nullptr){
@@ -5862,11 +6159,8 @@ void EditorApp::add_asset_placement(uint32_t x,uint32_t y,uint32_t asset_id,uint
     placement.set_render_position_q12(cell.world_x_q12,cell.world_y_q12);
     placement.orientation_turn16=selected_orientation_;
     document_->level().add_placement(placement);
-    uint32_t technology_effect_id = 0U;
-    if (const auto* preview = technology_level_preview(*preset, technology_level); preview != nullptr)
-        technology_effect_id = preview->technology_effect_id;
     document_->placement_tags().push_back({document_->level().placements().size()-1U,role,
-        preset->display_name,technology_level,technology_effect_id});
+        preset->display_name,100U});
     std::size_t resource_field_cells = 0U;
     if(const auto occupancy_class=thandor::resource_field_occupancy_class(placed_asset_id)){
         thandor::Brush resource_brush;
@@ -5888,11 +6182,6 @@ void EditorApp::add_asset_placement(uint32_t x,uint32_t y,uint32_t asset_id,uint
     rebuild_objects();
 
     status_="Placed "+preset->display_name+" (ARM "+std::to_string(placed_asset_id)+") from the 3D asset browser.";
-    if (const auto* preview = technology_level_preview(*preset, technology_level); preview != nullptr) {
-        status_ += " Preview level " + std::to_string(preview->level_index+1U) +
-            " · STR: " + preview->technology_effect_title +
-            " is stored only in the .thmap project; retail LEV resolves the live model from faction technology.";
-    }
     if(placed_asset_id!=asset_id)
         status_+=" The selected stock alias "+std::to_string(asset_id)+" was normalized to the canonical ID.";
     if(role==thandor::PlacementRole::PlayerStart)

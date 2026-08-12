@@ -42,4 +42,10 @@ constexpr int32_t float_to_q12(float value) noexcept {
     return static_cast<int32_t>(value * 4096.0F + (value >= 0.0F ? 0.5F : -0.5F));
 }
 
+// Retail audio gains use unsigned Q15 where 0x8000 is unity.  Keep this conversion named
+// separately from Q12 world units so UI diagnostics cannot silently mix the two domains.
+constexpr float q15_gain_to_float(uint32_t value) noexcept {
+    return static_cast<float>(value) / 32768.0F;
+}
+
 } // namespace thandor

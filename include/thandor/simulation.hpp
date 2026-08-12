@@ -164,6 +164,9 @@ struct SimulationProjectileState {
     uint32_t shot_definition_id{};
     Vec3f launch_position{};
     Vec3f target_position{};
+    // Present only for entity-targeted editor shots. Mode-2 retail projectiles re-read the
+    // live target X/Y after their transition instead of freezing the firing-time coordinate.
+    std::optional<std::size_t> live_target_placement_index;
     Vec3f launch_velocity{};
     uint32_t spawn_tick{};
     uint32_t travel_ticks{};
@@ -307,7 +310,8 @@ std::vector<SimulationProjectileState> simulation_create_volley(
     const ShotDefinitionRecord& shot,
     uint32_t spawn_tick,
     uint64_t& next_serial,
-    uint32_t fired_attachment_selector = 0xFFFFFFFFU);
+    uint32_t fired_attachment_selector = 0xFFFFFFFFU,
+    std::optional<std::size_t> live_target_placement_index = std::nullopt);
 
 // Compatibility overload for the pre-G371 caller shape.
 std::vector<SimulationProjectileState> simulation_create_volley(
@@ -321,7 +325,14 @@ std::vector<SimulationProjectileState> simulation_create_volley(
 
 Vec3f simulation_projectile_position(const SimulationProjectileState& projectile,
                                      const ShotDefinitionRecord& shot,
-                                     uint32_t current_tick) noexcept;
+                                     uint32_t current_tick,
+                                     const Vec3f* live_target_position = nullptr) noexcept;
+
+// Updates the frozen target/impact coordinate for an entity-targeted editor projectile. For
+// fixed-range shots this also recomputes the vertical target-reach tick from the retail path.
+void simulation_update_projectile_live_target(SimulationProjectileState& projectile,
+                                              const ShotDefinitionRecord& shot,
+                                              Vec3f target_position) noexcept;
 uint32_t simulation_shot_frame_index(const ShotDefinitionRecord& shot,
                                      uint32_t age_ticks) noexcept;
 uint32_t simulation_mode3_elevation_offset_turn16(const ShotDefinitionRecord& shot,

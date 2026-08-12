@@ -57,23 +57,24 @@ def main() -> int:
                 not (build_dir / "stale.txt").exists(),
                 "stale non-game build content survived the clean")
 
-    require("technology_level_previews.size() > 1U" in app and
-            "Select technology level##placement" in app and
-            "Level \"+std::to_string(preview.level_index+1U)" in app and
-            " · STR: " in app,
-            "drag/drop technology-level context menu is incomplete")
-    popup_start = app.index("void EditorApp::draw_technology_placement_popup()")
-    popup_end = app.index("void EditorApp::add_asset_placement", popup_start)
-    popup_source = app[popup_start:popup_end]
-    require("technology_effect_title" in popup_source and
-            "BeginPopup(kPopup" in popup_source and "BeginPopupModal" not in popup_source,
-            "technology selection is not a context popup with STR effect text")
-    require("placement_technology_level." in manifest and
-            "placement_technology_effect." in manifest and
-            "retail LEV stores no technology level" in app,
-            "editor-only technology selection persistence/export boundary is missing")
-    require("topology_matches_base" in catalog,
-            "technology-level choices are not gated by hierarchy topology")
+    require("technology_level_previews" not in app and
+            "Select technology level##placement" not in app and
+            "placement_technology_level." not in manifest and
+            "placement_technology_effect." not in manifest,
+            "obsolete per-placement technology-level preview survived G400")
+    require("Research state (exact 256-bit mask)" in app and
+            "faction_technology_mask." in manifest and
+            "resolve_faction_technology_hierarchy" in app and
+            "resolve_faction_technology_hierarchy" in catalog,
+            "faction-wide exact research preview path is incomplete")
+    require("placement_integrity_percent." in manifest and
+            "Integrity / damage preview %" in app and
+            "damage_effect_controllers_" in app_header,
+            "damage-state preview persistence/UI/runtime path is incomplete")
+    require("candidate.technology_unlock_id" in catalog and
+            "selected = &candidate" in catalog and
+            "first unlocked MDL +0x238..+0x24C wins" in catalog,
+            "ARM-last/MDL-first technology selection rules are missing")
 
     require("normalize_model_texture_offset_u" in app,
             "tank renderer does not consume the fixed-coordinate track offset helper")

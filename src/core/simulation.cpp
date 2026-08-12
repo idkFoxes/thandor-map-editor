@@ -182,7 +182,7 @@ float simulation_mode0_beam_length_world(const SimulationProjectileState& projec
                                          const ShotDefinitionRecord& shot) noexcept {
     const float resolved=distance3(projectile.launch_position,projectile.target_position);
     if(shot.trajectory_mode!=0)return resolved;
-    const int64_t product=static_cast<int64_t>(shot.range_scale_d0_q12)*
+    const int64_t product=static_cast<int64_t>(static_cast<int32_t>(shot.projectile_lifetime_ticks))*
                           static_cast<int64_t>(shot.launch_speed_q12);
     if(product<=0)return resolved;
     const float maximum=q12_to_float(static_cast<int32_t>(std::min<int64_t>(
@@ -541,126 +541,238 @@ SimulationActorTickResult simulation_tick_actor(
     return aggregate;
 }
 
+namespace {
+
+double cubic_ramp_distance_ticks(uint32_t age_ticks, uint32_t ramp_ticks) noexcept {
+    if (age_ticks == 0U) return 0.0;
+    if (ramp_ticks == 0U) return static_cast<double>(age_ticks);
+
+    // Creation stores zero current speed when +0x270 is nonzero. Maintenance moves with the
+    // previous speed first, then installs min(age,ramp)^3/ramp^3 * launchSpeed for mode 2.
+    const uint32_t last_ramp_tick = std::min(age_ticks - 1U, ramp_ticks);
+    const double n = static_cast<double>(last_ramp_tick);
+    const double triangular = n * (n + 1.0) * 0.5;
+    const double sum_cubes = triangular * triangular;
+    const double ramp = static_cast<double>(ramp_ticks);
+    const double ramp_contribution = sum_cubes / (ramp * ramp * ramp);
+    const uint32_t saturated_ticks = age_ticks > ramp_ticks + 1U
+        ? age_ticks - (ramp_ticks + 1U) : 0U;
+    return ramp_contribution + static_cast<double>(saturated_ticks);
+}
+
+uint32_t fixed_range_transition_age(const ShotDefinitionRecord& shot) noexcept {
+    // The comparison happens after the runtime age has been incremented for a processed tick.
+    // Even a serialized threshold of zero therefore cannot transition at presentation age zero.
+    return std::max(1U, shot.fixed_range_transition_age_threshold_ticks);
+}
+
+Vec3f fixed_range_projectile_position(const SimulationProjectileState& projectile,
+                                      const ShotDefinitionRecord& shot,
+                                      uint32_t age_ticks,
+                                      const Vec3f& target_position) noexcept {
+    const uint32_t ramp_ticks = shot.trajectory_ramp_duration_ticks;
+    const uint32_t transition_age = fixed_range_transition_age(shot);
+    const double distance_at_age = cubic_ramp_distance_ticks(age_ticks, ramp_ticks);
+    const double distance_at_transition =
+        cubic_ramp_distance_ticks(std::min(age_ticks, transition_age), ramp_ticks);
+    const double signed_distance_ticks = age_ticks <= transition_age
+        ? distance_at_age
+        : distance_at_transition - (distance_at_age - distance_at_transition);
+    const float vertical_speed = std::abs(projectile.launch_velocity.z);
+
+    Vec3f position = projectile.launch_position;
+    position.z += vertical_speed * static_cast<float>(signed_distance_ticks);
+    if (age_ticks >= transition_age) {
+        // Retail mode 2 snaps/follows only X/Y and then negates its pitch; Z keeps integrating.
+        position.x = target_position.x;
+        position.y = target_position.y;
+    }
+    return position;
+}
+
+uint32_t fixed_range_target_reach_tick(const SimulationProjectileState& projectile,
+                                       const ShotDefinitionRecord& shot,
+                                       Vec3f target_position) noexcept {
+    const uint32_t lifetime = std::max(1U, projectile.lifetime_ticks);
+    const uint32_t transition_age = fixed_range_transition_age(shot);
+    for (uint32_t age = transition_age; age <= lifetime; ++age) {
+        const Vec3f position = fixed_range_projectile_position(projectile, shot, age, target_position);
+        if (position.z <= target_position.z) return age;
+    }
+    return lifetime;
+}
+
+} // namespace
+
 std::vector<SimulationProjectileState> simulation_create_volley(
-    std::size_t owner_placement_index,std::size_t weapon_profile_index,
-    const SimulationWeaponProfile& weapon,std::span<const Vec3f> launch_positions,
-    Vec3f target_position,const ShotDefinitionRecord& shot,uint32_t spawn_tick,
-    uint64_t& next_serial,uint32_t fired_attachment_selector){
+    std::size_t owner_placement_index, std::size_t weapon_profile_index,
+    const SimulationWeaponProfile& weapon, std::span<const Vec3f> launch_positions,
+    Vec3f target_position, const ShotDefinitionRecord& shot, uint32_t spawn_tick,
+    uint64_t& next_serial, uint32_t fired_attachment_selector,
+    std::optional<std::size_t> live_target_placement_index) {
     std::vector<SimulationProjectileState> result;
     result.reserve(launch_positions.size());
-    const float speed=std::max(1.0F/4096.0F,std::abs(q12_to_float(shot.launch_speed_q12)));
-    for(const Vec3f launch:launch_positions){
-        const auto aim=simulation_shot_launch_angles(launch,target_position,shot);
-        if(!aim.valid)continue;
-        const uint32_t movement_pitch_turn16=shot.trajectory_mode==3
-            ?wrap_turn16(static_cast<int64_t>(aim.pitch_turn16)-shot.elevation_offset_angle16)
-            :aim.pitch_turn16;
-        const float yaw=turn16_to_radians(aim.yaw_turn16);
-        const float movement_pitch=turn16_to_radians(movement_pitch_turn16);
-        Vec3f velocity{std::cos(yaw)*std::cos(movement_pitch)*speed,
-                       std::sin(yaw)*std::cos(movement_pitch)*speed,
-                       std::sin(movement_pitch)*speed};
-        const float direct_distance=distance3(launch,target_position);
-        uint32_t travel=1U;
-        if(shot.trajectory_mode==0){
-            // Mode zero performs the full ray test from the launch node in its first
-            // maintenance update. The stretched SHT visual is therefore a one-tick beam.
-            travel=1U;
-        }else if(shot.trajectory_mode==3&&shot.range_scale_270_q12>0&&speed>1.0e-8F){
-            // The serialized elevation offset is visual pitch state. Creation stores
-            // directPitch+offset in the model, but maintenance moves with
-            // modelPitch-movementStateFlags, which is the direct target pitch. Creation also
-            // seeds current speed to zero; each maintenance tick moves with the previous speed
-            // before installing min(age,ramp)^2/ramp^2 * fullSpeed.
-            const uint32_t ramp=static_cast<uint32_t>(shot.range_scale_270_q12);
-            double travelled=0.0;
-            const uint32_t cap=std::max(1U,shot.lifetime_ticks);
-            for(travel=1U;travel<cap&&travelled<direct_distance;++travel){
-                const uint32_t previous_age=travel-1U;
-                const uint32_t clamped=std::min(previous_age,ramp);
-                travelled+=static_cast<double>(speed)*clamped*clamped/
-                    static_cast<double>(ramp)/static_cast<double>(ramp);
+
+    const float speed = std::max(1.0F / 4096.0F,
+                                 std::abs(q12_to_float(shot.launch_speed_q12)));
+    for (const Vec3f launch : launch_positions) {
+        const auto aim = simulation_shot_launch_angles(launch, target_position, shot);
+        if (!aim.valid) continue;
+
+        const uint32_t movement_pitch_turn16 = shot.trajectory_mode == 3
+            ? wrap_turn16(static_cast<int64_t>(aim.pitch_turn16) - shot.elevation_offset_angle16)
+            : aim.pitch_turn16;
+        const float yaw = turn16_to_radians(aim.yaw_turn16);
+        const float movement_pitch = turn16_to_radians(movement_pitch_turn16);
+        const Vec3f velocity{
+            std::cos(yaw) * std::cos(movement_pitch) * speed,
+            std::sin(yaw) * std::cos(movement_pitch) * speed,
+            std::sin(movement_pitch) * speed,
+        };
+
+        const float direct_distance = distance3(launch, target_position);
+        uint32_t travel_ticks = 1U;
+        if (shot.trajectory_mode == 0) {
+            // Mode zero ray-tests from the launch node in its first maintenance update.
+            travel_ticks = 1U;
+        } else if (shot.trajectory_mode == 2) {
+            // Mode 2 rises vertically, optionally ramps its speed cubically, snaps to the target
+            // X/Y at +0x274, then descends. Start with the complete lifetime; target/surface
+            // resolution below shortens this to the first actual contact.
+            travel_ticks = std::max(1U, shot.projectile_lifetime_ticks);
+        } else if (shot.trajectory_mode == 3 &&
+                   shot.trajectory_ramp_duration_ticks != 0U && speed > 1.0e-8F) {
+            const uint32_t ramp = shot.trajectory_ramp_duration_ticks;
+            double travelled = 0.0;
+            const uint32_t cap = std::max(1U, shot.projectile_lifetime_ticks);
+            for (travel_ticks = 1U; travel_ticks < cap && travelled < direct_distance;
+                 ++travel_ticks) {
+                const uint32_t previous_age = travel_ticks - 1U;
+                const uint32_t clamped = std::min(previous_age, ramp);
+                travelled += static_cast<double>(speed) * clamped * clamped /
+                    static_cast<double>(ramp) / static_cast<double>(ramp);
             }
-        }else{
-            travel=std::max(1U,static_cast<uint32_t>(std::ceil(direct_distance/speed)));
+        } else {
+            travel_ticks = std::max(1U,
+                static_cast<uint32_t>(std::ceil(direct_distance / speed)));
         }
-        const uint32_t lifetime=std::max(travel,std::max(1U,shot.lifetime_ticks));
-        result.push_back(SimulationProjectileState{next_serial++,owner_placement_index,
-            weapon_profile_index,weapon.shot_definition_id,launch,target_position,velocity,
-            spawn_tick,travel,lifetime,aim.yaw_turn16,aim.pitch_turn16,
-            fired_attachment_selector});
+
+        SimulationProjectileState projectile;
+        projectile.serial = next_serial++;
+        projectile.owner_placement_index = owner_placement_index;
+        projectile.weapon_profile_index = weapon_profile_index;
+        projectile.shot_definition_id = weapon.shot_definition_id;
+        projectile.launch_position = launch;
+        projectile.target_position = target_position;
+        projectile.live_target_placement_index = live_target_placement_index;
+        projectile.launch_velocity = velocity;
+        projectile.spawn_tick = spawn_tick;
+        projectile.travel_ticks = travel_ticks;
+        projectile.lifetime_ticks = std::max(travel_ticks,
+            std::max(1U, shot.projectile_lifetime_ticks));
+        projectile.launch_yaw_turn16 = aim.yaw_turn16;
+        projectile.launch_pitch_turn16 = aim.pitch_turn16;
+        projectile.fired_attachment_selector = fired_attachment_selector;
+
+        if (shot.trajectory_mode == 2 && live_target_placement_index) {
+            projectile.travel_ticks = fixed_range_target_reach_tick(projectile, shot, target_position);
+        }
+        result.push_back(projectile);
     }
     return result;
 }
 
 std::vector<SimulationProjectileState> simulation_create_volley(
-    std::size_t owner_placement_index,const SimulationWeaponProfile& weapon,
-    std::span<const Vec3f> launch_positions,Vec3f target_position,
-    const ShotDefinitionRecord& shot,uint32_t spawn_tick,uint64_t& next_serial){
-    return simulation_create_volley(owner_placement_index,0U,weapon,launch_positions,
-                                    target_position,shot,spawn_tick,next_serial,0xFFFFFFFFU);
+    std::size_t owner_placement_index, const SimulationWeaponProfile& weapon,
+    std::span<const Vec3f> launch_positions, Vec3f target_position,
+    const ShotDefinitionRecord& shot, uint32_t spawn_tick, uint64_t& next_serial) {
+    return simulation_create_volley(owner_placement_index, 0U, weapon, launch_positions,
+                                    target_position, shot, spawn_tick, next_serial,
+                                    0xFFFFFFFFU, std::nullopt);
 }
 
 uint32_t simulation_shot_frame_index(const ShotDefinitionRecord& shot,
                                      uint32_t age_ticks) noexcept {
-    const uint32_t threshold=std::max(1U,shot.animation_threshold_q4);
-    const uint32_t frames=std::max(1U,shot.animation_frame_count);
-    return ((age_ticks*0x10U)/threshold)%frames;
+    const uint32_t threshold = std::max(1U, shot.animation_threshold_q4);
+    const uint32_t frames = std::max(1U, shot.animation_frame_count);
+    return ((age_ticks * 0x10U) / threshold) % frames;
 }
 
 uint32_t simulation_mode3_elevation_offset_turn16(const ShotDefinitionRecord& shot,
                                                   uint32_t age_ticks) noexcept {
-    if(shot.trajectory_mode!=3||shot.elevation_offset_angle16==0||
-       shot.range_scale_270_q12<=0)return 0U;
-    const uint32_t ramp=static_cast<uint32_t>(shot.range_scale_270_q12);
-    const uint32_t remaining=age_ticks>=ramp*2U?0U:ramp*2U-age_ticks;
-    const int64_t scaled=(static_cast<int64_t>(remaining)*shot.elevation_offset_angle16)/ramp;
-    return wrap_turn16(scaled/2);
+    if (shot.trajectory_mode != 3 || shot.elevation_offset_angle16 == 0 ||
+        shot.trajectory_ramp_duration_ticks == 0U) return 0U;
+    const uint32_t ramp = shot.trajectory_ramp_duration_ticks;
+    const uint32_t remaining = age_ticks >= ramp * 2U ? 0U : ramp * 2U - age_ticks;
+    const int64_t scaled =
+        (static_cast<int64_t>(remaining) * shot.elevation_offset_angle16) / ramp;
+    return wrap_turn16(scaled / 2);
 }
 
 uint32_t simulation_mode3_model_pitch_turn16(const SimulationProjectileState& projectile,
                                               const ShotDefinitionRecord& shot,
                                               uint32_t age_ticks) noexcept {
-    if(shot.trajectory_mode!=3)return projectile.launch_pitch_turn16;
-    const uint32_t movement_pitch=wrap_turn16(
-        static_cast<int64_t>(projectile.launch_pitch_turn16)-shot.elevation_offset_angle16);
-    return wrap_turn16(static_cast<int64_t>(movement_pitch)+
-        static_cast<int32_t>(simulation_mode3_elevation_offset_turn16(shot,age_ticks)));
+    // Retail keeps movement pitch and presentation/model pitch as separate state. The model pitch
+    // eases the serialized elevation offset back toward the movement direction over the ramp.
+    if (shot.trajectory_mode != 3) return projectile.launch_pitch_turn16;
+    const uint32_t movement_pitch = wrap_turn16(
+        static_cast<int64_t>(projectile.launch_pitch_turn16) - shot.elevation_offset_angle16);
+    return wrap_turn16(static_cast<int64_t>(movement_pitch) +
+        static_cast<int32_t>(simulation_mode3_elevation_offset_turn16(shot, age_ticks)));
 }
 
 Vec3f simulation_projectile_position(const SimulationProjectileState& projectile,
                                      const ShotDefinitionRecord& shot,
-                                     uint32_t current_tick) noexcept {
-    const uint32_t age=current_tick-projectile.spawn_tick;
-    if(shot.trajectory_mode==0){
-        // Mode zero is the ray/beam path. Its model stays anchored at the launch node for the
-        // complete SHT lifetime while renderDepthBiasOrState stretches local +Z to the hit.
-        // This must precede the generic travel-end clamp: mode-zero travel_ticks is one because
-        // collision resolves on the first maintenance tick, not because the beam moves to target.
+                                     uint32_t current_tick,
+                                     const Vec3f* live_target_position) noexcept {
+    const uint32_t age = current_tick - projectile.spawn_tick;
+    if (shot.trajectory_mode == 0) {
+        // Mode zero is a stationary launch-node model stretched to the ray hit by render state.
         return projectile.launch_position;
     }
-    if(age>=projectile.travel_ticks)return projectile.target_position;
-    float distance_ticks=static_cast<float>(age);
-    if(shot.trajectory_mode==3&&shot.range_scale_270_q12>0){
-        const uint32_t ramp=static_cast<uint32_t>(shot.range_scale_270_q12);
-        double accumulated=0.0;
-        for(uint32_t tick=0U;tick<age;++tick){
-            const uint32_t clamped=std::min(tick,ramp);
-            accumulated+=static_cast<double>(clamped)*clamped/
-                static_cast<double>(ramp)/static_cast<double>(ramp);
+
+    const Vec3f target = live_target_position ? *live_target_position : projectile.target_position;
+    if (shot.trajectory_mode == 2) {
+        return fixed_range_projectile_position(projectile, shot, age, target);
+    }
+    if (age >= projectile.travel_ticks) return target;
+
+    float distance_ticks = static_cast<float>(age);
+    if (shot.trajectory_mode == 3 && shot.trajectory_ramp_duration_ticks != 0U) {
+        // Retail mode 3 accelerates along the direct launch vector. Its path is accelerated but
+        // not a fabricated sine arc. The presentation/model pitch is handled separately below.
+        const uint32_t ramp = shot.trajectory_ramp_duration_ticks;
+        double accumulated = 0.0;
+        for (uint32_t tick = 0U; tick < age; ++tick) {
+            const uint32_t clamped = std::min(tick, ramp);
+            accumulated += static_cast<double>(clamped) * clamped /
+                static_cast<double>(ramp) / static_cast<double>(ramp);
         }
-        distance_ticks=static_cast<float>(accumulated);
+        distance_ticks = static_cast<float>(accumulated);
     }
-    Vec3f position{projectile.launch_position.x+projectile.launch_velocity.x*distance_ticks,
-                   projectile.launch_position.y+projectile.launch_velocity.y*distance_ticks,
-                   projectile.launch_position.z+projectile.launch_velocity.z*distance_ticks};
-    if(shot.trajectory_mode==1&&shot.ballistic_divisor_q12!=0){
-        const float gravity=std::abs(q12_to_float(shot.ballistic_divisor_q12));
-        position.z-=0.5F*gravity*distance_ticks*distance_ticks;
+
+    Vec3f position{
+        projectile.launch_position.x + projectile.launch_velocity.x * distance_ticks,
+        projectile.launch_position.y + projectile.launch_velocity.y * distance_ticks,
+        projectile.launch_position.z + projectile.launch_velocity.z * distance_ticks,
+    };
+    if (shot.trajectory_mode == 1 && shot.ballistic_divisor_q12 != 0) {
+        const float gravity = std::abs(q12_to_float(shot.ballistic_divisor_q12));
+        position.z -= 0.5F * gravity * distance_ticks * distance_ticks;
     }
-    // Mode 3 changes model pitch while subtracting the same serialized offset from
-    // the movement direction. Its path is accelerated but not a fabricated sine arc.
     return position;
+}
+
+void simulation_update_projectile_live_target(SimulationProjectileState& projectile,
+                                              const ShotDefinitionRecord& shot,
+                                              Vec3f target_position) noexcept {
+    projectile.target_position = target_position;
+    if (projectile.impact_kind == SimulationImpactKind::TargetModelImpactClass) {
+        projectile.impact_position = target_position;
+    }
+    if (shot.trajectory_mode == 2) {
+        projectile.travel_ticks = fixed_range_target_reach_tick(projectile, shot, target_position);
+    }
 }
 
 bool simulation_projectile_impacted(const SimulationProjectileState& projectile,

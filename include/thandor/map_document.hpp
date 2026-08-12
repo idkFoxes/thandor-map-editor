@@ -4,6 +4,7 @@
 #include "thandor/scenario_catalog.hpp"
 #include "thandor/text_resource.hpp"
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <map>
@@ -53,10 +54,10 @@ struct PlacementTag {
     std::size_t placement_index{};
     PlacementRole role{PlacementRole::Generic};
     std::string display_name;
-    // Editor-only preview metadata. Retail LEV placement records do not serialize a selected
-    // technology model level; the game resolves it from the owning faction's live technology set.
-    uint32_t technology_level{};
-    uint32_t technology_effect_id{};
+    // Editor-only integrity percentage for previewing ArmyRuntime_EmitDamageThresholdEffect.
+    // Retail LEV placement records do not serialize current damage; a newly loaded map starts
+    // every placement at 100 percent integrity.
+    uint32_t preview_integrity_percent{100U};
 };
 
 class MapDocument {
@@ -110,6 +111,18 @@ public:
 
     std::vector<PlacementTag>& placement_tags() noexcept { return placement_tags_; }
     std::span<const PlacementTag> placement_tags() const noexcept { return placement_tags_; }
+    std::array<FactionTechnologyMask256, 8>& faction_technology_masks() noexcept {
+        return faction_technology_masks_;
+    }
+    const std::array<FactionTechnologyMask256, 8>& faction_technology_masks() const noexcept {
+        return faction_technology_masks_;
+    }
+    FactionTechnologyMask256& faction_technology_mask(uint32_t faction_index) noexcept {
+        return faction_technology_masks_[std::min<uint32_t>(faction_index, 7U)];
+    }
+    const FactionTechnologyMask256& faction_technology_mask(uint32_t faction_index) const noexcept {
+        return faction_technology_masks_[std::min<uint32_t>(faction_index, 7U)];
+    }
 
     std::vector<std::byte> load_asset(const AssetCatalog& catalog, std::string_view path) const;
     bool has_custom_asset(std::string_view path) const;
@@ -128,6 +141,7 @@ private:
     FieldGrid field_;
     LevelAsset level_;
     std::vector<PlacementTag> placement_tags_;
+    std::array<FactionTechnologyMask256, 8> faction_technology_masks_{};
     std::map<std::string, std::vector<std::byte>> custom_assets_;
     std::array<std::string, 26> terrain_material_sources_{};
     ScenarioCatalogRecord scenario_record_;

@@ -29,6 +29,7 @@ if you want to report bugs, join discord https://thandor.cc/ and post in https:/
 ## Effects and Attacks
 ![Effects and Attacks](docs/screenshots/attack_test.png)
 ![Info tooltip](docs/screenshots/building_and_unit_info.png)
+![Info tooltip 2](docs/screenshots/building_and_unit_info_2.png)
 
 ## Moving Units
 ![Moving units](docs/screenshots/moving_units.png)

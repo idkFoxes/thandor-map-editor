@@ -12,8 +12,7 @@
 namespace thandor {
 namespace {
 constexpr std::string_view kProjectManifest = "editor/project.txt";
-constexpr std::string_view kProjectMagic = "THANDOR_MAP_EDITOR_PROJECT_V2";
-constexpr std::string_view kProjectMagicV1 = "THANDOR_MAP_EDITOR_PROJECT_V1";
+constexpr std::string_view kProjectMagic = "THANDOR_MAP_EDITOR_PROJECT_V3";
 constexpr std::string_view kScenarioEntry = "editor/scenario_record.dat";
 
 std::string stem_of(std::string_view path) {
@@ -98,7 +97,7 @@ std::unordered_map<std::string, std::string> parse_manifest(std::string_view tex
     std::unordered_map<std::string, std::string> result;
     std::istringstream stream{std::string(text)};
     std::string line;
-    if (!std::getline(stream, line) || (line != kProjectMagic && line != kProjectMagicV1)) {
+    if (!std::getline(stream, line) || line != kProjectMagic) {
         throw FormatError("unsupported map-editor project manifest");
     }
     while (std::getline(stream, line)) {
@@ -900,17 +899,28 @@ MapDocument MapDocument::open_project(const AssetCatalog& catalog,
             ? terrain_material_path(base, material) : found->second;
     }
     initialize_placement_tags(document, catalog);
+    for (uint32_t faction = 0U; faction < document.faction_technology_masks_.size(); ++faction) {
+        for (uint32_t word = 0U; word < document.faction_technology_masks_[faction].size(); ++word) {
+            const std::string key = "faction_technology_mask." + std::to_string(faction) + "." +
+                                    std::to_string(word);
+            const auto found = manifest.find(key);
+            if (found == manifest.end())
+                throw FormatError("project manifest is missing exact faction technology mask word: " + key);
+            document.faction_technology_masks_[faction][word] =
+                parse_manifest_u32(found->second, "faction technology mask word");
+        }
+    }
     for (std::size_t index = 0; index < document.placement_tags_.size(); ++index) {
         const auto found = manifest.find("placement_name." + std::to_string(index));
         if (found != manifest.end()) document.placement_tags_[index].display_name = found->second;
-        if (const auto level = manifest.find("placement_technology_level." + std::to_string(index));
-            level != manifest.end())
-            document.placement_tags_[index].technology_level = parse_manifest_u32(
-                level->second, "placement technology level");
-        if (const auto effect = manifest.find("placement_technology_effect." + std::to_string(index));
-            effect != manifest.end())
-            document.placement_tags_[index].technology_effect_id = parse_manifest_u32(
-                effect->second, "placement technology effect");
+        const std::string integrity_key = "placement_integrity_percent." + std::to_string(index);
+        const auto integrity = manifest.find(integrity_key);
+        if (integrity == manifest.end())
+            throw FormatError("project manifest is missing damage-preview integrity: " + integrity_key);
+        document.placement_tags_[index].preview_integrity_percent =
+            parse_manifest_u32(integrity->second, "placement integrity percent");
+        if (document.placement_tags_[index].preview_integrity_percent > 100U)
+            throw FormatError("placement integrity percent exceeds 100");
     }
     document.dirty_ = false;
     return document;
@@ -1358,12 +1368,16 @@ void MapDocument::save_project(const std::filesystem::path& project_path) const 
     for (uint32_t material = 0; material < 26U; ++material) {
         manifest << "material." << material << '=' << percent_encode(terrain_material_sources_[material]) << '\n';
     }
+    for (uint32_t faction = 0U; faction < faction_technology_masks_.size(); ++faction) {
+        for (uint32_t word = 0U; word < faction_technology_masks_[faction].size(); ++word) {
+            manifest << "faction_technology_mask." << faction << '.' << word << '='
+                     << faction_technology_masks_[faction][word] << '\n';
+        }
+    }
     for (std::size_t index = 0; index < placement_tags_.size(); ++index) {
         manifest << "placement_name." << index << '=' << percent_encode(placement_tags_[index].display_name) << '\n';
-        manifest << "placement_technology_level." << index << '='
-                 << placement_tags_[index].technology_level << '\n';
-        manifest << "placement_technology_effect." << index << '='
-                 << placement_tags_[index].technology_effect_id << '\n';
+        manifest << "placement_integrity_percent." << index << '='
+                 << placement_tags_[index].preview_integrity_percent << '\n';
     }
     std::vector<PckWriteEntry> entries;
     entries.push_back({std::string(kProjectManifest), text_bytes_padded(manifest.str()), fourcc("txt")});

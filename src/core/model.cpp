@@ -263,6 +263,7 @@ SpriteAsset SpriteAsset::parse(std::span<const std::byte> data) {
     result.local_bounds_max_ = read_q12_vec3(data, 0xCCU);
     result.bounding_radius_ = q12_to_float(read_i32(data, 0xD8U));
     result.placement_height_offset_ = q12_to_float(read_i32(data, 0xDCU));
+    result.lighting_scale_q12_ = read_i32(data, 0xE0U);
     result.has_valid_header_bounds_ =
         result.local_bounds_min_.x <= result.local_bounds_max_.x &&
         result.local_bounds_min_.y <= result.local_bounds_max_.y &&
@@ -601,6 +602,20 @@ std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::b
             for (uint32_t slot = 0U; slot < visual.technology_panel_ids.size(); ++slot) {
                 visual.technology_panel_ids[slot] = read_u32(data, offset + 0x1C8U + slot * 4U);
             }
+        }
+        if (size >= 0x250U) {
+            for (uint32_t slot = 0U; slot < visual.faction_technology_variant_model_ids.size(); ++slot) {
+                visual.faction_technology_variant_model_ids[slot] =
+                    read_u32(data, offset + 0x238U + slot * 4U);
+            }
+        }
+        if (size >= 0x260U) {
+            visual.simulation.damage_effect_health_threshold_percent =
+                read_i32(data, offset + 0x250U);
+            visual.simulation.damage_effect_id = read_u32(data, offset + 0x254U);
+            visual.simulation.damage_effect_min_cooldown_ticks = read_u32(data, offset + 0x258U);
+            visual.simulation.damage_effect_random_cooldown_ticks = read_u32(data, offset + 0x25CU);
+            for (auto& node : visual.hierarchy_nodes) node.simulation = visual.simulation;
         }
         result.push_back(std::move(visual));
         offset += size;

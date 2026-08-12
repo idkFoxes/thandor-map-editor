@@ -87,6 +87,7 @@ ShotAsset ShotAsset::parse(std::span<const std::byte> data) {
         record.launch_effect_id = read_u32(data, offset + 0xD4);
         record.shading_color_argb = read_u32(data, offset + 0x25C);
         record.shading_transition_ticks = read_i32(data, offset + 0x260);
+        record.shading_release_transition_ticks = read_i32(data, offset + 0x264);
         record.secondary_effect_id = read_u32(data, offset + 0x268);
         for (uint32_t class_index = 0; class_index < record.target_impact_effect_ids.size();
              ++class_index) {
@@ -95,23 +96,28 @@ ShotAsset ShotAsset::parse(std::span<const std::byte> data) {
             record.target_impact_damage_q12[class_index] =
                 read_i32(data, offset + 0xB0 + class_index * 4U);
         }
-        record.lifetime_ticks = read_u32(data, offset + 0xD0);
-        record.range_scale_d0_q12 = read_i32(data, offset + 0xD0);
+        record.projectile_lifetime_ticks = read_u32(data, offset + 0xD0);
         record.animation_threshold_q4 = read_u32(data, offset + 0x15C);
         record.animation_frame_count = read_u32(data, offset + 0x1DC);
         record.secondary_effect_interval_ticks = read_u32(data, offset + 0x26C);
-        record.range_scale_270_q12 = read_i32(data, offset + 0x270);
+        record.trajectory_ramp_duration_ticks = read_u32(data, offset + 0x270);
+        record.fixed_range_transition_age_threshold_ticks = read_u32(data, offset + 0x274);
         record.elevation_offset_angle16 = read_i32(data, offset + 0x278);
         record.mode2_selection_range_q12 = read_i32(data, offset + 0x27C);
+        record.terrain_grid_mask_index = read_i32(data, offset + 0x280);
+        record.state_tint_argb = read_u32(data, offset + 0x284);
+        record.positioned_sound_gain_q15 = read_u32(data, offset + 0x288);
+        record.positioned_sound_maximum_distance_q12 = read_u32(data, offset + 0x28C);
         record.mode3_lead_disabled = read_u32(data, offset + 0x290);
         for (uint32_t effect_index = 0; effect_index < record.terrain_impact_effect_ids.size();
              ++effect_index) {
             record.terrain_impact_effect_ids[effect_index] =
                 read_u32(data, offset + 0x14 + effect_index * 4U);
+            record.terrain_impact_effect_owner_slots[effect_index] =
+                read_u32(data, offset + 0xE0 + effect_index * 4U);
             record.terrain_material_indices[effect_index] =
                 read_i32(data, offset + 0x1E0 + effect_index * 4U);
         }
-        record.state_tint_argb = read_u32(data, offset + 0x284);
         record.sprite_path = read_resource_path(data, offset + kShotPathOffset);
         if (record.sprite_path.empty()) throw FormatError("SHT definition has no sprite path");
         result.definitions_.push_back(std::move(record));
@@ -131,9 +137,9 @@ int32_t shot_selection_range_q12(const ShotDefinitionRecord& definition) noexcep
     } else if (definition.trajectory_mode == 2) {
         value = definition.mode2_selection_range_q12;
     } else {
-        const std::int64_t scaled270 =
-            (static_cast<std::int64_t>(definition.range_scale_270_q12) * -0xAAA) >> 12;
-        value = (scaled270 + definition.range_scale_d0_q12) *
+        const std::int64_t ramp_distance_bias =
+            (static_cast<std::int64_t>(definition.trajectory_ramp_duration_ticks) * -0xAAA) >> 12;
+        value = (ramp_distance_bias + static_cast<std::int64_t>(definition.projectile_lifetime_ticks)) *
                 static_cast<std::int64_t>(definition.launch_speed_q12);
     }
     if (value <= 0) return 0;
@@ -143,6 +149,24 @@ int32_t shot_selection_range_q12(const ShotDefinitionRecord& definition) noexcep
 
 float shot_selection_range_world(const ShotDefinitionRecord& definition) noexcept {
     return q12_to_float(shot_selection_range_q12(definition));
+}
+
+ShotTerrainMaterialValidation validate_shot_terrain_material_references(
+    const ShotDefinitionRecord& definition, uint32_t loaded_material_count) noexcept {
+    ShotTerrainMaterialValidation result;
+    const uint32_t available_materials = std::min(loaded_material_count, 26U);
+    for (const int32_t material_index : definition.terrain_material_indices) {
+        if (material_index < 0) {
+            ++result.sentinel_count;
+            continue;
+        }
+        if (static_cast<uint32_t>(material_index) < available_materials) {
+            ++result.valid_reference_count;
+        } else {
+            ++result.invalid_reference_count;
+        }
+    }
+    return result;
 }
 
 EffectAsset EffectAsset::parse(std::span<const std::byte> data) {
@@ -401,6 +425,66 @@ ResourceEmitterSchedule build_resource_emitter_schedule(
     return result;
 }
 
+DamageEffectSchedule build_damage_effect_schedule_for_attachment_keys(
+    DamageEffectTiming timing, std::span<const uint32_t> attachment_key_indices,
+    uint32_t primary_rng_seed, uint32_t preferred_cycle_ticks, uint32_t maximum_pulses) {
+    DamageEffectSchedule result;
+    if (maximum_pulses == 0U) return result;
+    preferred_cycle_ticks = std::max(2U, preferred_cycle_ticks);
+    uint32_t state = primary_rng_seed;
+    uint32_t spawn_tick = 0U;
+    int64_t selection_metric4 = 0;
+    const auto has_key = [&](uint32_t key) {
+        return std::find(attachment_key_indices.begin(), attachment_key_indices.end(), key) !=
+            attachment_key_indices.end();
+    };
+    while (spawn_tick < preferred_cycle_ticks && result.pulses.size() < maximum_pulses) {
+        uint32_t random_cooldown = 0U;
+        if (timing.random_cooldown_ticks != 0U)
+            random_cooldown = resource_random_next_primary(state) % timing.random_cooldown_ticks;
+        const uint32_t interval = std::max(1U, timing.base_cooldown_ticks + random_cooldown);
+
+        uint32_t emitted_attachment_key = 0U;
+        if (!attachment_key_indices.empty()) {
+            if (selection_metric4 >= 0 && has_key(static_cast<uint32_t>(selection_metric4))) {
+                emitted_attachment_key = static_cast<uint32_t>(selection_metric4);
+                ++selection_metric4;
+            } else {
+                // The retail function stores -1 before retrying lookup key zero, then increments
+                // that stored value after a successful transform. Hence a wrap emission from key
+                // zero leaves the next requested key at zero rather than one.
+                selection_metric4 = -1;
+                if (has_key(0U)) {
+                    emitted_attachment_key = 0U;
+                    ++selection_metric4;
+                }
+            }
+        }
+
+        const uint32_t orientation_word = resource_random_next_primary(state);
+        const uint32_t orientation_elevation = resource_random_next_primary(state);
+        result.pulses.push_back({spawn_tick, emitted_attachment_key,
+            orientation_word & 0xFFFFU,
+            (orientation_elevation & 0x1FFFU) + 0x1FFFU,
+            (orientation_word >> 16U) & 0xFFFFU});
+        if (std::numeric_limits<uint32_t>::max() - spawn_tick < interval) break;
+        spawn_tick += interval;
+    }
+    result.cycle_ticks = result.pulses.size() == maximum_pulses && !result.pulses.empty()
+        ? std::max(2U, result.pulses.back().spawn_tick + 1U) : preferred_cycle_ticks;
+    return result;
+}
+
+DamageEffectSchedule build_damage_effect_schedule(
+    DamageEffectTiming timing, uint32_t primary_rng_seed,
+    uint32_t preferred_cycle_ticks, uint32_t maximum_pulses) {
+    std::vector<uint32_t> contiguous_keys;
+    contiguous_keys.reserve(timing.attachment_count);
+    for (uint32_t key = 0U; key < timing.attachment_count; ++key) contiguous_keys.push_back(key);
+    return build_damage_effect_schedule_for_attachment_keys(timing, contiguous_keys,
+        primary_rng_seed, preferred_cycle_ticks, maximum_pulses);
+}
+
 uint32_t effect_frame_index_at_age(const EffectDefinitionRecord& definition,
                                    uint32_t age_ticks) noexcept {
     if (definition.runtime_value_0c == 0U) return 0U;
@@ -446,30 +530,54 @@ uint8_t effect_alpha_at_age(const EffectDefinitionRecord& definition,
     return 255U;
 }
 
-std::array<float, 3> effect_transition2_displacement_at_age(
+std::array<float, 3> effect_transition2_displacement_at_age_angles(
     const EffectDefinitionRecord& definition, uint32_t age_ticks,
-    uint32_t orientation_random) noexcept {
+    uint32_t world_rotation_angle0, uint32_t world_rotation_angle1) noexcept {
     std::array<float, 3> result{};
     if (definition.transition_kind != 2U || definition.movement_speed_q12 == 0 || age_ticks == 0U)
         return result;
     const float speed = q12_to_float(definition.movement_speed_q12);
-    uint32_t azimuth = orientation_random & 0xFFFFU;
-    uint32_t elevation = (0x4000U - (orientation_random >> 20U)) & 0xFFFFU;
+    uint32_t angle0 = world_rotation_angle0 & 0xFFFFU;
+    uint32_t angle1 = world_rotation_angle1 & 0xFFFFU;
     constexpr float turn_to_radians = 6.28318530717958647692F / 65536.0F;
-    // Effect lifetimes are small (EFF 131 is 80 ticks), so reproducing the integer recurrence is
-    // both cheaper than rebuilding model geometry and more faithful than integrating a float curve.
+    // FixedMath_BuildVectorFromAnglesAndMagnitude3Regs at 0x00484770 is equivalent to
+    // {cos(a0)*cos(a1), cos(a0)*sin(a1), sin(a0)} * magnitude. The runtime then updates
+    // worldRotationAngle1 with (angle1*63 + 0x4000) >> 6 after each integration step.
     const uint32_t steps = std::min(age_ticks, effect_lifetime_ticks(definition));
     for (uint32_t tick = 0; tick < steps; ++tick) {
-        const float elevation_radians = static_cast<float>(elevation) * turn_to_radians;
-        const float azimuth_radians = static_cast<float>(azimuth) * turn_to_radians;
-        const float horizontal = std::cos(elevation_radians) * speed;
-        result[0] += horizontal * std::cos(azimuth_radians);
-        result[1] += horizontal * std::sin(azimuth_radians);
-        result[2] += std::sin(elevation_radians) * speed;
-        elevation = static_cast<uint32_t>((static_cast<uint64_t>(elevation) * 63U + 0x4000U) >> 6U)
+        const float a0 = static_cast<float>(angle0) * turn_to_radians;
+        const float a1 = static_cast<float>(angle1) * turn_to_radians;
+        const float horizontal = std::cos(a0) * speed;
+        result[0] += horizontal * std::cos(a1);
+        result[1] += horizontal * std::sin(a1);
+        result[2] += std::sin(a0) * speed;
+        angle1 = static_cast<uint32_t>((static_cast<uint64_t>(angle1) * 63U + 0x4000U) >> 6U)
             & 0xFFFFU;
     }
     return result;
+}
+
+uint32_t effect_transition2_world_rotation_angle1_at_pose_age(
+    const EffectDefinitionRecord& definition, uint32_t age_ticks,
+    uint32_t initial_world_rotation_angle1) noexcept {
+    uint32_t angle1 = initial_world_rotation_angle1 & 0xFFFFU;
+    if (definition.transition_kind != 2U || age_ticks <= 1U) return angle1;
+    const uint32_t lifetime = effect_lifetime_ticks(definition);
+    const uint32_t movement_steps = std::min(age_ticks, lifetime);
+    const uint32_t easing_steps = movement_steps == 0U ? 0U : movement_steps - 1U;
+    for (uint32_t tick = 0; tick < easing_steps; ++tick)
+        angle1 = static_cast<uint32_t>((static_cast<uint64_t>(angle1) * 63U + 0x4000U) >> 6U)
+            & 0xFFFFU;
+    return angle1;
+}
+
+std::array<float, 3> effect_transition2_displacement_at_age(
+    const EffectDefinitionRecord& definition, uint32_t age_ticks,
+    uint32_t orientation_random) noexcept {
+    // Preserve the deterministic editor seed mapping used before exact runtime angles were exposed.
+    const uint32_t azimuth = orientation_random & 0xFFFFU;
+    const uint32_t elevation = (0x4000U - (orientation_random >> 20U)) & 0xFFFFU;
+    return effect_transition2_displacement_at_age_angles(definition, age_ticks, elevation, azimuth);
 }
 
 std::vector<LinkedShotEmission> build_linked_shot_emissions(

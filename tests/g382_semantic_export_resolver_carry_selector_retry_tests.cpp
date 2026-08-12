@@ -52,7 +52,7 @@ int main() try {
     ShotDefinitionRecord shot;
     shot.trajectory_mode = 0U;
     shot.launch_speed_q12 = 0x1000;
-    shot.lifetime_ticks = 64U;
+    shot.projectile_lifetime_ticks = 64U;
     const Vec3f source_position{0.0F, 0.0F, 0.0F};
     const Vec3f target{5.0F, 0.0F, 0.0F};
     const auto aim = simulation_shot_launch_angles(source_position, target, shot);

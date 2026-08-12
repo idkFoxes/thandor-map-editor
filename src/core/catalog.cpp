@@ -256,6 +256,27 @@ void collect_arm_model_variant_groups(
                 }
                 variant.model_source_path = visual->source_path;
                 variant.sprite_path = visual->sprite_path;
+                variant.model_hierarchy = visual->hierarchy_nodes;
+                for (uint32_t replacement_slot = 0U;
+                     replacement_slot < visual->faction_technology_variant_model_ids.size();
+                     ++replacement_slot) {
+                    const uint32_t replacement_id =
+                        visual->faction_technology_variant_model_ids[replacement_slot];
+                    if (replacement_id == 0U) continue;
+                    const auto* replacement_visual = select_model_visual_for_arm(
+                        model_visuals, replacement_id, arm_path);
+                    if (replacement_visual == nullptr) continue;
+                    ModelFactionTechnologyReplacement replacement;
+                    replacement.slot_index = replacement_slot;
+                    replacement.model_definition_id = replacement_id;
+                    replacement.technology_unlock_id = replacement_visual->technology_unlock_id;
+                    replacement.technology_title = technology_title_at(
+                        technologies, replacement_visual->technology_unlock_id);
+                    replacement.model_source_path = replacement_visual->source_path;
+                    replacement.sprite_path = replacement_visual->sprite_path;
+                    replacement.model_hierarchy = replacement_visual->hierarchy_nodes;
+                    variant.faction_technology_replacements.push_back(std::move(replacement));
+                }
             }
             group.variants.push_back(std::move(variant));
         }
@@ -274,95 +295,6 @@ void collect_arm_model_variant_groups(
         active_nodes.erase(node_offset);
     };
     visit(root_node_offset, std::numeric_limits<uint32_t>::max(), 0U, 0U);
-}
-
-std::vector<ModelVisualNode> resolve_arm_linked_model_hierarchy(
-    std::span<const std::byte> arm_bytes, std::size_t arm_root_offset,
-    std::string_view arm_path,
-    const std::unordered_map<uint32_t, std::vector<ModelVisualRecord>>& model_visuals,
-    uint32_t& linked_runtime_count, uint32_t& deferred_attachment_count,
-    uint32_t technology_level_index = 0U) {
-    std::vector<ModelVisualNode> output;
-    linked_runtime_count = 0U;
-    deferred_attachment_count = 0U;
-    if (arm_root_offset > arm_bytes.size() || 0x40U > arm_bytes.size() - arm_root_offset) return output;
-
-    auto append_model = [&](const ModelVisualRecord& visual, uint32_t external_parent,
-                            uint32_t external_slot,
-                            const DeferredModelAttachment* root_override,
-                            std::vector<DeferredModelAttachment>& deferred) {
-        std::vector<uint32_t> remap(visual.hierarchy_nodes.size(),
-            std::numeric_limits<uint32_t>::max());
-        for (std::size_t local_index = 0; local_index < visual.hierarchy_nodes.size(); ++local_index) {
-            const auto& source = visual.hierarchy_nodes[local_index];
-            const bool root = source.parent_index == std::numeric_limits<uint32_t>::max();
-            uint32_t mapped_parent = external_parent;
-            if (!root) {
-                if (source.parent_index >= remap.size()) continue;
-                mapped_parent = remap[source.parent_index];
-                if (mapped_parent == std::numeric_limits<uint32_t>::max()) continue;
-            }
-            if (!source.creates_runtime_node()) {
-                deferred.push_back(DeferredModelAttachment{
-                    mapped_parent, source.child_slot, source.local_rotation_angle0,
-                    source.local_rotation_angle1, source.local_rotation_angle2});
-                ++deferred_attachment_count;
-                continue;
-            }
-            if (source.sprite_path.empty()) continue;
-            ModelVisualNode node = source;
-            node.parent_index = root ? external_parent : mapped_parent;
-            node.child_slot = root ? external_slot : source.child_slot;
-            if (root && root_override != nullptr) {
-                node.local_rotation_angle0 = root_override->angle0;
-                node.local_rotation_angle1 = root_override->angle1;
-                node.local_rotation_angle2 = root_override->angle2;
-            }
-            remap[local_index] = static_cast<uint32_t>(output.size());
-            output.push_back(std::move(node));
-        }
-    };
-
-    std::unordered_set<std::size_t> active_arm_nodes;
-    std::function<void(std::size_t, const DeferredModelAttachment*, bool)> append_arm_node;
-    append_arm_node = [&](std::size_t arm_node_offset,
-                          const DeferredModelAttachment* attachment,
-                          bool linked_child) {
-        if (arm_node_offset > arm_bytes.size() || 0x40U > arm_bytes.size() - arm_node_offset)
-            return;
-        if (!active_arm_nodes.insert(arm_node_offset).second)
-            throw FormatError("ARM linked model hierarchy contains a cycle");
-        uint32_t model_id = 0U;
-        if (technology_level_index < 8U)
-            model_id = read_u32(arm_bytes, arm_node_offset + 0x20U + technology_level_index * 4U);
-        if (model_id == 0U) model_id = base_arm_model_definition_id(arm_bytes, arm_node_offset);
-        const ModelVisualRecord* visual = select_model_visual_for_arm(model_visuals, model_id, arm_path);
-        std::vector<DeferredModelAttachment> deferred;
-        if (visual != nullptr) {
-            const uint32_t parent = attachment == nullptr
-                ? std::numeric_limits<uint32_t>::max() : attachment->parent_index;
-            const uint32_t slot = attachment == nullptr ? 0U : attachment->child_slot;
-            append_model(*visual, parent, slot, attachment, deferred);
-            if (linked_child) ++linked_runtime_count;
-        }
-
-        const uint32_t child_count = read_u32(arm_bytes, arm_node_offset + 8U);
-        if (child_count > 8U)
-            throw FormatError("ARM linked model child count exceeds the serialized eight-slot array");
-        if (arm_node_offset + 0x0CU + static_cast<std::size_t>(child_count) * 4U > arm_bytes.size())
-            throw FormatError("ARM linked model child offsets exceed payload");
-        const uint32_t resolvable = std::min<uint32_t>(child_count,
-            static_cast<uint32_t>(deferred.size()));
-        for (uint32_t child = 0U; child < resolvable; ++child) {
-            const uint32_t child_offset = read_u32(arm_bytes, arm_node_offset + 0x0CU + child * 4U);
-            if (child_offset == 0U) continue;
-            append_arm_node(child_offset, &deferred[child], true);
-        }
-        active_arm_nodes.erase(arm_node_offset);
-    };
-
-    append_arm_node(arm_root_offset, nullptr, false);
-    return output;
 }
 
 bool generic_runtime_registry_source(std::string_view path) {
@@ -526,6 +458,139 @@ void assign_pck_placement_name(ArmyAssetPreset& preset) {
 }
 
 } // namespace
+
+std::vector<ModelVisualNode> resolve_faction_technology_hierarchy(
+    const ArmyAssetPreset& preset, const FactionTechnologyMask256& technology_mask,
+    uint32_t* selected_root_model_definition_id, uint32_t* linked_runtime_count,
+    uint32_t* deferred_attachment_count) {
+    if (selected_root_model_definition_id != nullptr) *selected_root_model_definition_id = 0U;
+    if (linked_runtime_count != nullptr) *linked_runtime_count = 0U;
+    if (deferred_attachment_count != nullptr) *deferred_attachment_count = 0U;
+    std::vector<ModelVisualNode> output;
+    if (preset.model_variant_groups.empty()) return output;
+
+    struct DeferredAttachment {
+        uint32_t parent_index{std::numeric_limits<uint32_t>::max()};
+        uint32_t child_slot{};
+        uint32_t angle0{};
+        uint32_t angle1{};
+        uint32_t angle2{};
+    };
+
+    const auto choose_arm_variant = [&](const ArmyModelVariantGroup& group)
+        -> const ModelTechnologyVariant* {
+        if (group.variants.empty()) return nullptr;
+        // The executable initializes the selected definition from serialized ARM slot zero.
+        // Later nonzero slots replace it only when their candidate MDL +0x1C0 technology bit is
+        // unlocked. Do not silently promote slot 1+ to the baseline when serialized slot 0 is zero.
+        const ModelTechnologyVariant* selected = nullptr;
+        for (const auto& candidate : group.variants) {
+            if (candidate.variant_index == 0U) selected = &candidate;
+            if (faction_technology_unlocked(technology_mask, candidate.technology_unlock_id))
+                selected = &candidate; // executable keeps the last unlocked ARM candidate
+        }
+        return selected;
+    };
+
+    const auto choose_model_hierarchy = [&](const ModelTechnologyVariant& variant,
+                                            uint32_t* selected_definition)
+        -> const std::vector<ModelVisualNode>* {
+        *selected_definition = variant.model_definition_id;
+        const std::vector<ModelVisualNode>* hierarchy = &variant.model_hierarchy;
+        for (const auto& replacement : variant.faction_technology_replacements) {
+            if (!faction_technology_unlocked(technology_mask, replacement.technology_unlock_id))
+                continue;
+            *selected_definition = replacement.model_definition_id;
+            hierarchy = &replacement.model_hierarchy; // first unlocked MDL +0x238..+0x24C wins
+            break;
+        }
+        return hierarchy;
+    };
+
+    const auto append_model = [&](const std::vector<ModelVisualNode>& hierarchy,
+                                  uint32_t external_parent, uint32_t external_slot,
+                                  const DeferredAttachment* root_override,
+                                  std::vector<DeferredAttachment>& deferred) {
+        std::vector<uint32_t> remap(hierarchy.size(), std::numeric_limits<uint32_t>::max());
+        for (std::size_t local_index = 0U; local_index < hierarchy.size(); ++local_index) {
+            const auto& source = hierarchy[local_index];
+            const bool root = source.parent_index == std::numeric_limits<uint32_t>::max();
+            uint32_t mapped_parent = external_parent;
+            if (!root) {
+                if (source.parent_index >= remap.size()) continue;
+                mapped_parent = remap[source.parent_index];
+                if (mapped_parent == std::numeric_limits<uint32_t>::max()) continue;
+            }
+            if (!source.creates_runtime_node()) {
+                deferred.push_back(DeferredAttachment{mapped_parent, source.child_slot,
+                    source.local_rotation_angle0, source.local_rotation_angle1,
+                    source.local_rotation_angle2});
+                if (deferred_attachment_count != nullptr) ++*deferred_attachment_count;
+                continue;
+            }
+            if (source.sprite_path.empty()) continue;
+            ModelVisualNode node = source;
+            node.parent_index = root ? external_parent : mapped_parent;
+            node.child_slot = root ? external_slot : source.child_slot;
+            if (root && root_override != nullptr) {
+                node.local_rotation_angle0 = root_override->angle0;
+                node.local_rotation_angle1 = root_override->angle1;
+                node.local_rotation_angle2 = root_override->angle2;
+            }
+            remap[local_index] = static_cast<uint32_t>(output.size());
+            output.push_back(std::move(node));
+        }
+    };
+
+    std::function<void(uint32_t, const DeferredAttachment*, bool)> append_group;
+    append_group = [&](uint32_t group_index, const DeferredAttachment* attachment,
+                       bool linked_child) {
+        if (group_index >= preset.model_variant_groups.size()) return;
+        const auto& group = preset.model_variant_groups[group_index];
+        const auto* arm_variant = choose_arm_variant(group);
+        if (arm_variant == nullptr) return;
+        uint32_t selected_definition = 0U;
+        const auto* hierarchy = choose_model_hierarchy(*arm_variant, &selected_definition);
+        if (group.depth == 0U && selected_root_model_definition_id != nullptr)
+            *selected_root_model_definition_id = selected_definition;
+        if (linked_child && linked_runtime_count != nullptr) ++*linked_runtime_count;
+
+        std::vector<DeferredAttachment> deferred;
+        if (hierarchy != nullptr) {
+            const uint32_t parent = attachment == nullptr
+                ? std::numeric_limits<uint32_t>::max() : attachment->parent_index;
+            const uint32_t slot = attachment == nullptr ? 0U : attachment->child_slot;
+            append_model(*hierarchy, parent, slot, attachment, deferred);
+        }
+
+        std::vector<uint32_t> children;
+        for (uint32_t candidate = 0U; candidate < preset.model_variant_groups.size(); ++candidate) {
+            if (preset.model_variant_groups[candidate].parent_group_index == group_index)
+                children.push_back(candidate);
+        }
+        std::sort(children.begin(), children.end(), [&](uint32_t left, uint32_t right) {
+            return preset.model_variant_groups[left].child_slot <
+                   preset.model_variant_groups[right].child_slot;
+        });
+        for (uint32_t child_group : children) {
+            const uint32_t child_slot = preset.model_variant_groups[child_group].child_slot;
+            if (child_slot >= deferred.size()) continue;
+            append_group(child_group, &deferred[child_slot], true);
+        }
+    };
+
+    uint32_t root_group = std::numeric_limits<uint32_t>::max();
+    for (uint32_t index = 0U; index < preset.model_variant_groups.size(); ++index) {
+        if (preset.model_variant_groups[index].parent_group_index ==
+            std::numeric_limits<uint32_t>::max()) {
+            root_group = index;
+            break;
+        }
+    }
+    if (root_group != std::numeric_limits<uint32_t>::max())
+        append_group(root_group, nullptr, false);
+    return output;
+}
 
 AssetKind classify_asset(std::string_view normalized_path) {
     const auto ext = extension_of(normalized_path);
@@ -848,6 +913,13 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                             preset.timed_effect_id = visual.timed_effect_id;
                             preset.timed_effect_interval_ticks = visual.timed_effect_interval_ticks;
                             preset.timed_effect_random_ticks = visual.timed_effect_random_ticks;
+                            preset.damage_effect_health_threshold_percent =
+                                visual.simulation.damage_effect_health_threshold_percent;
+                            preset.damage_effect_id = visual.simulation.damage_effect_id;
+                            preset.damage_effect_min_cooldown_ticks =
+                                visual.simulation.damage_effect_min_cooldown_ticks;
+                            preset.damage_effect_random_cooldown_ticks =
+                                visual.simulation.damage_effect_random_cooldown_ticks;
                             preset.linked_technology_id = visual.linked_technology_id;
                             if (visual.linked_technology_id != 0U) {
                                 preset.linked_technology_title = technology_title_at(
@@ -879,55 +951,14 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                             }
                             collect_arm_model_variant_groups(preset, bytes, root_node_offset,
                                 asset.normalized_path, model_visuals, catalog.technologies_);
-                            preset.resolved_model_hierarchy = resolve_arm_linked_model_hierarchy(
-                                bytes, root_node_offset, asset.normalized_path, model_visuals,
-                                preset.linked_model_runtime_count,
-                                preset.deferred_model_attachment_count);
+                            const FactionTechnologyMask256 no_research{};
+                            uint32_t selected_root_model_id = 0U;
+                            preset.resolved_model_hierarchy = resolve_faction_technology_hierarchy(
+                                preset, no_research, &selected_root_model_id,
+                                &preset.linked_model_runtime_count,
+                                &preset.deferred_model_attachment_count);
                             if (preset.resolved_model_hierarchy.empty())
                                 preset.resolved_model_hierarchy = preset.model_hierarchy;
-                            const auto root_group = std::find_if(preset.model_variant_groups.begin(),
-                                preset.model_variant_groups.end(), [](const ArmyModelVariantGroup& group) {
-                                    return group.depth == 0U;
-                                });
-                            if (root_group != preset.model_variant_groups.end()) {
-                                for (const auto& variant : root_group->variants) {
-                                    ArmyTechnologyLevelPreview preview;
-                                    preview.level_index = variant.variant_index;
-                                    preview.root_model_definition_id = variant.model_definition_id;
-                                    preview.technology_effect_id = variant.technology_unlock_id != 0U
-                                        ? variant.technology_unlock_id : variant.linked_technology_id;
-                                    preview.technology_effect_title = !variant.technology_title.empty()
-                                        ? variant.technology_title : variant.linked_technology_title;
-                                    if (preview.technology_effect_title.empty())
-                                        preview.technology_effect_title = preview.level_index == 0U
-                                            ? "Base model / no STR effect" : "No named STR effect";
-                                    uint32_t preview_linked_count = 0U;
-                                    uint32_t preview_deferred_count = 0U;
-                                    preview.resolved_model_hierarchy = resolve_arm_linked_model_hierarchy(
-                                        bytes, root_node_offset, asset.normalized_path, model_visuals,
-                                        preview_linked_count, preview_deferred_count,
-                                        preview.level_index);
-                                    if (preview.resolved_model_hierarchy.empty() && preview.level_index == 0U)
-                                        preview.resolved_model_hierarchy = preset.resolved_model_hierarchy;
-                                    const auto topology_matches_base = [&]() {
-                                        if (preview.resolved_model_hierarchy.size() !=
-                                            preset.resolved_model_hierarchy.size()) return false;
-                                        for (std::size_t node_index = 0;
-                                             node_index < preview.resolved_model_hierarchy.size();
-                                             ++node_index) {
-                                            const auto& candidate = preview.resolved_model_hierarchy[node_index];
-                                            const auto& base = preset.resolved_model_hierarchy[node_index];
-                                            if (candidate.parent_index != base.parent_index ||
-                                                candidate.child_slot != base.child_slot ||
-                                                candidate.creates_runtime_node() != base.creates_runtime_node())
-                                                return false;
-                                        }
-                                        return true;
-                                    };
-                                    if (!preview.resolved_model_hierarchy.empty() && topology_matches_base())
-                                        preset.technology_level_previews.push_back(std::move(preview));
-                                }
-                            }
                         }
                     }
                 }
@@ -1588,6 +1619,23 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
             }
             if (preset.timed_effect_id != 0U)
                 validate_effect(preset.timed_effect_id, 1U, "ARM timed effect");
+            if (preset.damage_effect_id != 0U)
+                validate_effect(preset.damage_effect_id, 1U, "ARM damage-state effect");
+            for (const auto& group : preset.model_variant_groups) {
+                for (const auto& variant : group.variants) {
+                    for (const auto& node : variant.model_hierarchy) {
+                        if (node.simulation.damage_effect_id != 0U)
+                            validate_effect(node.simulation.damage_effect_id, 1U, "MDL damage-state effect");
+                    }
+                    for (const auto& replacement_model : variant.faction_technology_replacements) {
+                        for (const auto& node : replacement_model.model_hierarchy) {
+                            if (node.simulation.damage_effect_id != 0U)
+                                validate_effect(node.simulation.damage_effect_id, 1U,
+                                                "MDL technology-variant damage-state effect");
+                        }
+                    }
+                }
+            }
             std::sort(validation.issues.begin(), validation.issues.end());
             validation.issues.erase(std::unique(validation.issues.begin(), validation.issues.end()),
                                     validation.issues.end());
@@ -1676,6 +1724,13 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                     preset.asset_search_text += " linked tech " +
                         std::to_string(variant.linked_technology_id);
                 preset.asset_search_text += " mdl " + std::to_string(variant.model_definition_id);
+                for (const auto& replacement_model : variant.faction_technology_replacements) {
+                    preset.asset_search_text += " mdl variant " +
+                        std::to_string(replacement_model.model_definition_id) + " tech " +
+                        std::to_string(replacement_model.technology_unlock_id);
+                    if (!replacement_model.technology_title.empty())
+                        preset.asset_search_text += " " + replacement_model.technology_title;
+                }
                 for (const auto& pipeline : variant.weapon_pipelines) {
                     preset.asset_search_text += " sht " +
                         std::to_string(pipeline.shot_definition_id) + " " +

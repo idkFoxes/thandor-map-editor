@@ -3,6 +3,7 @@
 #include "thandor/binary.hpp"
 
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -12,6 +13,30 @@ namespace thandor {
 
 // Partial enum recovered from TechnologyRecord +0x34. Category, research-panel branch,
 // panel row, and model attachment kind are independent axes and must not be collapsed.
+
+using FactionTechnologyMask256 = std::array<uint32_t, 8>;
+
+constexpr bool faction_technology_unlocked(const FactionTechnologyMask256& mask,
+                                           uint32_t technology_id) noexcept {
+    return technology_id < 256U &&
+           (mask[technology_id >> 5U] & (1U << (technology_id & 31U))) != 0U;
+}
+
+constexpr void set_faction_technology_unlocked(FactionTechnologyMask256& mask,
+                                                uint32_t technology_id,
+                                                bool unlocked) noexcept {
+    if (technology_id >= 256U) return;
+    const uint32_t bit = 1U << (technology_id & 31U);
+    auto& word = mask[technology_id >> 5U];
+    word = unlocked ? (word | bit) : (word & ~bit);
+}
+
+inline uint32_t faction_technology_unlocked_count(const FactionTechnologyMask256& mask) noexcept {
+    uint32_t count = 0U;
+    for (uint32_t word : mask) count += static_cast<uint32_t>(std::popcount(word));
+    return count;
+}
+
 enum class TechnologyCategory : uint32_t {
     Category0 = 0,
     Category1 = 1,

@@ -82,15 +82,23 @@ int main(int argc, char** argv) try {
         const auto catalog = thandor::AssetCatalog::scan_game_root(argv[1]);
         for (const uint32_t id : {1U, 60U, 80U, 100U, 140U}) {
             const auto& asset = require_preset(catalog, id);
-            require(asset.technology_level_previews.size() >= 3U,
-                    "stock multi-level unit lost its technology preview choices");
-            for (const auto& preview : asset.technology_level_previews) {
-                require(!preview.technology_effect_title.empty(),
-                        "technology preview has no STR effect title");
-                require(preview.resolved_model_hierarchy.size() ==
-                            asset.resolved_model_hierarchy.size(),
-                        "technology preview hierarchy topology differs from the base runtime tree");
-            }
+            const auto root_group = std::find_if(asset.model_variant_groups.begin(),
+                asset.model_variant_groups.end(), [](const auto& group) { return group.depth == 0U; });
+            require(root_group != asset.model_variant_groups.end() && root_group->variants.size() >= 3U,
+                    "stock multi-level unit lost its ARM technology variants");
+            thandor::FactionTechnologyMask256 none{};
+            uint32_t base_root = 0U;
+            const auto base_hierarchy = thandor::resolve_faction_technology_hierarchy(
+                asset, none, &base_root);
+            require(!base_hierarchy.empty() && base_root == root_group->variants.front().model_definition_id,
+                    "zero research mask did not retain the first serialized ARM model");
+            thandor::FactionTechnologyMask256 all{}; all.fill(0xFFFFFFFFU);
+            uint32_t researched_root = 0U;
+            const auto researched_hierarchy = thandor::resolve_faction_technology_hierarchy(
+                asset, all, &researched_root);
+            require(!researched_hierarchy.empty(),
+                    "all-research mask produced no faction-resolved model hierarchy");
+            require(researched_root != 0U, "all-research mask produced no root model definition");
         }
 
         const auto map_group = std::find_if(catalog.map_groups().begin(),
@@ -104,10 +112,10 @@ int main(int argc, char** argv) try {
         require(!document.placement_tags().empty(),
                 "stock map fixture has no placement metadata row");
         const auto lev_before_metadata = document.level().serialize();
-        document.placement_tags().front().technology_level = 2U;
-        document.placement_tags().front().technology_effect_id = 141U;
+        thandor::set_faction_technology_unlocked(document.faction_technology_mask(1U), 141U, true);
+        document.placement_tags().front().preview_integrity_percent = 37U;
         require(document.level().serialize() == lev_before_metadata,
-                "editor-only technology selection mutated serialized LEV placement bytes");
+                "editor-only faction research/damage preview mutated serialized LEV placement bytes");
         const auto project_path = std::filesystem::temp_directory_path() /
                                   "thandor_g393_technology_metadata_roundtrip.thmap";
         std::error_code remove_error;
@@ -116,9 +124,9 @@ int main(int argc, char** argv) try {
         const auto reopened = thandor::MapDocument::open_project(catalog, project_path);
         require(!reopened.placement_tags().empty(),
                 "technology metadata project round trip lost placement rows");
-        require(reopened.placement_tags().front().technology_level == 2U &&
-                    reopened.placement_tags().front().technology_effect_id == 141U,
-                "technology level and STR effect metadata did not round trip through .thmap");
+        require(thandor::faction_technology_unlocked(reopened.faction_technology_mask(1U), 141U) &&
+                    reopened.placement_tags().front().preview_integrity_percent == 37U,
+                "faction research mask and damage integrity did not round trip through .thmap");
         std::filesystem::remove(project_path, remove_error);
 
         std::size_t tanks = 0U;

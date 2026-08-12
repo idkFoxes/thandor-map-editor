@@ -76,8 +76,8 @@ int main(int argc, char** argv) try {
     require_token(editor, "launch_mesh_group_mask");
     require_token(editor, "simulation_shot_frame_index(*shot,age)");
     require_token(editor, "simulation_mode3_model_pitch_turn16");
-    require_token(simulation, "for(uint32_t tick=0U;tick<age;++tick)");
-    require_token(simulation, "Its path is accelerated but not a fabricated sine arc");
+    require_token(simulation, "for (uint32_t tick = 0U; tick < age; ++tick)");
+    require_token(simulation, "Retail mode 3 accelerates along the direct launch vector");
     require_token(simulation, "weapon.launch_attachment_selector_mask&(1U<<selector)");
     require_token(simulation, "state.next_launch_attachment=(selector+1U)%count");
     reject_token(simulation, "std::sin(t*std::numbers::pi_v<float>)");
