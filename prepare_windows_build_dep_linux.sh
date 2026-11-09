@@ -39,7 +39,7 @@ install_system_packages() {
     if command -v pacman >/dev/null 2>&1; then
         log "Installing Arch Linux build dependencies."
         run_root pacman -S --needed --noconfirm \
-            base-devel cmake ninja git python mingw-w64-gcc mingw-w64-winpthreads shaderc vulkan-headers
+            base-devel cmake ninja git python mingw-w64-gcc shaderc vulkan-headers
     elif command -v apt-get >/dev/null 2>&1; then
         log "Installing Debian/Ubuntu build dependencies."
         run_root apt-get update
@@ -86,21 +86,6 @@ find_glslc() {
     command -v glslc 2>/dev/null || true
 }
 
-vulkan_include_root_is_complete() {
-    local candidate="$1"
-    local core_header="${candidate}/vulkan/vulkan_core.h"
-
-    [[ -f "${candidate}/vulkan/vulkan.h" && -f "${core_header}" ]] || return 1
-
-    # Recent Vulkan-Headers releases keep codec headers in include/vk_video.
-    # Do not select a partial MinGW include root when a complete host SDK is
-    # available later in the candidate list.
-    if grep -qE '#include[[:space:]]*[<"]vk_video/' "${core_header}"; then
-        [[ -d "${candidate}/vk_video" ]] || return 1
-    fi
-    return 0
-}
-
 find_vulkan_include_root() {
     local candidate
     for candidate in \
@@ -109,8 +94,7 @@ find_vulkan_include_root() {
         "/usr/${triplet}/include" \
         "/usr/include" \
         "/usr/local/include"; do
-        [[ -n "${candidate}" ]] || continue
-        vulkan_include_root_is_complete "${candidate}" || continue
+        [[ -n "${candidate}" && -f "${candidate}/vulkan/vulkan.h" ]] || continue
         printf '%s\n' "${candidate}"
         return
     done
@@ -133,25 +117,12 @@ clone_tag https://github.com/ocornut/imgui.git "${imgui_tag}" "${src_dir}/imgui"
 
 vulkan_include_root="$(find_vulkan_include_root)"
 [[ -n "${vulkan_include_root}" ]] || die "Vulkan headers were not found. Install vulkan-headers/libvulkan-dev or set THANDOR_VULKAN_INCLUDE_DIR."
-
-# Vulkan-Headers is not a single include/vulkan directory. Modern
-# vulkan_core.h files also include codec definitions from include/vk_video.
-# Copy both sibling trees so the staged SDK preserves the layout expected by
-# the official headers.
-rm -rf -- "${vulkan_prefix}/include/vulkan" "${vulkan_prefix}/include/vk_video"
+rm -rf -- "${vulkan_prefix}/include/vulkan"
 cp -a "${vulkan_include_root}/vulkan" "${vulkan_prefix}/include/vulkan"
+# Recent Vulkan core headers include the sibling video codec headers too.
+rm -rf -- "${vulkan_prefix}/include/vk_video"
 if [[ -d "${vulkan_include_root}/vk_video" ]]; then
     cp -a "${vulkan_include_root}/vk_video" "${vulkan_prefix}/include/vk_video"
-fi
-
-# Fail here with a useful message instead of much later while compiling ImGui.
-# The compiler probe also catches transitive header dependencies, not only the
-# currently known vk_video files.
-vulkan_probe_source=$'#define VK_USE_PLATFORM_WIN32_KHR 1\n#include <vulkan/vulkan.h>\nint main() { return 0; }\n'
-if ! printf '%s' "${vulkan_probe_source}" | "${triplet}-g++" \
-        -std=c++20 -fsyntax-only -x c++ \
-        -I"${vulkan_prefix}/include" -; then
-    die "The staged Vulkan headers are incomplete. The include root must contain both vulkan/ and vk_video/ from the same Vulkan-Headers installation."
 fi
 
 # Windows normally provides vulkan-1.dll through the installed GPU driver. The

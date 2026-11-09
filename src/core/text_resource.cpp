@@ -23,6 +23,10 @@ TextResourceAsset TextResourceAsset::parse(std::span<const std::byte> data) {
     TextResourceAsset asset;
     asset.header_.assign(data.begin(), data.begin() + static_cast<std::ptrdiff_t>(kHeaderSize));
     const auto locale_count = read_u32(data, kLocaleCountOffset);
+    // Every locale occupies at least a 0x10-byte prefix. Validate before
+    // allocating a vector from an untrusted STR header.
+    if(locale_count > (data.size()-kHeaderSize)/kBlockPrefixSize)
+        throw FormatError("STR locale count exceeds asset capacity");
     std::size_t cursor = kHeaderSize;
     asset.blocks_.reserve(locale_count);
     for (uint32_t locale = 0; locale < locale_count; ++locale) {

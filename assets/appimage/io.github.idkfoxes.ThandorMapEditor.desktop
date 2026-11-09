@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Thandor Map Editor
+Comment=Edit Thandor maps and run the Simulation Lab
+Exec=thandor-map-editor
+Icon=thandor-map-editor
+Terminal=false
+Categories=Game;Development;

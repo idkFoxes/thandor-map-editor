@@ -10,10 +10,25 @@
 #include <limits>
 #include <set>
 #include <functional>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace thandor {
 namespace {
+
+
+uint32_t fixed_length3_floor_q12(const std::array<int32_t, 3>& value) noexcept {
+    const auto square = [](int32_t component) -> uint64_t {
+        const int64_t wide = component;
+        return static_cast<uint64_t>(wide * wide);
+    };
+    const uint64_t squared = square(value[0]) + square(value[1]) + square(value[2]);
+    uint64_t root = static_cast<uint64_t>(std::sqrt(static_cast<long double>(squared)));
+    while ((root + 1U) != 0U && root + 1U <= std::numeric_limits<uint32_t>::max() &&
+           (root + 1U) <= squared / (root + 1U)) ++root;
+    while (root != 0U && root > squared / root) --root;
+    return static_cast<uint32_t>(std::min<uint64_t>(root, std::numeric_limits<uint32_t>::max()));
+}
 
 std::string extension_of(std::string_view path) {
     const auto dot = path.find_last_of('.');
@@ -241,11 +256,14 @@ void collect_arm_model_variant_groups(
             const uint32_t model_definition_id =
                 read_u32(arm_bytes, node_offset + 0x20U + variant_index * 4U);
             if (model_definition_id == 0U) continue;
+            const auto* visual = select_model_visual_for_arm(model_visuals, model_definition_id, arm_path);
+            // 0x0052AD90: failed MDL lookup returns CF set (locked). A missing
+            // definition has no technology-zero gate and must never replace a live child.
+            if (visual == nullptr) continue;
             ModelTechnologyVariant variant;
             variant.variant_index = variant_index;
             variant.model_definition_id = model_definition_id;
-            if (const auto* visual = select_model_visual_for_arm(
-                    model_visuals, model_definition_id, arm_path); visual != nullptr) {
+            {
                 variant.technology_unlock_id = visual->technology_unlock_id;
                 variant.technology_title = technology_title_at(
                     technologies, visual->technology_unlock_id);
@@ -416,13 +434,13 @@ void assign_pck_placement_name(ArmyAssetPreset& preset) {
         }
     }
     if (preset.visual_kind == PlacementVisualKind::PowerResource) {
-        preset.display_name = "Energy resource (buildable, blue)";
-        preset.short_name = "Energy resource";
+        preset.display_name = "Tritium resource (buildable, blue)";
+        preset.short_name = "Tritium resource";
         return;
     }
     if (preset.visual_kind == PlacementVisualKind::BuildingResource) {
-        preset.display_name = "Building resource (buildable, gold)";
-        preset.short_name = "Building resource";
+        preset.display_name = "Xenite resource (buildable, gold)";
+        preset.short_name = "Xenite resource";
         return;
     }
     if (preset.visual_kind == PlacementVisualKind::ResourceScenery) {
@@ -592,6 +610,23 @@ std::vector<ModelVisualNode> resolve_faction_technology_hierarchy(
     return output;
 }
 
+bool army_asset_all_selected_model_technologies_unlocked(
+    const ArmyAssetPreset& preset, const FactionTechnologyMask256& technology_mask) noexcept {
+    if (preset.model_variant_groups.empty()) return false;
+    for (const auto& group : preset.model_variant_groups) {
+        const ModelTechnologyVariant* selected = nullptr;
+        for (const auto& candidate : group.variants) {
+            if (candidate.variant_index == 0U) selected = &candidate;
+            if (faction_technology_unlocked(technology_mask, candidate.technology_unlock_id))
+                selected = &candidate;
+        }
+        if (selected == nullptr ||
+            !faction_technology_unlocked(technology_mask, selected->technology_unlock_id))
+            return false;
+    }
+    return true;
+}
+
 AssetKind classify_asset(std::string_view normalized_path) {
     const auto ext = extension_of(normalized_path);
     if (ext == "lev") return AssetKind::Level;
@@ -630,8 +665,8 @@ const char* placement_visual_kind_name(PlacementVisualKind kind) noexcept {
         case PlacementVisualKind::Tree: return "Tree";
         case PlacementVisualKind::Rock: return "Rock";
         case PlacementVisualKind::PlayerStart: return "Player / AI start vehicle";
-        case PlacementVisualKind::PowerResource: return "Energy resource (buildable, blue)";
-        case PlacementVisualKind::BuildingResource: return "Building resource (buildable, gold)";
+        case PlacementVisualKind::PowerResource: return "Tritium resource (buildable, blue)";
+        case PlacementVisualKind::BuildingResource: return "Xenite resource (buildable, gold)";
         case PlacementVisualKind::ResourceScenery: return "Resource scenery / terrain element";
     }
     return "Standard";
@@ -659,9 +694,9 @@ bool placement_is_resource_scenery(const ArmyAssetPreset& preset) noexcept {
 std::optional<uint32_t> resource_field_occupancy_class(uint32_t registry_id) noexcept {
     switch (registry_id) {
         case 814U:
-        case 815U: return 0U; // building-material extractor ARM 330 requires 0x0800
+        case 815U: return 0U; // Xenite deposit/support field; extractor ARM 330 requires FLD 0x0800
         case 810U:
-        case 811U: return 1U; // energy generator ARM 332 requires 0x1000
+        case 811U: return 1U; // Tritium deposit/support field; extractor ARM 332 requires FLD 0x1000
         default: return std::nullopt;
     }
 }
@@ -694,8 +729,9 @@ uint32_t canonical_placement_registry_id(const ArmyAssetPreset& preset) noexcept
 }
 
 PlacementBrowserKind classify_placement_browser_kind(const ArmyAssetPreset& preset) noexcept {
-    if (preset.visual_kind == PlacementVisualKind::PlayerStart || placement_is_resource(preset))
-        return PlacementBrowserKind::General;
+    // The pioneer is a movable unit even though it also serves as the faction start vehicle.
+    // Its PlayerStart visual role does not make it a LEV camera/header record.
+    if (placement_is_resource(preset)) return PlacementBrowserKind::General;
     const std::string_view source = preset.source_path;
     const auto slash = source.find_last_of('/');
     const std::string_view leaf = slash == std::string_view::npos ? source : source.substr(slash + 1U);
@@ -703,7 +739,7 @@ PlacementBrowserKind classify_placement_browser_kind(const ArmyAssetPreset& pres
     // runtime registries for movable units and structures. Everything else with a visual is an
     // editor element; nonvisual helper records remain explicit marker-only entries.
     if (leaf == "unit.arm") return PlacementBrowserKind::Unit;
-    if (leaf == "building.arm") return PlacementBrowserKind::Building;
+    if (leaf.starts_with("building")&&leaf.ends_with(".arm")) return PlacementBrowserKind::Building;
     return PlacementBrowserKind::Element;
 }
 
@@ -727,18 +763,94 @@ bool placement_uses_neutral_source_color(const ArmyAssetPreset& preset) noexcept
     return placement_uses_neutral_source_color(preset.visual_kind);
 }
 
+bool army_asset_preview_uses_neutral_source_color(uint32_t registry_id) noexcept {
+    // game.exe 0x00571DE6 compares the requested registry ID with 0x190 (400).
+    // The preview renderer receives the current faction only below that boundary.
+    return registry_id >= 400U;
+}
+
+bool army_asset_preview_uses_neutral_source_color(const ArmyAssetPreset& preset) noexcept {
+    return army_asset_preview_uses_neutral_source_color(preset.registry_id);
+}
+
 uint32_t default_faction_graphics_family(uint32_t faction_index) noexcept {
-    // The stock frontend player/faction record supplies this selector to
-    // ArmyRuntime_InitializePoolAndGraphicsCf before armyN.gfx/armyN.pal are loaded.
-    // The standard scenario colour order is not the numeric faction index.
-    constexpr std::array<uint32_t, 8> families{{0U, 1U, 3U, 4U, 2U, 5U, 6U, 7U}};
-    return families[std::min<std::size_t>(faction_index, families.size() - 1U)];
+    // Fallback for callers without a loaded LEV.  Retail does not have a universal
+    // faction->colour permutation: LevelLoad seeds record +0x38 as
+    // faction_index + playerSlot.aiClassOrMode.  A zero raw offset is therefore
+    // the only non-invented default.
+    return std::min(faction_index, 8U);
+}
+
+namespace {
+struct GraphicsFamilyColorInfo {
+    const char* color_name;
+    const char* single_player_faction_name;
+    uint32_t single_player_text_rgb24;
+    uint32_t representative_rgb24;
+    bool standard_player_color;
+};
+
+// Direct stock-PCK audit of faction-coloured armyN/sarmyN texture surfaces.
+// These are family identities, not a faction-number permutation.  Family 8 is
+// gray in the package and the retail frontend only exposes it when a runtime
+// flag widens the normal seven-entry colour cycle to eight.
+//
+// Retail Single Player names come from PATCH00/ENGINE texte\menue.str resources
+// 0x2174..0x217B. FrontendTaskAssignmentPage_Initialize selects those resources
+// as 0x2173 + faction_index + the LEV family offset, so the text name follows the
+// exact same effective-family arithmetic as armyN.gfx / armyN.pal selection.
+// The 0x8006 prefix carries four colour nibbles in BLUE, GREEN, RED, ALPHA
+// order, NOT RGBA. The game's FrontendResultsTable_DrawColumnSequenceByType
+// reads text pairs [1,2] as blue, [3,4] as green, [5,6] as red, [7,8]
+// as alpha. Expand each colour nibble twice before returning ImGui 0xRRGGBB.
+// Stock nibbles: Ares D00F, Thoraner 0D0F, Devoken 00DF,
+// Ilurer CC0F, Albor 06CF, Urdoner 025F, Alderaden 909F, Golrathen 333F.
+// Keep these bright frontend names separate from representative armyN textures;
+// e.g. army2 is an olive texture family but its faction-name text is green.
+constexpr std::array<GraphicsFamilyColorInfo, 9> kGraphicsFamilyColors{{
+    {"Neutral",        "Neutral",   0xB0B8C0U, 0x737D8CU, false},
+    {"Blue",           "Ares",      0x0000DDU, 0x4C7388U, true},
+    {"Lime / olive",   "Thoraner",  0x00DD00U, 0x7A8848U, true},
+    {"Red",            "Devoken",   0xDD0000U, 0x884C4CU, true},
+    {"Teal green",     "Ilurer",    0x00CCCCU, 0x4E7868U, true},
+    {"Yellow / gold",  "Albor",     0xCC6600U, 0x987E3DU, true},
+    {"Brown",          "Urdoner",   0x552200U, 0x705748U, true},
+    {"Purple",         "Alderaden", 0x990099U, 0x665880U, true},
+    {"Gray (special)", "Golrathen", 0x333333U, 0x888888U, false},
+}};
+}
+
+const char* graphics_family_color_name(uint32_t graphics_family) noexcept {
+    return graphics_family < kGraphicsFamilyColors.size()
+        ? kGraphicsFamilyColors[graphics_family].color_name
+        : "Custom/invalid family";
+}
+
+const char* graphics_family_single_player_faction_name(uint32_t graphics_family) noexcept {
+    return graphics_family < kGraphicsFamilyColors.size()
+        ? kGraphicsFamilyColors[graphics_family].single_player_faction_name
+        : "Custom/invalid faction";
+}
+
+uint32_t graphics_family_single_player_text_rgb24(uint32_t graphics_family) noexcept {
+    return graphics_family < kGraphicsFamilyColors.size()
+        ? kGraphicsFamilyColors[graphics_family].single_player_text_rgb24
+        : kGraphicsFamilyColors[0].single_player_text_rgb24;
+}
+
+uint32_t graphics_family_representative_rgb24(uint32_t graphics_family) noexcept {
+    return graphics_family < kGraphicsFamilyColors.size()
+        ? kGraphicsFamilyColors[graphics_family].representative_rgb24
+        : kGraphicsFamilyColors[0].representative_rgb24;
+}
+
+bool graphics_family_is_standard_player_color(uint32_t graphics_family) noexcept {
+    return graphics_family < kGraphicsFamilyColors.size() &&
+        kGraphicsFamilyColors[graphics_family].standard_player_color;
 }
 
 const char* default_faction_color_name(uint32_t faction_index) noexcept {
-    constexpr std::array<const char*, 8> names{{
-        "Neutral", "Blue", "Red", "Green", "Yellow", "Orange", "Brown", "Purple"}};
-    return names[std::min<std::size_t>(faction_index, names.size() - 1U)];
+    return graphics_family_color_name(default_faction_graphics_family(faction_index));
 }
 
 bool has_supported_game_executable(const std::filesystem::path& game_root) {
@@ -750,6 +862,22 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
     if (!std::filesystem::is_directory(game_root)) throw std::runtime_error("game root is not a directory");
     if (!has_supported_game_executable(game_root))
         throw std::runtime_error("game.exe or thandor.exe was not found in the selected root");
+    return scan_archive_root(game_root);
+}
+
+AssetCatalog AssetCatalog::scan_archive_root(const std::filesystem::path& game_root, const LevelAsset& level) {
+    return scan_archive_root(game_root, level.model_resource_paths_in_load_order(),
+        level.army_resource_paths_in_load_order(), level.effect_resource_paths_in_load_order(),
+        level.shot_resource_paths_in_load_order(), level.paths().technology);
+}
+
+AssetCatalog AssetCatalog::scan_archive_root(const std::filesystem::path& game_root,
+    std::span<const std::string> model_load_order,
+    std::span<const std::string> army_load_order,
+    std::span<const std::string> effect_load_order,
+    std::span<const std::string> shot_load_order,
+    std::string_view technology_path) {
+    if (!std::filesystem::is_directory(game_root)) throw std::runtime_error("archive root is not a directory");
 
     AssetCatalog catalog;
     catalog.game_root_ = std::filesystem::canonical(game_root);
@@ -815,6 +943,21 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
         }
     }
 
+    // A numeric MDL ID is local to the level registry. The library can contain
+    // different seasonal/campaign records with that same ID. Bind simulation
+    // presets to the LEV's actual load list, instead of a library-wide guess.
+    std::unordered_set<uint32_t> level_model_ids;
+    for(const auto& base:model_load_order){
+        const auto path=normalize_asset_path(base.ends_with(".mdl")?base:base+".mdl");
+        catalog.model_load_order_.push_back(path);
+        for(auto model:parse_model_visual_records(catalog.load(path),path)){
+            if(!level_model_ids.insert(model.definition_id).second)
+                throw FormatError("Duplicate model ID in level registry");
+            auto& candidates=model_visuals[model.definition_id];
+            candidates.clear();candidates.push_back(std::move(model));
+        }
+    }
+
     // The executable loads texte\help.str as text page 0x18. Selection-detail rendering
     // resolves each model name as resource 0x18004F + the MDL record dword at +0x04.
     std::optional<TextResourceAsset> army_asset_name_text;
@@ -832,7 +975,9 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
     // The game loads the fixed 256-record technology table and pairs technology ID N with
     // texte/techno.str resources 0x300000 + N*2 (title) and +1 (detail). Preserve both the
     // machine fields and localized strings so the asset browser can name exact ARM/MDL variants.
-    if (const auto* technology_record = catalog.find("engine/tech.tec")) {
+    const auto technology_resource = technology_path.empty() ? std::string("engine/tech.tec") :
+        asset_base_path(technology_path) + ".tec";
+    if (const auto* technology_record = catalog.find(technology_resource)) {
         try {
             const auto technology_asset = TechnologyAsset::parse(catalog.load(*technology_record));
             catalog.technologies_.assign(technology_asset.records().begin(),
@@ -857,10 +1002,16 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
         }
     }
 
+    // Campaign ARM files carry level-specific enabled flags and linked assets.
+    // The simulation registry admits exactly the LEV's ARM resource list.
+    std::unordered_set<std::string> level_arm_paths;
+    for(const auto& base:army_load_order)
+        level_arm_paths.insert(normalize_asset_path(base.ends_with(".arm")?base:base+".arm"));
     // ARM assets contain variable-size records. Each record begins with byteSize and
     // stores the runtime registry ID at +0x08; this is the exact ID persisted by LEV placements.
     for (const auto& asset : catalog.assets_) {
         if (asset.kind != AssetKind::Army) continue;
+        if(!level_arm_paths.empty()&&!level_arm_paths.contains(asset.normalized_path))continue;
         try {
             const auto bytes = catalog.load(asset);
             if (bytes.size() < 0x200 || read_u32(bytes, 0) != fourcc("arm")) continue;
@@ -900,6 +1051,25 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                             preset.traversal_low_band_index = visual.traversal_low_band_index;
                             preset.traversal_high_band_index = visual.traversal_high_band_index;
                             preset.has_placement_occupancy_class = visual.has_placement_occupancy_class;
+                            preset.resource_extraction_weight_u8 =
+                                visual.simulation.resource_extraction_weight_u8;
+                            preset.resource_storage_selector = visual.simulation.resource_storage_selector;
+                            preset.resource_storage_capacity_contribution_q4 =
+                                visual.simulation.resource_storage_capacity_contribution_q4;
+                            preset.has_resource_storage_capacity_contribution =
+                                visual.simulation.has_resource_storage_capacity_contribution;
+                            preset.water_damage_multiplier = visual.simulation.water_damage_multiplier;
+                            preset.water_damage_threshold_q12 = visual.simulation.water_damage_threshold_q12;
+                            preset.ground_heading_interpolation_distance_q12 =
+                                visual.simulation.ground_heading_interpolation_distance_q12;
+                            preset.ground_far_heading_error_limit_turn16 =
+                                visual.simulation.ground_far_heading_error_limit_turn16;
+                            preset.ground_near_heading_error_limit_turn16 =
+                                visual.simulation.ground_near_heading_error_limit_turn16;
+                            preset.vertical_deployment_step_q12_per_tick =
+                                visual.simulation.vertical_deployment_step_q12_per_tick;
+                            preset.vertical_deployment_travel_limit_q12 =
+                                visual.simulation.vertical_deployment_travel_limit_q12;
                             preset.has_traversal_profile = visual.has_traversal_profile;
                             preset.primary_animated_subresource = visual.primary_animated_subresource;
                             preset.secondary_animated_subresource = visual.secondary_animated_subresource;
@@ -910,9 +1080,44 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                             preset.articulated_contact_interpolation_rate_q12 = visual.simulation.articulated_contact_interpolation_rate_q12;
                             preset.articulated_contact_lift_q12 =
                                 visual.simulation.articulated_contact_lift_q12;
+                            preset.runtime_class_step_q12 = visual.simulation.class_step_q12;
+                            preset.runtime_class_specific_c0_raw = visual.simulation.class_specific_c0_raw;
+                            preset.runtime_class_specific_c4_raw = visual.simulation.class_specific_c4_raw;
+                            preset.runtime_class_specific_c8_raw = visual.simulation.class_specific_c8_raw;
+                            preset.runtime_class_specific_cc_raw = visual.simulation.class_specific_cc_raw;
+                            preset.runtime_class_specific_19c_raw = visual.simulation.class_specific_19c_raw;
+                            preset.runtime_class_specific_1a8_raw = visual.simulation.class_specific_1a8_raw;
+                            preset.runtime_class_effect_sound_asset_id_26c =
+                                visual.simulation.runtime_class_effect_sound_asset_id_26c;
+                            preset.class13_completion_sound_asset_id =
+                                visual.simulation.class13_completion_sound_asset_id;
+                            preset.creation_sound_asset_id_270 =
+                                visual.simulation.creation_sound_asset_id_270;
+                            preset.articulated_contact_steering_limit_turn16 =
+                                visual.simulation.articulated_contact_steering_limit_turn16;
+                            preset.articulated_contact_sound_asset_id =
+                                visual.simulation.articulated_contact_sound_asset_id;
+                            preset.positioned_sound_gain_q15 =
+                                visual.simulation.positioned_sound_gain_q15;
+                            preset.positioned_sound_maximum_distance_q12 =
+                                visual.simulation.positioned_sound_maximum_distance_q12;
+                            preset.projected_sound_asset_id_d0 =
+                                visual.simulation.projected_sound_asset_id_d0;
+                            preset.projected_sound_asset_id_d8 =
+                                visual.simulation.projected_sound_asset_id_d8;
+                            preset.projected_sound_asset_id_primary =
+                                visual.simulation.projected_sound_asset_id_primary;
+                            preset.projected_sound_asset_id_secondary =
+                                visual.simulation.projected_sound_asset_id_secondary;
+                            preset.timed_shot_definition_id = visual.timed_shot_definition_id;
+                            preset.timed_shot_interval_ticks = visual.timed_shot_interval_ticks;
+                            preset.timed_shot_random_ticks = visual.timed_shot_random_ticks;
+                            preset.timed_water_effect_id = visual.timed_water_effect_id;
                             preset.timed_effect_id = visual.timed_effect_id;
                             preset.timed_effect_interval_ticks = visual.timed_effect_interval_ticks;
                             preset.timed_effect_random_ticks = visual.timed_effect_random_ticks;
+                            preset.construction_destruction_effect_id =
+                                visual.simulation.construction_destruction_effect_id;
                             preset.damage_effect_health_threshold_percent =
                                 visual.simulation.damage_effect_health_threshold_percent;
                             preset.damage_effect_id = visual.simulation.damage_effect_id;
@@ -941,7 +1146,7 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                                         catalog.technologies_, technology_id); technology != nullptr) {
                                     panel_entry.category = technology->category;
                                     panel_entry.xenite_cost_q4 = technology->xenite_cost_q4;
-                                    panel_entry.energy_cost_q4 = technology->energy_cost_q4;
+                                    panel_entry.energy_demand_q4 = technology->energy_demand_q4;
                                     panel_entry.research_duration_q5 = technology->research_duration_q5;
                                     panel_entry.title = technology->title;
                                     panel_entry.special_features = technology_special_features(*technology);
@@ -966,10 +1171,22 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                 if (lower.find("rohstoff") != std::string::npos) preset.group_hint = "Resources";
                 else if (lower.find("ruinen") != std::string::npos || lower.find("baum") != std::string::npos || lower.find("busch") != std::string::npos || lower.find("farne") != std::string::npos || lower.find("kaktus") != std::string::npos) preset.group_hint = "Scenery / effects";
                 else preset.group_hint = "Units / structures";
-                if (byte_size >= 0x18U && preset.runtime_model_class_id == 2U) {
-                    // Binary class-2 movement uses top-level ARM +0x14 only as the track-texture
-                    // distance scale. It is not the generic child[2] vertical animation step.
-                    preset.track_texture_travel_scale = read_i32(bytes, offset + 0x14U);
+                if (byte_size >= 0x18U) {
+                    // V519 AiArmyCandidate_* reads bit 0 of the raw ARM +0x14 dword as an
+                    // eligibility predicate. Keep that view separate from class-specific users.
+                    preset.army_runtime_flags14_raw = read_u32(bytes, offset + 0x14U);
+                    preset.ai_candidate_eligible_bit0 =
+                        (preset.army_runtime_flags14_raw & 1U) != 0U;
+                    if (preset.runtime_model_class_id == 2U) {
+                        // The established class-2 movement callback consumes the same storage as
+                        // a signed track-texture distance scale. Preserve that interpretation.
+                        preset.track_texture_travel_scale = read_i32(bytes, offset + 0x14U);
+                    }
+                }
+                if (byte_size >= 0x7CU) {
+                    preset.ai_definition_class_value70 = read_u32(bytes, offset + 0x70U);
+                    preset.ai_definition_class_value74 = read_u32(bytes, offset + 0x74U);
+                    preset.ai_definition_class_value78 = read_u32(bytes, offset + 0x78U);
                 }
                 {
                     const auto& resolved_hierarchy = preset.resolved_model_hierarchy.empty()
@@ -1005,6 +1222,8 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                             });
                     preset.runtime_uses_class17_movement_banking =
                         preset.runtime_model_class_id == 17U;
+                    preset.runtime_uses_class17_root_child_deployment =
+                        hierarchy_root_uses_class17_deployment_tilt(resolved_hierarchy);
                     preset.has_model_subnode_animation =
                         hierarchy_has_authored_model_subnode_animation(resolved_hierarchy);
                     preset.has_continuous_radar_subnode_animation =
@@ -1094,14 +1313,14 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
 
         if (preset.timed_effect_id == 114U && visual_energy == ResourceEnergyKind::Power) {
             preset.visual_kind = PlacementVisualKind::PowerResource;
-            preset.group_hint = "Active energy deposit · EFF 114 · extractor-compatible";
+            preset.group_hint = "Active Tritium deposit · EFF 114 · extractor-compatible";
             preset.canonical_registry_id = 811U;
             preset.compatible_registry_ids = {810U, 811U};
             preset.browser_visible = preset.registry_id == 811U;
         } else if (preset.timed_effect_id == 116U &&
                    visual_energy == ResourceEnergyKind::Building) {
             preset.visual_kind = PlacementVisualKind::BuildingResource;
-            preset.group_hint = "Active building-material deposit · EFF 116 · extractor-compatible";
+            preset.group_hint = "Active Xenite deposit · EFF 116 · extractor-compatible";
             preset.canonical_registry_id = 815U;
             preset.compatible_registry_ids = {814U, 815U};
             preset.browser_visible = preset.registry_id == 815U;
@@ -1210,25 +1429,76 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
     // SHT definitions are fixed 0x2E0-byte records. Keep the definition IDs and effect references
     // available to the static preview so invisible timed EFF controllers can reproduce their
     // linked projectile/effect chain without pretending the empty controller SPR is visible.
+    const auto load_shots = [&](const ShotAsset& shots) {
+        for (const auto& definition : shots.definitions())
+            catalog.shot_definitions_.try_emplace(definition.definition_id, definition);
+    };
+    for (const auto& base : shot_load_order)
+        load_shots(ShotAsset::parse(catalog.load(base.ends_with(".sht") ? base : base + ".sht")));
     for (const auto& asset : catalog.assets_) {
         if (asset.kind != AssetKind::Shot) continue;
         try {
-            const auto shot_asset = ShotAsset::parse(catalog.load(asset));
-            for (const auto& definition : shot_asset.definitions()) {
-                catalog.shot_definitions_.try_emplace(definition.definition_id, definition);
-            }
+            load_shots(ShotAsset::parse(catalog.load(asset)));
         } catch (const std::exception&) {
             // Strict validation reports malformed SHT assets; discovery remains best-effort.
         }
     }
 
-    // Recover editor-only simulation profiles from the exact MDL fields consumed by the game's
-    // 20 Hz movement/aim/fire callbacks. The runtime does not aim and fire from one arbitrary
-    // muzzle leaf: it smooths yaw on the highest node in one repeated-definition assembly, pitch
-    // on the next node, and applies recoil/attachment transforms on the leaf. Parallel leaves
-    // below the same pitch joint are alternating barrels of one channel. Runtime class 21 uses
-    // the separate attachment-selector callback and therefore advances one kind-2 attachment at
-    // a time. These distinctions are required for correct tower casing rotation and muzzle origin.
+    struct SpriteRuntimeGeometry {
+        int32_t bounding_radius_q12{};
+        std::array<std::optional<std::array<int32_t, 3>>, 6> child_translation_q12{};
+    };
+    std::unordered_map<std::string, SpriteRuntimeGeometry> sprite_runtime_geometry_cache;
+    const auto sprite_runtime_geometry = [&](std::string_view path) -> SpriteRuntimeGeometry {
+        const std::string normalized = normalize_asset_path(path);
+        if (const auto found = sprite_runtime_geometry_cache.find(normalized);
+            found != sprite_runtime_geometry_cache.end()) return found->second;
+        SpriteRuntimeGeometry geometry;
+        try {
+            const auto sprite = SpriteAsset::parse(catalog.load(normalized));
+            geometry.bounding_radius_q12 = std::max(0, sprite.bounding_radius_q12());
+            for (uint32_t slot = 0U; slot < geometry.child_translation_q12.size(); ++slot) {
+                if (const auto* attachment = sprite.child_attachment(slot); attachment != nullptr)
+                    geometry.child_translation_q12[slot] = attachment->local_translation_q12;
+            }
+        } catch (const std::exception&) {
+            // Optional preview geometry must not make asset discovery fail. A missing radius keeps
+            // the established MDL +0xDC fallback while strict validation reports malformed SPRs.
+        }
+        sprite_runtime_geometry_cache.emplace(normalized, geometry);
+        return geometry;
+    };
+    const auto hierarchy_subtree_radius_q12 = [&](std::span<const ModelVisualNode> hierarchy) -> int32_t {
+        if (hierarchy.empty()) return 0;
+        std::vector<int32_t> cached(hierarchy.size(), -1);
+        std::function<int32_t(std::size_t)> visit = [&](std::size_t index) -> int32_t {
+            if (index >= hierarchy.size()) return 0;
+            if (cached[index] >= 0) return cached[index];
+            const auto parent_geometry = sprite_runtime_geometry(hierarchy[index].sprite_path);
+            int64_t radius = parent_geometry.bounding_radius_q12;
+            for (std::size_t child = 0U; child < hierarchy.size(); ++child) {
+                if (hierarchy[child].parent_index != index || hierarchy[child].child_slot >= 6U) continue;
+                const auto& translation = parent_geometry.child_translation_q12[hierarchy[child].child_slot];
+                if (!translation) continue; // retail leaves this child runtime null when no SPR transform exists
+                const uint64_t offset = fixed_length3_floor_q12(*translation);
+                const int64_t candidate = static_cast<int64_t>(offset) + visit(child);
+                radius = std::max(radius, candidate);
+            }
+            cached[index] = static_cast<int32_t>(std::clamp<int64_t>(
+                radius, 0, std::numeric_limits<int32_t>::max()));
+            return cached[index];
+        };
+        int32_t root_radius = 0;
+        for (std::size_t index = 0U; index < hierarchy.size(); ++index) {
+            if (hierarchy[index].parent_index == std::numeric_limits<uint32_t>::max())
+                root_radius = std::max(root_radius, visit(index));
+        }
+        return root_radius;
+    };
+
+    // Recover editor-only simulation profiles from the exact MDL hierarchy selected for this
+    // preset. Runtime placements rebuild the same profile from their faction-technology-resolved
+    // hierarchy so technology-only replacements are not silently reduced to their SHT-0 base.
     for (auto& preset : catalog.army_presets_) {
         const auto& hierarchy = preset.resolved_model_hierarchy.empty()
             ? preset.model_hierarchy : preset.resolved_model_hierarchy;
@@ -1237,126 +1507,48 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                 [](const ModelVisualNode& node) {
                     return node.parent_index == std::numeric_limits<uint32_t>::max();
                 });
+            if (root_node != hierarchy.end()) {
+                // Contact callbacks belong to every world model, including factories and scenery.
+                preset.simulation_motion_profile.placement_contact_kind =
+                    root_node->simulation.placement_contact_kind;
+                preset.simulation_motion_profile.placement_height_offset_q12 = root_node->simulation.placement_height_offset_q12;
+                // MDL +0xDC participates when the runtime is either mover or blocker, so keep
+                // the exact radius for buildings as well as units. Speed/yaw remain unit-only.
+                preset.simulation_motion_profile.collision_radius_q12 =
+                    root_node->simulation.movement_collision_radius_q12;
+                const int32_t subtree_radius_q12 = hierarchy_subtree_radius_q12(hierarchy);
+                preset.simulation_motion_profile.depth_bin_broad_phase_radius_q12 =
+                    std::max(preset.simulation_motion_profile.collision_radius_q12, subtree_radius_q12);
+            }
             if (root_node != hierarchy.end() &&
-                preset.browser_kind == PlacementBrowserKind::Unit) {
+                (preset.browser_kind == PlacementBrowserKind::Unit ||
+                 (preset.visual_kind == PlacementVisualKind::PlayerStart &&
+                  preset.runtime_model_class_id == 18U))) {
+                // ARM 50 retains its PlayerStart role as a real class-18 movable ground unit.
+                // Do not let UI categorization
+                // erase its recovered MDL +0x0C/+0x20/+0x24 movement contract.
                 preset.simulation_motion_profile.speed_q12_per_tick =
                     root_node->simulation.class_step_q12;
                 preset.simulation_motion_profile.yaw_max_velocity_turn16 =
                     root_node->simulation.yaw_max_velocity_turn16;
                 preset.simulation_motion_profile.yaw_acceleration_turn16 =
                     root_node->simulation.yaw_acceleration_turn16;
-                preset.simulation_motion_profile.placement_contact_kind =
-                    root_node->simulation.placement_contact_kind;
+                preset.simulation_motion_profile.heading_interpolation_distance_q12 =
+                    root_node->simulation.ground_heading_interpolation_distance_q12;
+                preset.simulation_motion_profile.far_heading_error_limit_turn16 =
+                    root_node->simulation.ground_far_heading_error_limit_turn16;
+                preset.simulation_motion_profile.near_heading_error_limit_turn16 =
+                    root_node->simulation.ground_near_heading_error_limit_turn16;
+                auto& motion = preset.simulation_motion_profile;
+                const auto cls = preset.runtime_model_class_id;
+                motion.ground_speed_control = cls == 1U || cls == 2U || cls == 17U || cls == 18U || cls == 19U;
+                motion.ground_acceleration_q12 = static_cast<uint32_t>(root_node->simulation.runtime_field_18_raw);
+                motion.ground_slope_threshold_turn16 = root_node->simulation.ground_slope_threshold_turn16;
+                motion.ground_secondary_slope_threshold_turn16 = root_node->simulation.ground_secondary_slope_threshold_turn16;
             }
         }
-        const auto direct_child_index = [&](uint32_t parent_index, uint32_t child_slot) {
-            if (parent_index == std::numeric_limits<uint32_t>::max())
-                return std::numeric_limits<uint32_t>::max();
-            const auto found = std::find_if(hierarchy.begin(), hierarchy.end(),
-                [&](const ModelVisualNode& node) {
-                    return node.creates_runtime_node() && node.parent_index == parent_index &&
-                           node.child_slot == child_slot;
-                });
-            return found == hierarchy.end() ? std::numeric_limits<uint32_t>::max()
-                : static_cast<uint32_t>(std::distance(hierarchy.begin(), found));
-        };
-        for (std::size_t node_index = 0; node_index < hierarchy.size(); ++node_index) {
-            const auto& launch_node = hierarchy[node_index];
-            if (!launch_node.simulation.has_weapon_definition() || launch_node.sprite_path.empty())
-                continue;
-            const auto* shot = catalog.shot_definition(launch_node.simulation.shot_definition_id);
-            if (shot == nullptr) continue;
-            uint32_t launch_count = 0U;
-            uint32_t launch_selector_mask = 0U;
-            try {
-                const auto sprite = SpriteAsset::parse(catalog.load(launch_node.sprite_path));
-                for (const auto& attachment : sprite.lookup_records()) {
-                    if (attachment.key_class().value() != 2U) continue;
-                    ++launch_count;
-                    if (attachment.key_index().value() < 32U)
-                        launch_selector_mask |= 1U << attachment.key_index().value();
-                }
-            } catch (const std::exception&) {
-                launch_count = 0U;
-                launch_selector_mask = 0U;
-            }
-            if (launch_count == 0U) continue;
-
-            std::vector<uint32_t> same_definition_chain{
-                static_cast<uint32_t>(node_index)};
-            uint32_t cursor = static_cast<uint32_t>(node_index);
-            while (hierarchy[cursor].parent_index != std::numeric_limits<uint32_t>::max()) {
-                const uint32_t parent = hierarchy[cursor].parent_index;
-                if (parent >= hierarchy.size() ||
-                    hierarchy[parent].model_definition_id != launch_node.model_definition_id)
-                    break;
-                same_definition_chain.push_back(parent);
-                cursor = parent;
-            }
-            std::reverse(same_definition_chain.begin(), same_definition_chain.end());
-            const uint32_t yaw_node_index = same_definition_chain.front();
-            const uint32_t pitch_node_index = same_definition_chain.size() >= 2U
-                ? same_definition_chain[1U] : yaw_node_index;
-            const auto& weapon_simulation = hierarchy[yaw_node_index].simulation;
-
-            const auto existing = std::find_if(preset.simulation_weapon_profiles.begin(),
-                preset.simulation_weapon_profiles.end(), [&](const SimulationWeaponProfile& profile) {
-                    return profile.yaw_model_node_index == yaw_node_index &&
-                           profile.pitch_model_node_index == pitch_node_index &&
-                           profile.model_definition_id == launch_node.model_definition_id &&
-                           profile.shot_definition_id == launch_node.simulation.shot_definition_id;
-                });
-            if (existing != preset.simulation_weapon_profiles.end()) {
-                existing->launch_model_node_indices.push_back(static_cast<uint32_t>(node_index));
-                existing->launch_attachment_count += launch_count;
-                existing->launch_attachment_selector_mask |= launch_selector_mask;
-                existing->launch_policy = SimulationLaunchPolicy::AlternateLaunchNodes;
-                continue;
-            }
-
-            SimulationWeaponProfile profile;
-            profile.model_node_index = static_cast<uint32_t>(node_index);
-            profile.yaw_model_node_index = yaw_node_index;
-            profile.pitch_model_node_index = pitch_node_index;
-            profile.aim_model_node_index = pitch_node_index;
-            profile.launch_model_node_index = static_cast<uint32_t>(node_index);
-            profile.launch_model_node_indices.push_back(static_cast<uint32_t>(node_index));
-            profile.runtime_class_id = hierarchy[yaw_node_index].runtime_class_id;
-            if (profile.runtime_class_id == 9U) {
-                // The callback reads aim from root->child[0] and the eight selector bits from
-                // root->child[0]->child[0], independently of the kind-2 launch-point owner.
-                profile.aim_model_node_index = direct_child_index(yaw_node_index, 0U);
-                profile.rack_mesh_model_node_index =
-                    direct_child_index(profile.aim_model_node_index, 0U);
-            }
-            // RUNTIME_UPDATE[9] owns eight attachment-specific reload counters and one
-            // MDL +0x38 inter-shot gate. It fires one free selector, hides that rocket mesh,
-            // then restores the selector when its MDL +0x30 timer expires.
-            profile.launch_policy = (profile.runtime_class_id == 9U ||
-                                     preset.runtime_model_class_id == 21U)
-                ? SimulationLaunchPolicy::SequentialKind2Attachments
-                : SimulationLaunchPolicy::AllKind2Attachments;
-            profile.model_definition_id = launch_node.model_definition_id;
-            profile.shot_definition_id = launch_node.simulation.shot_definition_id;
-            profile.reload_ticks = weapon_simulation.reload_ticks;
-            profile.inter_shot_ticks = profile.runtime_class_id == 9U
-                ? static_cast<uint32_t>(std::max(0, weapon_simulation.recoil_duration_ticks))
-                : 0U;
-            profile.maximum_range_q12 = shot_selection_range_q12(*shot);
-            profile.yaw_max_velocity_turn16 = weapon_simulation.yaw_max_velocity_turn16;
-            profile.yaw_acceleration_turn16 = weapon_simulation.yaw_acceleration_turn16;
-            profile.pitch_max_velocity_turn16 = weapon_simulation.pitch_max_velocity_turn16;
-            profile.pitch_acceleration_turn16 = weapon_simulation.pitch_acceleration_turn16;
-            profile.pitch_min_turn16 = weapon_simulation.pitch_min_turn16;
-            profile.pitch_max_turn16 = weapon_simulation.pitch_max_turn16;
-            profile.recoil_rotation_step_turn16 = weapon_simulation.recoil_rotation_step_turn16;
-            profile.recoil_duration_ticks = profile.runtime_class_id == 9U
-                ? 0 : weapon_simulation.recoil_duration_ticks;
-            profile.recoil_translation_q12 = weapon_simulation.recoil_translation_q12;
-            profile.launch_attachment_count = launch_count;
-            profile.launch_attachment_selector_mask = launch_selector_mask;
-            if (profile.valid()) preset.simulation_weapon_profiles.push_back(std::move(profile));
-        }
+        preset.simulation_weapon_profiles =
+            catalog.simulation_weapon_profiles_for_hierarchy(hierarchy);
     }
 
     // EFF definitions use a fixed 0xC0-byte record stream and change the stored path to .spr
@@ -1364,14 +1556,18 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
     // so the UI can expose related transition/destruction effects without auto-spawning inactive
     // runtime effects on a static LEV placement.
     std::unordered_map<std::string, std::vector<uint32_t>> effect_definition_ids_by_sprite;
+    const auto load_effects = [&](const EffectAsset& effects) {
+        for (const auto& definition : effects.definitions()) {
+            catalog.effect_definitions_.try_emplace(definition.definition_id, definition);
+            effect_definition_ids_by_sprite[definition.sprite_path].push_back(definition.definition_id);
+        }
+    };
+    for (const auto& base : effect_load_order)
+        load_effects(EffectAsset::parse(catalog.load(base.ends_with(".eff") ? base : base + ".eff")));
     for (const auto& asset : catalog.assets_) {
         if (asset.kind != AssetKind::Effect) continue;
         try {
-            const auto effect_asset = EffectAsset::parse(catalog.load(asset));
-            for (const auto& definition : effect_asset.definitions()) {
-                catalog.effect_definitions_.try_emplace(definition.definition_id, definition);
-                effect_definition_ids_by_sprite[definition.sprite_path].push_back(definition.definition_id);
-            }
+            load_effects(EffectAsset::parse(catalog.load(asset)));
         } catch (const std::exception&) {
             // Strict validation reports malformed EFF assets; catalog discovery remains best-effort.
         }
@@ -1407,6 +1603,15 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
         // recursively sums selected MDL +0x60 and +0x18C. The editor's no-faction base preview uses
         // the first serialized nonzero variant and applies the same once-per-ARM-node accounting.
         for (const auto& group : preset.model_variant_groups) {
+            // ArmyAssetRecord_RegisterAndRelocate uses linkedDefinitionIds[0],
+            // including children whose operating-energy flags exclude attachments.
+            const auto construction_base = std::find_if(group.variants.begin(), group.variants.end(),
+                [](const ModelTechnologyVariant& variant) { return variant.variant_index == 0U; });
+            if (construction_base != group.variants.end()) {
+                if (const auto* definition = select_model_visual_for_arm(
+                        model_visuals, construction_base->model_definition_id, preset.source_path))
+                    preset.retail_build_energy_q4 += definition->simulation.retail_build_energy_q4;
+            }
             if (group.variants.empty()) continue;
             const auto base = std::min_element(group.variants.begin(), group.variants.end(),
                 [](const ModelTechnologyVariant& left, const ModelTechnologyVariant& right) {
@@ -1420,7 +1625,8 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                 std::max(0, visual->simulation.maximum_integrity));
             preset.retail_build_time_q5 += visual->simulation.retail_build_time_q5;
             preset.retail_xenite_cost_q4 += visual->simulation.retail_xenite_cost_q4;
-            preset.retail_energy_cost_q4 += visual->simulation.retail_energy_cost_q4;
+            preset.retail_energy_demand_q4 += visual->simulation.retail_energy_demand_q4;
+            preset.retail_energy_generation_capacity_q4 += visual->simulation.energy_generation_capacity_q4;
             if (group.depth == 0U)
                 preset.root_maximum_integrity = visual->simulation.maximum_integrity;
         }
@@ -1449,6 +1655,20 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                             definition != nullptr) {
                             reference.transition_kind = definition->lifecycle_transition_kind();
                             reference.sprite_path = definition->sprite_path;
+                            try {
+                                const auto effect_sprite = SpriteAsset::parse(
+                                    catalog.load(definition->sprite_path));
+                                for (const auto& lookup : effect_sprite.lookup_records()) {
+                                    const uint32_t key_class = lookup.key_class().value();
+                                    const uint32_t key_index = lookup.key_index().value();
+                                    if (key_class >= reference.attachment_counts.size()) continue;
+                                    ++reference.attachment_counts[key_class];
+                                    if (key_index < 32U)
+                                        reference.attachment_selector_masks[key_class] |= 1U << key_index;
+                                }
+                            } catch (const std::exception&) {
+                                // Strict catalog validation owns malformed EFF/SPR diagnostics.
+                            }
                         }
                         return reference;
                     };
@@ -1478,6 +1698,10 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                         if (duplicate == references.end())
                             references.push_back(effect_reference(effect_definition_id));
                     };
+                    pipeline.terrain_impact_effect_ids = shot->terrain_impact_effect_ids;
+                    pipeline.target_class_impact_effect_ids = shot->target_impact_effect_ids;
+                    pipeline.target_class_impact_damage_q12 = shot->target_impact_damage_q12;
+                    pipeline.terrain_material_indices = shot->terrain_material_indices;
                     for (const uint32_t id : shot->terrain_impact_effect_ids)
                         append_unique_effect_reference(pipeline.terrain_impact_effects, id);
                     for (const uint32_t id : shot->target_impact_effect_ids)
@@ -1535,7 +1759,6 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
             std::function<void(uint32_t, uint32_t, std::string_view)> validate_effect;
             std::function<void(uint32_t, uint32_t, std::string_view)> validate_shot;
             validate_shot = [&](uint32_t shot_id, uint32_t depth, std::string_view owner) {
-                if (shot_id == 0U) return;
                 validation.maximum_effect_depth = std::max(validation.maximum_effect_depth, depth);
                 if (!visited_shots.insert(shot_id).second) return;
                 ++validation.shot_reference_count;
@@ -1646,10 +1869,10 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
             if (group.depth == 0U) continue;
             std::string attachment_branch_title;
             bool branch_has_weapon_pipeline = false;
-            uint32_t basic_weapon_shot_definition_id = 0U;
+            std::optional<uint32_t> basic_weapon_shot_definition_id;
             for (const auto& variant : group.variants) {
                 branch_has_weapon_pipeline = branch_has_weapon_pipeline || !variant.weapon_pipelines.empty();
-                if (basic_weapon_shot_definition_id == 0U && !variant.weapon_pipelines.empty())
+                if (!basic_weapon_shot_definition_id && !variant.weapon_pipelines.empty())
                     basic_weapon_shot_definition_id = variant.weapon_pipelines.front().shot_definition_id;
                 if (!variant.technology_title.empty() &&
                     lower_ascii(variant.technology_title) != "basic technology") {
@@ -1659,8 +1882,8 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
             }
             if (attachment_branch_title.empty() && branch_has_weapon_pipeline) {
                 attachment_branch_title = "Basic weapon";
-                if (basic_weapon_shot_definition_id != 0U)
-                    attachment_branch_title += " (SHT " + std::to_string(basic_weapon_shot_definition_id) + ")";
+                if (basic_weapon_shot_definition_id)
+                    attachment_branch_title += " (SHT " + std::to_string(*basic_weapon_shot_definition_id) + ")";
             }
             if (!attachment_branch_title.empty() &&
                 std::find(attachment_loadout_names.begin(), attachment_loadout_names.end(), attachment_branch_title) ==
@@ -1787,7 +2010,17 @@ AssetCatalog AssetCatalog::scan_game_root(const std::filesystem::path& game_root
                 group.display_name = parent.substr(6) + " / " + group.display_name;
             }
             group.level_path = level_record.normalized_path;
-            group.field_path = level_record.normalized_path.substr(0, level_record.normalized_path.size() - 3) + "fld";
+            // The LEV resource path owns its FLD reference. Tutorial scenarios can
+            // share a terrain file (T02_tut references T01_tut); the LEV filename
+            // is not the field identity. Retail replaces the referenced path's extension.
+            auto field_base = normalize_asset_path(level.paths().level);
+            if (field_base.empty()) field_base = level_record.normalized_path;
+            const auto field_slash = field_base.find_last_of('/');
+            const auto field_dot = field_base.find_last_of('.');
+            if (field_dot != std::string::npos &&
+                (field_slash == std::string::npos || field_dot > field_slash))
+                field_base.resize(field_dot);
+            group.field_path = field_base + ".fld";
             std::set<std::size_t> members{i};
             if (const auto field = catalog.find_asset_index(group.field_path)) members.insert(*field);
             const auto& paths = level.paths();
@@ -1848,6 +2081,11 @@ std::optional<std::size_t> AssetCatalog::find_asset_index(std::string_view norma
     return it->second;
 }
 
+std::filesystem::path AssetCatalog::backing_archive_path(const AssetRecord& record) const {
+    if (record.archive_index >= archives_.size()) throw FormatError("catalog archive index is invalid");
+    return archives_[record.archive_index]->path();
+}
+
 std::vector<std::byte> AssetCatalog::load(const AssetRecord& record) const {
     if (record.archive_index >= archives_.size()) throw FormatError("catalog archive index is invalid");
     const auto& archive = *archives_[record.archive_index];
@@ -1875,6 +2113,118 @@ const EffectDefinitionRecord* AssetCatalog::effect_definition(uint32_t definitio
 const ShotDefinitionRecord* AssetCatalog::shot_definition(uint32_t definition_id) const noexcept {
     const auto found = shot_definitions_.find(definition_id);
     return found == shot_definitions_.end() ? nullptr : &found->second;
+}
+
+std::vector<SimulationWeaponProfile> AssetCatalog::simulation_weapon_profiles_for_hierarchy(
+    std::span<const ModelVisualNode> hierarchy) const {
+    return simulation_weapon_profiles_from_hierarchy(hierarchy,
+        [this](uint32_t id){return shot_definition(id);},
+        [this](std::string_view path){
+            std::pair<uint32_t,uint32_t> geometry{};
+            try {
+                const auto sprite=SpriteAsset::parse(load(path));
+                for(const auto& attachment:sprite.lookup_records()) {
+                    if(attachment.key_class().value()!=2U)continue;
+                    ++geometry.first;
+                    if(attachment.key_index().value()<32U)geometry.second|=1U<<attachment.key_index().value();
+                }
+            } catch(const std::exception&) {}
+            return geometry;
+        });
+}
+
+std::vector<SimulationWeaponProfile> simulation_weapon_profiles_from_hierarchy(
+    std::span<const ModelVisualNode> hierarchy,
+    const std::function<const ShotDefinitionRecord*(uint32_t)>& shot_lookup,
+    const std::function<std::pair<uint32_t,uint32_t>(std::string_view)>& launch_lookup) {
+    std::vector<SimulationWeaponProfile> profiles;
+    const auto direct_child_index = [&](uint32_t parent_index, uint32_t child_slot) {
+        if (parent_index == std::numeric_limits<uint32_t>::max())
+            return std::numeric_limits<uint32_t>::max();
+        const auto found = std::find_if(hierarchy.begin(), hierarchy.end(),
+            [&](const ModelVisualNode& node) {
+                return node.creates_runtime_node() && node.parent_index == parent_index &&
+                       node.child_slot == child_slot;
+            });
+        return found == hierarchy.end() ? std::numeric_limits<uint32_t>::max()
+            : static_cast<uint32_t>(std::distance(hierarchy.begin(), found));
+    };
+
+    for (std::size_t node_index = 0; node_index < hierarchy.size(); ++node_index) {
+        const auto& launch_node = hierarchy[node_index];
+        if (!launch_node.simulation.has_weapon_definition() || launch_node.sprite_path.empty())
+            continue;
+        const auto* shot = shot_lookup(launch_node.simulation.shot_definition_id);
+        if (shot == nullptr) continue;
+        const auto [launch_count,launch_selector_mask]=launch_lookup(launch_node.sprite_path);
+        if (launch_count == 0U) continue;
+
+        std::vector<uint32_t> same_definition_chain{static_cast<uint32_t>(node_index)};
+        uint32_t cursor = static_cast<uint32_t>(node_index);
+        while (hierarchy[cursor].parent_index != std::numeric_limits<uint32_t>::max()) {
+            const uint32_t parent = hierarchy[cursor].parent_index;
+            if (parent >= hierarchy.size() ||
+                hierarchy[parent].model_definition_id != launch_node.model_definition_id)
+                break;
+            same_definition_chain.push_back(parent);
+            cursor = parent;
+        }
+        std::reverse(same_definition_chain.begin(), same_definition_chain.end());
+        const uint32_t yaw_node_index = same_definition_chain.front();
+        const uint32_t pitch_node_index = same_definition_chain.size() >= 2U
+            ? same_definition_chain[1U] : yaw_node_index;
+        const auto& weapon_simulation = hierarchy[yaw_node_index].simulation;
+
+        const auto existing = std::find_if(profiles.begin(), profiles.end(),
+            [&](const SimulationWeaponProfile& profile) {
+                return profile.yaw_model_node_index == yaw_node_index &&
+                       profile.pitch_model_node_index == pitch_node_index &&
+                       profile.model_definition_id == launch_node.model_definition_id &&
+                       profile.shot_definition_id == launch_node.simulation.shot_definition_id;
+            });
+        if (existing != profiles.end()) {
+            existing->launch_model_node_indices.push_back(static_cast<uint32_t>(node_index));
+            existing->launch_attachment_count += launch_count;
+            existing->launch_attachment_selector_mask |= launch_selector_mask;
+            existing->launch_policy = SimulationLaunchPolicy::AlternateLaunchNodes;
+            continue;
+        }
+
+        SimulationWeaponProfile profile;
+        profile.model_node_index = static_cast<uint32_t>(node_index);
+        profile.yaw_model_node_index = yaw_node_index;
+        profile.pitch_model_node_index = pitch_node_index;
+        profile.aim_model_node_index = pitch_node_index;
+        profile.launch_model_node_index = static_cast<uint32_t>(node_index);
+        profile.launch_model_node_indices.push_back(static_cast<uint32_t>(node_index));
+        profile.runtime_class_id = hierarchy[yaw_node_index].runtime_class_id;
+        if (profile.runtime_class_id == 9U) {
+            profile.aim_model_node_index = direct_child_index(yaw_node_index, 0U);
+            profile.rack_mesh_model_node_index = direct_child_index(profile.aim_model_node_index, 0U);
+        }
+        profile.launch_policy = simulation_launch_policy_for_runtime_class(profile.runtime_class_id);
+        profile.model_definition_id = launch_node.model_definition_id;
+        profile.shot_definition_id = launch_node.simulation.shot_definition_id;
+        profile.shot_definition_resolved = true;
+        profile.reload_ticks = weapon_simulation.reload_ticks;
+        profile.inter_shot_ticks = profile.runtime_class_id == 9U
+            ? static_cast<uint32_t>(std::max(0, weapon_simulation.recoil_duration_ticks)) : 0U;
+        profile.maximum_range_q12 = shot_selection_range_q12(*shot);
+        profile.yaw_max_velocity_turn16 = weapon_simulation.yaw_max_velocity_turn16;
+        profile.yaw_acceleration_turn16 = weapon_simulation.yaw_acceleration_turn16;
+        profile.pitch_max_velocity_turn16 = weapon_simulation.pitch_max_velocity_turn16;
+        profile.pitch_acceleration_turn16 = weapon_simulation.pitch_acceleration_turn16;
+        profile.pitch_min_turn16 = weapon_simulation.pitch_min_turn16;
+        profile.pitch_max_turn16 = weapon_simulation.pitch_max_turn16;
+        profile.recoil_rotation_step_turn16 = weapon_simulation.recoil_rotation_step_turn16;
+        profile.recoil_duration_ticks = profile.runtime_class_id == 9U
+            ? 0 : weapon_simulation.recoil_duration_ticks;
+        profile.recoil_translation_q12 = weapon_simulation.recoil_translation_q12;
+        profile.launch_attachment_count = launch_count;
+        profile.launch_attachment_selector_mask = launch_selector_mask;
+        if (profile.valid()) profiles.push_back(std::move(profile));
+    }
+    return profiles;
 }
 
 const TechnologyRecord* AssetCatalog::technology(uint32_t technology_id) const noexcept {
@@ -1938,6 +2288,42 @@ std::vector<PlacementCompatibilityIssue> AssetCatalog::validate_level_placements
         if (!diagnostic.empty()) issues.push_back({index, placement.army_asset_id, diagnostic});
     }
     return issues;
+}
+
+std::optional<std::array<std::uint32_t, 4>> retail_starting_primary_asset_ids(
+    std::span<const ArmyAssetPreset> presets) noexcept {
+    const ArmyAssetPreset* class11 = nullptr;
+    const ArmyAssetPreset* class14_zero_c0 = nullptr;
+    const ArmyAssetPreset* class14_nonzero_c0 = nullptr;
+    const ArmyAssetPreset* class16 = nullptr;
+    const auto later_registry_slot = [](const ArmyAssetPreset* current,
+                                        const ArmyAssetPreset& candidate) noexcept {
+        return current == nullptr || current->registry_id < candidate.registry_id;
+    };
+    for (const auto& candidate : presets) {
+        if ((candidate.army_runtime_flags14_raw & 1U) == 0U) continue;
+        switch (candidate.runtime_model_class_id) {
+            case 11U:
+                if (later_registry_slot(class11, candidate)) class11 = &candidate;
+                break;
+            case 14U:
+                if (candidate.runtime_class_specific_c0_raw == 0) {
+                    if (later_registry_slot(class14_zero_c0, candidate)) class14_zero_c0 = &candidate;
+                } else if (later_registry_slot(class14_nonzero_c0, candidate)) {
+                    class14_nonzero_c0 = &candidate;
+                }
+                break;
+            case 16U:
+                if (later_registry_slot(class16, candidate)) class16 = &candidate;
+                break;
+            default:
+                break;
+        }
+    }
+    if (class11 == nullptr || class14_zero_c0 == nullptr ||
+        class14_nonzero_c0 == nullptr || class16 == nullptr) return std::nullopt;
+    return std::array<std::uint32_t, 4>{class11->registry_id, class14_zero_c0->registry_id,
+                                        class14_nonzero_c0->registry_id, class16->registry_id};
 }
 
 

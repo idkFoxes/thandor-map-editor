@@ -1,6 +1,7 @@
 #include "thandor/map_document.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
 #include <iomanip>
@@ -14,6 +15,18 @@ namespace {
 constexpr std::string_view kProjectManifest = "editor/project.txt";
 constexpr std::string_view kProjectMagic = "THANDOR_MAP_EDITOR_PROJECT_V3";
 constexpr std::string_view kScenarioEntry = "editor/scenario_record.dat";
+
+// New-map defaults, not a rewrite of the retail armyN family table.  Faction 1
+// starts Ares / army1 (blue), faction 2 Devoken / army3 (red), and faction 3
+// Thoraner / army2 (green). Existing LEV player-slot offsets are never changed
+// when opening or editing a stock map. The engine resolves family = row + offset.
+void set_new_map_faction_color_defaults(LevelAsset& level) {
+    constexpr std::array<uint32_t, 8> family_by_faction{{0U, 1U, 3U, 2U, 4U, 5U, 6U, 7U}};
+    for (uint32_t faction = 1U; faction < family_by_faction.size(); ++faction) {
+        level.set_faction_graphics_family_offset_raw(
+            faction, family_by_faction[faction] - faction); // unsigned 32-bit signed offset
+    }
+}
 
 std::string stem_of(std::string_view path) {
     const auto slash = path.find_last_of('/');
@@ -97,10 +110,17 @@ std::unordered_map<std::string, std::string> parse_manifest(std::string_view tex
     std::unordered_map<std::string, std::string> result;
     std::istringstream stream{std::string(text)};
     std::string line;
-    if (!std::getline(stream, line) || line != kProjectMagic) {
-        throw FormatError("unsupported map-editor project manifest");
+    if (!std::getline(stream, line)) throw FormatError("empty .thmap project manifest");
+    if (line.size() >= 3U && static_cast<unsigned char>(line[0]) == 0xEFU &&
+        static_cast<unsigned char>(line[1]) == 0xBBU &&
+        static_cast<unsigned char>(line[2]) == 0xBFU) line.erase(0, 3);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line != kProjectMagic && line != "THANDOR_MAP_EDITOR_PROJECT_V2" &&
+        line != "THANDOR_MAP_EDITOR_PROJECT_V1") {
+        throw FormatError("unsupported .thmap manifest (expected map-editor V1, V2 or V3 project)");
     }
     while (std::getline(stream, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
         const auto equals = line.find('=');
         if (equals == std::string::npos) continue;
         result.emplace(line.substr(0, equals), percent_decode(line.substr(equals + 1)));
@@ -287,8 +307,8 @@ std::vector<PckWriteEntry> merge_pck_entries(const PckArchive& existing,
     return merged;
 }
 
-void backup_existing_file(const std::filesystem::path& path) {
-    if (!std::filesystem::exists(path)) return;
+std::filesystem::path backup_existing_file(const std::filesystem::path& path) {
+    if (!std::filesystem::exists(path)) return {};
     auto backup = path;
     backup += ".map-editor-backup";
     unsigned suffix = 1;
@@ -297,6 +317,7 @@ void backup_existing_file(const std::filesystem::path& path) {
         backup += ".map-editor-backup." + std::to_string(suffix++);
     }
     std::filesystem::copy_file(path, backup);
+    return backup;
 }
 
 std::optional<std::vector<std::byte>> read_optional_file(const std::filesystem::path& path) {
@@ -728,11 +749,11 @@ void MapDocument::synchronize_gameplay_metadata(LevelAsset& level,
     // skirmish map inheriting those zeros starts unable to construct. Repair only the
     // unambiguous zero/zero case for active factions; authored asymmetric values stay intact.
     for (uint32_t faction = 1U; faction <= active_count; ++faction) {
-        if (level.faction_building_resource_q4(faction) == 0U &&
-            level.faction_energy_resource_q4(faction) == 0U) {
+        if (level.faction_xenite_q4(faction) == 0U &&
+            level.faction_tritium_q4(faction) == 0U) {
             level.set_faction_starting_resources_q4(
-                faction, LevelAsset::kDefaultBuildingResourceQ4,
-                LevelAsset::kDefaultEnergyResourceQ4);
+                faction, LevelAsset::kDefaultXeniteQ4,
+                LevelAsset::kDefaultTritiumQ4);
         }
     }
 }
@@ -811,10 +832,40 @@ MapDocument MapDocument::open_loose(const AssetCatalog& catalog,
                                     const std::filesystem::path& level_path,
                                     const std::filesystem::path& field_path) {
     MapDocument document;
-    const auto resolved_field = field_path.empty()
-        ? level_path.parent_path() / (level_path.stem().string() + ".fld") : field_path;
     document.level_ = LevelAsset::parse(read_file(level_path));
-    document.field_ = FieldGrid::parse(read_file(resolved_field));
+    const std::string referenced_field = terrain_base_path(document.level_.paths().level) + ".fld";
+    auto resolved_field = field_path.empty()
+        ? level_path.parent_path() / (level_path.stem().string() + ".fld") : field_path;
+    if (field_path.empty() && !std::filesystem::is_regular_file(resolved_field)) {
+        // Windows assets frequently use uppercase .FLD/.LEV extensions. Find case-insensitively.
+        const auto wanted_stem = lower_ascii(level_path.stem().string());
+        std::error_code ec;
+        for (const auto& file : std::filesystem::directory_iterator(level_path.parent_path(), ec)) {
+            if (ec) break;
+            if (file.is_regular_file(ec) &&
+                lower_ascii(file.path().stem().string()) == wanted_stem &&
+                lower_ascii(file.path().extension().string()) == ".fld") {
+                resolved_field = file.path();
+                break;
+            }
+        }
+    }
+    if (!std::filesystem::is_regular_file(resolved_field) && field_path.empty()) {
+        // A standalone LEV may deliberately reuse the terrain referenced by its level path.
+        // Try beside the LEV first, then the already-mounted game archives.
+        const auto leaf = std::filesystem::path(referenced_field).filename();
+        const auto local = level_path.parent_path() / leaf;
+        if (std::filesystem::is_regular_file(local)) resolved_field = local;
+    }
+    if (std::filesystem::is_regular_file(resolved_field)) {
+        document.field_ = FieldGrid::parse(read_file(resolved_field));
+    } else if (field_path.empty() && catalog.find(referenced_field) != nullptr) {
+        document.field_ = FieldGrid::parse(catalog.load(referenced_field));
+    } else {
+        throw FormatError("no FLD terrain found for loose LEV '" + level_path.string() +
+            "'; expected a same-name .fld beside it or referenced stock FLD '" +
+            referenced_field + "'");
+    }
     document.map_name_ = sanitize_map_name(level_path.stem().string());
     document.display_name_ = document.map_name_;
     const auto text_path = level_path.parent_path() / (level_path.stem().string() + ".str");
@@ -863,10 +914,15 @@ MapDocument MapDocument::open_project(const AssetCatalog& catalog,
     }
     MapDocument document;
     document.level_ = LevelAsset::parse(archive.extract(level_it->second));
+    const auto mission_mode = manifest.find("preserve_mission_state");
+    document.campaign_mission_project_ = mission_mode != manifest.end() && mission_mode->second == "1";
     document.field_ = FieldGrid::parse(archive.extract(field_it->second));
     document.map_name_ = sanitize_map_name(manifest.at("map_name"));
     const auto display = manifest.find("display_name");
     document.display_name_ = display == manifest.end() ? document.map_name_ : sanitize_display_name(display->second);
+    if (const auto author = manifest.find("author"); author != manifest.end()) document.set_author(author->second);
+    if (const auto faction = manifest.find("default_human_faction"); faction != manifest.end())
+        document.set_default_human_faction(parse_manifest_u32(faction->second,"default human faction"));
 
     const auto scenario_it = manifest.find("scenario_entry");
     const auto string_it = manifest.find("string_entry");
@@ -904,10 +960,12 @@ MapDocument MapDocument::open_project(const AssetCatalog& catalog,
             const std::string key = "faction_technology_mask." + std::to_string(faction) + "." +
                                     std::to_string(word);
             const auto found = manifest.find(key);
-            if (found == manifest.end())
-                throw FormatError("project manifest is missing exact faction technology mask word: " + key);
-            document.faction_technology_masks_[faction][word] =
-                parse_manifest_u32(found->second, "faction technology mask word");
+            // Before V3 these editor-only technology preview masks were absent.
+            // Their default is an empty mask; do not reject an otherwise valid older map.
+            if (found != manifest.end()) {
+                document.faction_technology_masks_[faction][word] =
+                    parse_manifest_u32(found->second, "faction technology mask word");
+            }
         }
     }
     for (std::size_t index = 0; index < document.placement_tags_.size(); ++index) {
@@ -915,10 +973,13 @@ MapDocument MapDocument::open_project(const AssetCatalog& catalog,
         if (found != manifest.end()) document.placement_tags_[index].display_name = found->second;
         const std::string integrity_key = "placement_integrity_percent." + std::to_string(index);
         const auto integrity = manifest.find(integrity_key);
-        if (integrity == manifest.end())
-            throw FormatError("project manifest is missing damage-preview integrity: " + integrity_key);
-        document.placement_tags_[index].preview_integrity_percent =
-            parse_manifest_u32(integrity->second, "placement integrity percent");
+        // A V2 project has no damage-preview integrity field. Default to undamaged.
+        if (integrity != manifest.end()) {
+            document.placement_tags_[index].preview_integrity_percent =
+                parse_manifest_u32(integrity->second, "placement integrity percent");
+        } else {
+            document.placement_tags_[index].preview_integrity_percent = 100U;
+        }
         if (document.placement_tags_[index].preview_integrity_percent > 100U)
             throw FormatError("placement integrity percent exceeds 100");
     }
@@ -952,10 +1013,11 @@ MapDocument MapDocument::create_from_template(const AssetCatalog& catalog, const
     document.level_text_ = source.level_text_;
     document.level_text_.replace_string_zero_all_locales(document.display_name_);
     document.set_player_ai_configuration({1U, 2U});
+    set_new_map_faction_color_defaults(document.level_);
     for (uint32_t faction = 1U; faction <= 2U; ++faction) {
         document.level_.set_faction_starting_resources_q4(
-            faction, LevelAsset::kDefaultBuildingResourceQ4,
-            LevelAsset::kDefaultEnergyResourceQ4);
+            faction, LevelAsset::kDefaultXeniteQ4,
+            LevelAsset::kDefaultTritiumQ4);
     }
     document.dirty_ = true;
     return document;
@@ -989,10 +1051,11 @@ MapDocument MapDocument::create_empty(const AssetCatalog& catalog, const MapAsse
     document.level_text_ = shell.level_text_;
     document.level_text_.replace_string_zero_all_locales(document.display_name_);
     document.set_player_ai_configuration({1U, 2U});
+    set_new_map_faction_color_defaults(document.level_);
     for (uint32_t faction = 1U; faction <= 2U; ++faction) {
         document.level_.set_faction_starting_resources_q4(
-            faction, LevelAsset::kDefaultBuildingResourceQ4,
-            LevelAsset::kDefaultEnergyResourceQ4);
+            faction, LevelAsset::kDefaultXeniteQ4,
+            LevelAsset::kDefaultTritiumQ4);
     }
     document.dirty_ = true;
     return document;
@@ -1067,6 +1130,30 @@ void MapDocument::set_map_name(std::string value) {
     field_.set_source_path("level/" + map_name_ + ".fld");
     scenario_record_.set_map_name(map_name_);
     dirty_ = true;
+}
+
+uint32_t MapDocument::default_human_faction() const {
+    const auto active=std::clamp(level_.frontend_active_faction_count(),1U,7U);
+    const auto candidate=std::clamp(default_human_faction_?default_human_faction_:level_.frontend_assignable_faction_count(),1U,active);
+    if(level_.faction_graphics_family_selector(candidate)!=8U)return candidate;
+    for(uint32_t faction=1;faction<=active;++faction)if(level_.faction_graphics_family_selector(faction)!=8U)return faction;
+    return 1U;
+}
+void MapDocument::set_default_human_faction(uint32_t faction) {
+    if(faction<1U||faction>level_.frontend_active_faction_count()||level_.faction_graphics_family_selector(faction)==8U)
+        throw FormatError("default human faction must be an active human-playable faction");
+    default_human_faction_=faction;mark_dirty();
+}
+
+void MapDocument::set_author(std::string value) {
+    value.erase(std::remove_if(value.begin(),value.end(),[](unsigned char c){ return c < 0x20; }),value.end());
+    if (value.size() > 192U) {
+        std::size_t end = 192U;
+        while (end > 0U && (static_cast<unsigned char>(value[end]) & 0xC0U) == 0x80U) --end;
+        value.resize(end);
+    }
+    author_ = std::move(value);
+    mark_dirty();
 }
 
 void MapDocument::set_display_name(std::string value) {
@@ -1348,18 +1435,206 @@ void MapDocument::export_loose(const std::filesystem::path& directory) const {
     }
 }
 
-void MapDocument::save_project(const std::filesystem::path& project_path) const {
+StockMapSaveResult MapDocument::save_stock_map_in_place(const AssetCatalog& catalog,
+                                                        const MapAssetGroup& group,
+                                                        bool create_backup) const {
+    if (normalize_asset_path(group.level_path) != normalize_asset_path(level_.paths().level + ".lev")) {
+        // Stock LEVs normally carry their own level base. Fall back to the map-name identity for
+        // old compatibility shells whose +0x170 path has been edited independently.
+        if (stem_of(group.level_path) != map_name_) {
+            throw FormatError("stock save group does not match the currently open map");
+        }
+    }
+    const auto* level_record = catalog.find(group.level_path);
+    const auto* field_record = catalog.find(group.field_path);
+    if (level_record == nullptr || field_record == nullptr) {
+        throw FormatError("stock map no longer resolves its backing LEV/FLD entries");
+    }
+
+    struct PendingReplacement {
+        std::string path;
+        std::vector<std::byte> data;
+    };
+    struct ArchivePlan {
+        std::filesystem::path path;
+        std::vector<PendingReplacement> replacements;
+    };
+    std::map<std::filesystem::path, ArchivePlan> plans;
+    const auto add_replacement = [&](const std::filesystem::path& archive_path,
+                                     std::string path,
+                                     std::vector<std::byte> data) {
+        if (archive_path.empty()) throw FormatError("stock map replacement has no backing archive");
+        auto& plan = plans[archive_path];
+        plan.path = archive_path;
+        const auto normalized = normalize_asset_path(path);
+        const auto duplicate = std::find_if(plan.replacements.begin(), plan.replacements.end(),
+            [&](const auto& replacement) {
+                return normalize_asset_path(replacement.path) == normalized;
+            });
+        if (duplicate != plan.replacements.end()) {
+            duplicate->path = std::move(path);
+            duplicate->data = std::move(data);
+        } else {
+            plan.replacements.push_back({std::move(path), std::move(data)});
+        }
+    };
+
+    const auto level_archive = catalog.backing_archive_path(*level_record);
+    add_replacement(level_archive, level_record->path, level_.serialize());
+    add_replacement(catalog.backing_archive_path(*field_record), field_record->path, field_.serialize());
+
+    // Only update a true map-local STR. LEVEL.PCK stock maps often borrow a compatibility STR for
+    // the editor; rewriting that unrelated page would corrupt another map's frontend text.
+    const std::string map_text_path = level_string_path(map_name_);
+    if (const auto* text_record = catalog.find(map_text_path); text_record != nullptr) {
+        add_replacement(catalog.backing_archive_path(*text_record), text_record->path,
+                        level_text_.serialize());
+    }
+
+    // The effective scenario record is the last mounted numbered fragment that mentions this map,
+    // otherwise LEVEL/LEVEL.DAT. Replace only that 0x100-byte record and preserve every sibling.
+    const AssetRecord* scenario_source = nullptr;
+    std::vector<ScenarioCatalogRecord> scenario_records;
+    for (int slot = 99; slot >= 0 && scenario_source == nullptr; --slot) {
+        const auto path = scenario_fragment_path(static_cast<unsigned>(slot));
+        const auto* record = catalog.find(path);
+        if (record == nullptr) continue;
+        auto parsed = parse_scenario_catalog_records(catalog.load(*record));
+        if (find_scenario_catalog_record(parsed, map_name_) != nullptr) {
+            scenario_source = record;
+            scenario_records = std::move(parsed);
+        }
+    }
+    if (scenario_source == nullptr) {
+        if (const auto* record = catalog.find("level/level.dat"); record != nullptr) {
+            auto parsed = parse_scenario_catalog_records(catalog.load(*record));
+            if (find_scenario_catalog_record(parsed, map_name_) != nullptr) {
+                scenario_source = record;
+                scenario_records = std::move(parsed);
+            }
+        }
+    }
+    if (scenario_source != nullptr) {
+        bool replaced = false;
+        for (auto& record : scenario_records) {
+            if (record.map_name() == map_name_) {
+                record = scenario_record_;
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) throw FormatError("effective stock scenario record disappeared during save");
+        std::vector<std::byte> serialized;
+        serialized.reserve(scenario_records.size() * ScenarioCatalogRecord::kSize);
+        for (const auto& record : scenario_records) {
+            const auto bytes = record.serialize();
+            serialized.insert(serialized.end(), bytes.begin(), bytes.end());
+        }
+        add_replacement(catalog.backing_archive_path(*scenario_source), scenario_source->path,
+                        std::move(serialized));
+    }
+
+    // Imported terrain assets are authored map data, not simulation state. Keep them with the map's
+    // backing PCK so an in-place stock save cannot leave LEV paths pointing only at editor memory.
+    for (const auto& [path, data] : custom_assets_) {
+        add_replacement(level_archive, canonical_pck_entry_path(path), data);
+    }
+
+    struct PreparedArchive {
+        std::filesystem::path path;
+        std::vector<std::byte> original;
+        std::vector<std::byte> updated;
+        std::vector<PckWriteEntry> expected;
+        std::filesystem::path backup;
+    };
+    std::vector<PreparedArchive> prepared;
+    prepared.reserve(plans.size());
+    StockMapSaveResult result;
+
+    for (const auto& [path, plan] : plans) {
+        if (!std::filesystem::is_regular_file(path)) {
+            throw FormatError("stock backing archive does not exist: " + path.string());
+        }
+        const auto archive = PckArchive::open(path);
+        std::vector<PckWriteEntry> replacements;
+        replacements.reserve(plan.replacements.size());
+        for (const auto& pending : plan.replacements) {
+            const auto normalized = normalize_asset_path(pending.path);
+            const auto* existing = archive.find(normalized);
+            uint32_t type_tag = 0U;
+            std::string exact_path = canonical_pck_entry_path(pending.path);
+            if (existing != nullptr) {
+                type_tag = existing->type_tag;
+                exact_path = existing->name;
+                ++result.replaced_entries;
+            } else {
+                if (pending.data.size() >= sizeof(uint32_t)) type_tag = read_u32(pending.data, 0U);
+                ++result.inserted_entries;
+            }
+            replacements.push_back({std::move(exact_path), pending.data, type_tag});
+        }
+        auto merged = merge_pck_entries(archive, replacements);
+        auto updated = build_stored_pck(merged, archive.header_bytes());
+        prepared.push_back({path, read_file(path), std::move(updated), std::move(replacements), {}});
+    }
+
+    try {
+        for (auto& archive : prepared) {
+            if (create_backup) archive.backup = backup_existing_file(archive.path);
+            write_file_atomic(archive.path, archive.updated);
+            result.updated_archives.push_back(archive.path);
+            if (!archive.backup.empty()) result.backup_archives.push_back(archive.backup);
+        }
+        for (const auto& archive : prepared) {
+            const auto verification = PckArchive::open(archive.path);
+            for (const auto& expected : archive.expected) {
+                const auto* entry = verification.find_exact(expected.name);
+                if (entry == nullptr || verification.extract(*entry) != expected.data) {
+                    throw FormatError("stock in-place save verification failed for " + expected.name);
+                }
+            }
+        }
+    } catch (...) {
+        for (const auto& archive : prepared) {
+            try { write_file_atomic(archive.path, archive.original); } catch (...) {}
+        }
+        throw;
+    }
+    return result;
+}
+
+std::vector<PckWriteEntry> MapDocument::campaign_package_entries() const {
+    const auto base=normalize_asset_path(level_.paths().level);
+    if (!base.starts_with("level/") || base.size()<=6U) throw FormatError("mission terrain path must start with level/");
+    (void)canonical_pck_entry_path(base);
+    auto field=field_;
+    if (!field.has_game_compatible_dimensions()) throw FormatError("mission terrain dimensions are not game compatible");
+    stamp_resource_field_masks(field,level_.placements());
+    field.normalize_for_game_export();
+    std::vector<PckWriteEntry> entries{
+        {"level/"+map_name_+".lev",level_.serialize(),fourcc("lev")},
+        {base+".fld",field.serialize(),fourcc("fld")},
+        {"level/"+map_name_+".str",level_text_.serialize(),fourcc("str")}};
+    for (const auto& [path,data]:custom_assets_) entries.push_back({path,data,0});
+    return entries;
+}
+
+void MapDocument::save_project(const std::filesystem::path& project_path, bool preserve_mission_state) const {
+    preserve_mission_state = preserve_mission_state || campaign_mission_project_;
     auto emitted_level = level_;
     auto emitted_record = scenario_record_;
     const auto factions = playable_faction_summary();
-    if (factions.exportable) synchronize_gameplay_metadata(emitted_level, emitted_record);
+    if (factions.exportable && !preserve_mission_state) synchronize_gameplay_metadata(emitted_level, emitted_record);
     const std::string level_entry = "level/" + map_name_ + ".lev";
     const std::string field_entry = "level/" + map_name_ + ".fld";
     const std::string string_entry = level_string_path(map_name_);
     std::ostringstream manifest;
     manifest << kProjectMagic << '\n';
+    manifest << "preserve_mission_state=" << (preserve_mission_state ? 1 : 0) << '\n';
     manifest << "map_name=" << percent_encode(map_name_) << '\n';
     manifest << "display_name=" << percent_encode(display_name_) << '\n';
+    manifest << "author=" << percent_encode(author_) << '\n';
+    manifest << "default_human_faction=" << default_human_faction() << '\n';
     manifest << "level_entry=" << percent_encode(level_entry) << '\n';
     manifest << "field_entry=" << percent_encode(field_entry) << '\n';
     manifest << "scenario_entry=" << percent_encode(kScenarioEntry) << '\n';

@@ -1,4 +1,5 @@
 #include "ai_knowledge_panel.hpp"
+#include "editor_ui_scale.hpp"
 
 #include "thandor/binary.hpp"
 
@@ -26,7 +27,7 @@ void draw_parameter_row(const thandor::AiKnowledgeData& knowledge,
     ImGui::Text("0x%02X", index);
     ImGui::TableSetColumnIndex(1);
     if (semantic != nullptr) {
-        ImGui::TextUnformatted(semantic->label.data(), semantic->label.data() + semantic->label.size());
+        ImGui::TextWrapped("%.*s",static_cast<int>(semantic->label.size()),semantic->label.data());
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%.*s", static_cast<int>(semantic->identifier.size()),
                               semantic->identifier.data());
@@ -42,7 +43,12 @@ void draw_parameter_row(const thandor::AiKnowledgeData& knowledge,
     ImGui::TableSetColumnIndex(4);
     if (semantic != nullptr && semantic->domain == thandor::AiKnowledgeValueDomain::Q12Distance) {
         ImGui::Text("%.3f", thandor::q12_to_float(signed_value));
+    } else if (semantic != nullptr && semantic->domain == thandor::AiKnowledgeValueDomain::Q4Amount) {
+        ImGui::Text("%.3f", static_cast<double>(signed_value) / 16.0);
+    } else if (semantic != nullptr && semantic->domain == thandor::AiKnowledgeValueDomain::CountLimit) {
+        ImGui::Text("%u", raw);
     } else {
+        // Signed view complements, but never replaces, the raw 32-bit image column.
         ImGui::Text("%d", signed_value);
     }
 }
@@ -52,7 +58,7 @@ void draw_parameter_row(const thandor::AiKnowledgeData& knowledge,
 void draw_ai_knowledge_panel(const std::optional<thandor::AiKnowledgeData>& knowledge,
                              const std::string& load_error,
                              AiKnowledgeUiState& state) {
-    ImGui::SeparatorText("Retail KI.DAT diagnostics");
+    ImGui::SeparatorText("Original KI parameters");
     if (!knowledge) {
         ImGui::TextDisabled("engine/ki.dat unavailable");
         if (!load_error.empty() && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", load_error.c_str());
@@ -95,14 +101,14 @@ void draw_ai_knowledge_panel(const std::optional<thandor::AiKnowledgeData>& know
         "clearance, model radius, terrain and occupancy tests. Manual placement and export are "
         "never blocked by this diagnostic overlay.");
 
-    ImGui::Checkbox("Show 43 proven KI parameters", &state.show_parameter_table);
+    ImGui::Checkbox("Show 62 sourced KI parameters", &state.show_parameter_table);
     ImGui::SameLine();
     ImGui::Checkbox("Include unresolved raw entries", &state.show_all_raw_parameters);
     if (!state.show_parameter_table && !state.show_all_raw_parameters) return;
 
     if (ImGui::BeginTable("ki-parameters", 5,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
-                          ImVec2(0.0F, 260.0F))) {
+                          ImVec2(0.0F, ui_px(260.0F)))) {
         ImGui::TableSetupColumn("Index");
         ImGui::TableSetupColumn("Semantic");
         ImGui::TableSetupColumn("Raw");

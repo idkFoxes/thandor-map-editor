@@ -25,15 +25,22 @@ int main(int argc, char** argv) try {
     using namespace thandor;
     auto field = FieldGrid::create(17, 19, float_to_q12(2.5F), 4);
     field.at(3, 4).water_delta_q12 = float_to_q12(1.25F);
+    field.at(3, 4).flags_and_material = 0xFFFFFFFFU;
     field.at(3, 4).set_material(12);
-    field.at(3, 4).serialized_aux54 = 0xA5C37E19U;
     auto serialized_field = field.serialize();
     auto decoded_field = FieldGrid::parse(serialized_field);
     check(decoded_field.width() == 17 && decoded_field.height() == 19, "field dimensions changed");
     check(decoded_field.at(3, 4).material() == 12, "field material changed");
     check(decoded_field.at(3, 4).water_delta_q12 == float_to_q12(1.25F), "field water changed");
-    check(decoded_field.at(3, 4).serialized_aux54 == 0xA5C37E19U,
-          "serialized FLD auxiliary dword +0x54 was not preserved");
+    const std::size_t serialized_cell_offset = 0x200U + (4U * 17U + 3U) * 0x80U;
+    check(read_u32(serialized_field, serialized_cell_offset + 0x08U) ==
+              FieldGrid::kRetailSerializedTriangle0NormalSeed,
+          "retail FLD triangle0 serialization seed changed");
+    check(read_u32(serialized_field, serialized_cell_offset + 0x50U) ==
+              ((0xFFFFFF00U | 12U) & FieldGrid::kRetailPersistedFlagsAndMaterialMask),
+          "retail FLD flags/material sanitization mask changed");
+    check(read_u32(serialized_field, serialized_cell_offset + 0x54U) == 0U,
+          "retail FLD save did not clear runtime cell dword +0x54");
 
     const auto waves = FieldGrid::build_water_wave_records(0x12345678U);
     check(waves.size() == FieldGrid::kWaterWaveRecordCount, "terrain direction record count changed");
@@ -141,8 +148,8 @@ int main(int argc, char** argv) try {
                   before.start_camera_z_q12 == after.start_camera_z_q12 &&
                   before.start_camera_magnitude_q12 == after.start_camera_magnitude_q12 &&
                   before.packed_heading_low16_pitch_high16 == after.packed_heading_low16_pitch_high16 &&
-                  before.start_building_resource_q4 == after.start_building_resource_q4 &&
-                  before.start_energy_resource_q4 == after.start_energy_resource_q4 &&
+                  before.start_xenite_q4 == after.start_xenite_q4 &&
+                  before.start_tritium_q4 == after.start_tritium_q4 &&
                   before.ai_class_or_mode == after.ai_class_or_mode,
                   "LEV 0x20-byte player-slot record changed during roundtrip");
         }
@@ -241,6 +248,10 @@ int main(int argc, char** argv) try {
         check(created.map_name() == "unit_test_map", "new-map name normalization changed");
         check(created.field().width() == 37 && created.field().height() == 41, "new-map dimensions changed");
         check(created.level().placements().empty(), "new map retained template placements");
+        check(created.level().faction_graphics_family_selector(1U) == 1U &&
+              created.level().faction_graphics_family_selector(2U) == 3U &&
+              created.level().faction_graphics_family_selector(3U) == 2U,
+              "template-derived new map did not set blue/red/green faction defaults");
         for (uint32_t faction = 1U; faction <= 2U; ++faction) {
             LevelPlacement placement{};
             placement.army_asset_id = 50U;

@@ -1,4 +1,5 @@
 #include "thandor/model.hpp"
+#include "thandor/simulation_terrain_damage.hpp"
 #include "thandor/binary.hpp"
 
 #include <algorithm>
@@ -90,7 +91,7 @@ void parse_model_visual_node_recursive(std::span<const std::byte> data, std::siz
     require_range(data, node_offset, kNodeHeaderSize, "MDL model-node definition");
     if (!active_offsets.insert(node_offset).second) throw FormatError("MDL model-node hierarchy contains a cycle");
     const uint32_t child_count = read_u32(data, node_offset + 0x14U);
-    if (child_count > 8U) throw FormatError("MDL model-node child count exceeds the serialized eight-slot array");
+    if (child_count > 6U) throw FormatError("MDL model-node child count exceeds the serialized six-slot array");
     require_range(data, node_offset + 0x18U, static_cast<std::size_t>(child_count) * 4U,
                   "MDL model-node child offsets");
 
@@ -119,7 +120,8 @@ void parse_model_visual_node_recursive(std::span<const std::byte> data, std::siz
 
 void append_mesh_record(std::span<const std::byte> data, std::size_t record_offset,
                         std::size_t group_end, SpriteMesh& destination,
-                        uint32_t& winding_correction_count) {
+                        uint32_t& winding_correction_count,
+                        std::vector<SpriteRaycastTriangle>* raycast_triangles=nullptr) {
     require_range(data, record_offset, kMeshRecordHeaderSize, "SPR mesh record header");
     const auto record_size = read_u32(data, record_offset);
     const auto mesh_group_selector_mask = read_u32(data, record_offset + 4);
@@ -182,6 +184,13 @@ void append_mesh_record(std::span<const std::byte> data, std::size_t record_offs
         // the authoritative plane normal; all positions, materials, flags, and triangle counts
         // remain unchanged.
         const Vec3f plane_normal = read_q12_vec3(data, offset + 0x24U);
+        if(raycast_triangles){
+            const auto to_q12=[](Vec3f v){
+                return std::array{float_to_q12(v.x),float_to_q12(v.y),float_to_q12(v.z)};
+            };
+            raycast_triangles->push_back({{to_q12(corners[0].position),to_q12(corners[1].position),
+                                           to_q12(corners[2].position)},to_q12(plane_normal)});
+        }
         const Vec3f geometric_normal =
             cross(subtract(corners[1].position, corners[0].position),
                   subtract(corners[2].position, corners[0].position));
@@ -225,6 +234,18 @@ float normalize_model_texture_offset_u(int32_t fixed_texture_offset,
         (4096.0F * kSpriteTextureBasis * u_aspect);
 }
 
+float normalize_model_texture_offset_v(int32_t fixed_texture_offset,
+                                       uint32_t pixel_width,uint32_t pixel_height) {
+    if (pixel_width == 0U || pixel_height == 0U)
+        throw FormatError("SPR animated texture has zero physical dimensions");
+    if (!std::has_single_bit(pixel_width) || !std::has_single_bit(pixel_height))
+        throw FormatError("SPR animated texture dimensions are not powers of two");
+    const uint32_t maximum = std::max(pixel_width,pixel_height);
+    const float v_aspect = static_cast<float>(maximum / pixel_height);
+    return static_cast<float>(fixed_texture_offset) /
+        (4096.0F * kSpriteTextureBasis * v_aspect);
+}
+
 RgbaImage make_sprite_texture_square_canvas(const RgbaImage& source) {
     if (source.width == 0 || source.height == 0 ||
         source.pixels.size() != static_cast<std::size_t>(source.width) * source.height * 4U) {
@@ -261,7 +282,8 @@ SpriteAsset SpriteAsset::parse(std::span<const std::byte> data) {
     result.registry_id_ = read_u32(data, 0xB8);
     result.local_bounds_min_ = read_q12_vec3(data, 0xC0U);
     result.local_bounds_max_ = read_q12_vec3(data, 0xCCU);
-    result.bounding_radius_ = q12_to_float(read_i32(data, 0xD8U));
+    result.bounding_radius_q12_ = read_i32(data, 0xD8U);
+    result.bounding_radius_ = q12_to_float(result.bounding_radius_q12_);
     result.placement_height_offset_ = q12_to_float(read_i32(data, 0xDCU));
     result.lighting_scale_q12_ = read_i32(data, 0xE0U);
     result.has_valid_header_bounds_ =
@@ -283,8 +305,12 @@ SpriteAsset SpriteAsset::parse(std::span<const std::byte> data) {
         for (uint32_t index = 0; index < lookup_count; ++index) {
             const std::size_t offset = lookup_offset + static_cast<std::size_t>(index) * 0x10U;
             const uint32_t key = read_u32(data, offset);
-            const Vec3f translation = read_q12_vec3(data, offset + 4U);
-            result.lookup_records_.push_back(SpriteLookupRecord{key, translation});
+            const std::array<int32_t, 3> translation_q12{
+                read_i32(data, offset + 4U), read_i32(data, offset + 8U), read_i32(data, offset + 0x0CU)};
+            const Vec3f translation{q12_to_float(translation_q12[0]),
+                                    q12_to_float(translation_q12[1]),
+                                    q12_to_float(translation_q12[2])};
+            result.lookup_records_.push_back(SpriteLookupRecord{key, translation, translation_q12});
             if ((key & 0xFU) == 6U) result.class6_lookup_points_.push_back(translation);
         }
     }
@@ -309,7 +335,8 @@ SpriteAsset SpriteAsset::parse(std::span<const std::byte> data) {
         for (uint32_t record = 0; record < record_count; ++record) {
             require_range(data, record_offset, kMeshRecordHeaderSize, "SPR mesh record header");
             const auto record_size = read_u32(data, record_offset);
-            append_mesh_record(data, record_offset, group_end, lod.mesh, lod.winding_correction_count);
+            append_mesh_record(data, record_offset, group_end, lod.mesh,
+                               lod.winding_correction_count,&lod.raycast_triangles);
             record_offset += record_size;
         }
         if (record_offset > group_end) throw FormatError("SPR LOD records exceed group size");
@@ -321,6 +348,7 @@ SpriteAsset SpriteAsset::parse(std::span<const std::byte> data) {
     // The renderer's generated-shadow path follows the dedicated table referenced by
     // SPR header +0xEC. It does not reuse any visible distance-selected LOD group.
     const uint32_t shadow_table_offset = read_u32(data, 0xECU);
+    result.has_shadow_group_=shadow_table_offset!=0U;
     if (shadow_table_offset != 0U) {
         require_range(data, shadow_table_offset, kMeshRecordHeaderSize,
                       "SPR generated-shadow table header");
@@ -511,6 +539,7 @@ std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::b
             visual.simulation.class_step_q12 = read_i32(data, offset + 0x0CU);
             visual.simulation.yaw_max_velocity_turn16 = read_i32(data, offset + 0x10U);
             visual.simulation.pitch_max_velocity_turn16 = read_i32(data, offset + 0x14U);
+            visual.simulation.runtime_field_18_raw = read_i32(data, offset + 0x18U);
             visual.simulation.yaw_acceleration_turn16 = read_i32(data, offset + 0x1CU);
             visual.simulation.pitch_acceleration_turn16 = read_i32(data, offset + 0x20U);
             visual.simulation.pitch_min_turn16 = read_i32(data, offset + 0x24U);
@@ -524,21 +553,64 @@ std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::b
             visual.simulation.action_vector1 = read_i32(data, offset + 0x44U);
             if (size >= 0x4CU)
                 visual.simulation.fog_uncover_radius_q12 = read_i32(data, offset + 0x48U);
+            if (size >= 0x5CU)
+                visual.simulation.timed_water_effect_id = read_u32(data, offset + 0x58U);
             if (size >= 0x64U)
                 visual.simulation.maximum_integrity = read_i32(data, offset + 0x60U);
+            if (size >= 0x54U)
+                visual.simulation.aim_height_offset_q12 = read_i32(data, offset + 0x50U);
+            if (size >= 0x58U)
+                visual.simulation.placement_height_offset_q12 = read_i32(data, offset + 0x54U);
+            if (size >= 0x74U)
+                visual.simulation.fog_reference_height_offset_q12 = read_i32(data, offset + 0x70U);
+            if (size >= 0x78U)
+                visual.simulation.destroyed_replacement_army_asset_id = read_i32(data, offset + 0x74U);
+            if (size >= 0x80U) {
+                visual.simulation.positioned_sound_gain_q15 = read_u32(data, offset + 0x78U);
+                visual.simulation.positioned_sound_maximum_distance_q12 = read_u32(data, offset + 0x7CU);
+            }
+            if (size >= 0xC0U) {
+                for (std::size_t channel = 0; channel < 8U; ++channel) {
+                    const std::size_t pair_offset = 0x80U + channel * 8U;
+                    visual.simulation.terminal_attachment_effect_ids[channel] =
+                        read_u32(data, offset + pair_offset);
+                    visual.simulation.terminal_attachment_delay_ticks[channel] =
+                        read_i32(data, offset + pair_offset + 4U);
+                }
+            }
             if (size >= 0x190U) {
                 visual.simulation.retail_build_time_q5 = read_u32(data, offset + 0x180U);
                 visual.simulation.retail_xenite_cost_q4 = read_u32(data, offset + 0x184U);
-                visual.simulation.retail_energy_cost_q4 = read_u32(data, offset + 0x18CU);
+                visual.simulation.retail_build_energy_q4 = read_u32(data, offset + 0x188U);
+                visual.simulation.retail_energy_demand_q4 = read_u32(data, offset + 0x18CU);
             }
+            if (size >= 0x194U)
+                visual.simulation.construction_destruction_effect_id = read_u32(data, offset + 0x190U);
+            if (size >= 0x19CU && simulation_has_water_damage_fields(visual.runtime_class_id)) {
+                visual.simulation.water_damage_multiplier = read_i32(data, offset + 0x194U);
+                visual.simulation.water_damage_threshold_q12 = read_i32(data, offset + 0x198U);
+            }
+            if (visual.runtime_class_id == 23U) {
+                visual.simulation.vertical_deployment_step_q12_per_tick =
+                    visual.simulation.class_step_q12;
+                visual.simulation.vertical_deployment_travel_limit_q12 =
+                    visual.simulation.pitch_min_turn16;
+            }
+            if (size >= 0x1A0U)
+                visual.simulation.class_specific_19c_raw = read_i32(data, offset + 0x19CU);
+            if (size >= 0x1ACU)
+                visual.simulation.class_specific_1a8_raw = read_i32(data, offset + 0x1A8U);
             if (size >= 0x58U)
                 visual.simulation.articulated_root_height_q12 = read_i32(data, offset + 0x54U);
         }
         if (size >= 0x27CU) {
             visual.simulation.placement_contact_kind = read_i32(data, offset + 0x278U);
         }
+        if (size >= 0x280U)
+            visual.simulation.occupancy_mark_radius_units = read_u32(data, offset + 0x27CU);
         if (size >= 0x6CU) {
             visual.runtime_render_flags = read_u32(data, offset + 0x68U);
+            visual.simulation.runtime_render_flags = visual.runtime_render_flags;
             visual.casts_generated_shadow = (visual.runtime_render_flags & 0x40U) == 0U;
         }
         if (size >= 0x68U) {
@@ -558,13 +630,87 @@ std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::b
         if (!visual.hierarchy_nodes.empty()) visual.sprite_path = visual.hierarchy_nodes.front().sprite_path;
         if (visual.sprite_path.empty()) visual.sprite_path = find_first_sprite_path(slice);
         if (visual.sprite_path.empty()) throw FormatError("MDL definition has no serialized SPR path");
+        if (size >= 0xC4U) {
+            visual.simulation.class_specific_c0_raw = read_i32(data, offset + 0xC0U);
+            visual.simulation.articulated_contact_interpolation_rate_q12 =
+                visual.simulation.class_specific_c0_raw;
+            if (visual.runtime_class_id == 16U)
+                visual.simulation.energy_generation_capacity_q4 = read_u32(data, offset + 0xC0U);
+        }
         if (size >= 0xC8U) {
-            visual.simulation.articulated_contact_interpolation_rate_q12 = read_i32(data, offset + 0xC0U);
             visual.simulation.articulated_contact_lift_q12 = read_i32(data, offset + 0xC4U);
+            visual.simulation.class_specific_c4_raw = read_u32(data, offset + 0xC4U);
+        }
+        if (size >= 0xCCU) {
+            visual.simulation.class_specific_c8_raw = read_i32(data, offset + 0xC8U);
+        }
+        if (size >= 0xD0U) {
+            visual.simulation.class_specific_cc_raw = read_i32(data, offset + 0xCCU);
+            if (visual.runtime_class_id == 3U)
+                visual.simulation.articulated_contact_sound_asset_id = read_u32(data, offset + 0xCCU);
+        }
+        if (size >= 0xDCU) {
+            visual.simulation.projected_sound_asset_id_d0 = read_u32(data, offset + 0xD0U);
+            visual.simulation.projected_sound_asset_id_d8 = read_u32(data, offset + 0xD8U);
+        }
+        if (size >= 0xE0U) {
+            visual.simulation.movement_collision_radius_q12 = read_i32(data, offset + 0xDCU);
+        }
+        if (size >= 0x1A4U)
+            visual.simulation.attachment_proximity_radius_q12 = read_i32(data, offset + 0x1A0U);
+        if (size >= 0x1B8U)
+            visual.simulation.health_regeneration_per_step = read_i32(data, offset + 0x1B4U);
+        if (size >= 0x1B0U) {
+            visual.simulation.projected_sound_asset_id_primary = read_u32(data, offset + 0x1ACU);
+        }
+        if (size >= 0x270U) {
+            visual.simulation.runtime_class_effect_sound_asset_id_26c = read_u32(data, offset + 0x26CU);
+            visual.simulation.class13_completion_sound_asset_id =
+                visual.simulation.runtime_class_effect_sound_asset_id_26c;
+        }
+        if (size >= 0x274U) {
+            visual.simulation.creation_sound_asset_id_270 = read_u32(data, offset + 0x270U);
+        }
+        if (size >= 0x278U) {
+            visual.simulation.projected_sound_asset_id_secondary = read_u32(data, offset + 0x274U);
+        }
+        if (size >= 0xCCU) {
+            if (visual.runtime_class_id == 1U || visual.runtime_class_id == 2U ||
+                visual.runtime_class_id == 17U || visual.runtime_class_id == 18U ||
+                visual.runtime_class_id == 19U) {
+                visual.simulation.ground_heading_interpolation_distance_q12 =
+                    visual.simulation.class_specific_c0_raw;
+                visual.simulation.ground_far_heading_error_limit_turn16 =
+                    visual.simulation.class_specific_c4_raw & 0xFFFFU;
+                visual.simulation.ground_near_heading_error_limit_turn16 =
+                    static_cast<uint32_t>(visual.simulation.class_specific_c8_raw) & 0xFFFFU;
+            }
+            if (visual.runtime_class_id == 14U || visual.runtime_class_id == 15U) {
+                visual.simulation.resource_storage_selector =
+                    static_cast<uint32_t>(visual.simulation.class_specific_c0_raw);
+                visual.simulation.resource_storage_capacity_contribution_q4 =
+                    visual.simulation.class_specific_c4_raw;
+                visual.simulation.has_resource_storage_capacity_contribution = true;
+            }
+            if (visual.runtime_class_id == 3U) {
+                // V471 ArmyArticulatedRuntime_UpdateSelectedTerrainContact compares the signed
+                // steering delta against MDL +0xC8 on both the positive and wrapped-negative path.
+                visual.simulation.articulated_contact_steering_limit_turn16 =
+                    read_u32(data, offset + 0xC8U) & 0xFFFFU;
+            }
+            if (visual.runtime_class_id == 14U) {
+                // ArmyRuntimeClass_UpdateGridBoundEffectsAndModels shifts MDL +0xC8 left by 24
+                // before packing it into FieldGridCell.runtime7C. Only the serialized low byte can
+                // survive that operation and is consumed by the connected-region economy pass.
+                visual.simulation.resource_extraction_weight_u8 =
+                    read_u32(data, offset + 0xC8U) & 0xFFU;
+            }
         }
         if (size >= 0xC4U) {
             visual.placement_occupancy_class = read_u32(data, offset + 0xC0U);
-            visual.has_placement_occupancy_class = visual.placement_occupancy_class < 21U;
+            visual.has_placement_occupancy_class =
+                model_runtime_class_uses_resource_field_support(visual.runtime_class_id) &&
+                visual.placement_occupancy_class < 21U;
             // The class-initialization callback selected for runtime class 13 copies
             // MDL +0xC0 into the root node's primary animated texture subresource.
             if (visual.runtime_class_id == 13U && visual.placement_occupancy_class != 0U) {
@@ -575,8 +721,49 @@ std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::b
         if (size >= 0x268U) {
             visual.traversal_low_band_index = read_u32(data, offset + 0x260U);
             visual.traversal_high_band_index = read_u32(data, offset + 0x264U);
+            // ModelDefinition_CopyTerrainClassValues resolves MDL +0x260 through
+            // g_GridInfluenceRadiusOffset before any runtime owns this definition.
+            // Stock movers serialize zero at +0xDC; retaining that zero disables
+            // ArmyCollision_FindBlockingRuntimeForCurrentUnit entirely. Negative
+            // classes retain the serialized radius (buildings use that path).
+            // Unsupported custom classes must not emulate retail's out-of-bounds read.
+            constexpr std::array<int32_t, 8> footprint_radii_q12{
+                1000, 1250, 1500, 1600, 1920, 2240, 2600, 4100};
+            if (visual.traversal_low_band_index < footprint_radii_q12.size()) {
+                visual.simulation.movement_collision_radius_q12 =
+                    footprint_radii_q12[visual.traversal_low_band_index];
+                visual.simulation.attachment_proximity_radius_q12 =
+                    footprint_radii_q12[visual.traversal_low_band_index];
+            }
             visual.has_traversal_profile = visual.traversal_low_band_index < 24U &&
                                            visual.traversal_high_band_index < 7U;
+        }
+        if (size >= 0x26CU) {
+            auto& p = visual.simulation;
+            p.ground_slope_threshold_turn16 = p.pitch_min_turn16;
+            p.ground_secondary_slope_threshold_turn16 = read_i32(data, offset + 0x268U);
+            // ModelDefinition_CopyTerrainClassValues indexes this single table
+            // from different bases. Bound custom definitions rather than reading
+            // past it; negative terrain classes retain their serialized values.
+            constexpr std::array<int32_t, 17> thresholds{
+                0,11500,10500,10500,10500,14000,15000,15500,
+                500,500,500,10500,10500,10500,12500,13500,14500};
+            const int32_t terrain = std::bit_cast<int32_t>(visual.traversal_high_band_index);
+            const auto resolve = [&](int64_t index, int32_t& value) {
+                if (index >= 0 && index < static_cast<int64_t>(thresholds.size()))
+                    value = thresholds[static_cast<size_t>(index)];
+            };
+            if (terrain >= 0) {
+                if (p.placement_contact_kind == 1) resolve(11LL + terrain, p.ground_slope_threshold_turn16);
+                else if (p.placement_contact_kind == 4) {
+                    resolve(1LL + terrain, p.ground_slope_threshold_turn16);
+                    resolve(4LL + terrain, p.ground_secondary_slope_threshold_turn16);
+                } else {
+                    resolve(4LL + terrain, p.water_damage_threshold_q12);
+                    resolve(7LL + terrain, p.ground_slope_threshold_turn16);
+                    resolve(10LL + terrain, p.ground_secondary_slope_threshold_turn16);
+                }
+            }
         }
         // ModelRuntimeSlotClassInit_ApplyDefinitionTextureAnimationIndices reads the exact
         // MDL +0x1B8/+0x1BC pair. Runtime class 2 consumes both selectors as independent tank
@@ -587,14 +774,29 @@ std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::b
             visual.has_primary_texture_animation = visual.primary_animated_subresource != 0U;
             visual.has_secondary_texture_animation = visual.secondary_animated_subresource != 0U;
         }
+        if (size >= 0x168U) {
+            visual.simulation.first_creation_notification_movie_id = read_u32(data, offset + 0x160U);
+            visual.simulation.repeat_creation_notification_movie_id = read_u32(data, offset + 0x164U);
+        }
         if (size >= 0x180U) {
-            visual.timed_effect_id = read_u32(data, offset + 0x174);
-            visual.timed_effect_interval_ticks = read_u32(data, offset + 0x178);
-            visual.timed_effect_random_ticks = read_u32(data, offset + 0x17C);
+            visual.simulation.timed_shot_definition_id = read_i32(data, offset + 0x168U);
+            visual.simulation.timed_shot_interval_ticks = read_u32(data, offset + 0x16CU);
+            visual.simulation.timed_shot_random_ticks = read_u32(data, offset + 0x170U);
+            visual.simulation.timed_effect_id = read_u32(data, offset + 0x174U);
+            visual.simulation.timed_effect_interval_ticks = read_u32(data, offset + 0x178U);
+            visual.simulation.timed_effect_random_ticks = read_u32(data, offset + 0x17CU);
+            visual.timed_shot_definition_id = visual.simulation.timed_shot_definition_id;
+            visual.timed_shot_interval_ticks = visual.simulation.timed_shot_interval_ticks;
+            visual.timed_shot_random_ticks = visual.simulation.timed_shot_random_ticks;
+            visual.timed_water_effect_id = visual.simulation.timed_water_effect_id;
+            visual.timed_effect_id = visual.simulation.timed_effect_id;
+            visual.timed_effect_interval_ticks = visual.simulation.timed_effect_interval_ticks;
+            visual.timed_effect_random_ticks = visual.simulation.timed_effect_random_ticks;
         }
         if (size >= 0x1C4U) {
             visual.technology_unlock_id = read_u32(data, offset + 0x1C0U);
         }
+        if (size >= 0x1CCU) visual.simulation.timed_effects_require_research = read_u32(data, offset + 0x1C8U);
         if (size >= 0x1C8U) {
             visual.linked_technology_id = read_u32(data, offset + 0x1C4U);
         }
@@ -616,6 +818,13 @@ std::vector<ModelVisualRecord> parse_model_visual_records(std::span<const std::b
             visual.simulation.damage_effect_min_cooldown_ticks = read_u32(data, offset + 0x258U);
             visual.simulation.damage_effect_random_cooldown_ticks = read_u32(data, offset + 0x25CU);
             for (auto& node : visual.hierarchy_nodes) node.simulation = visual.simulation;
+        }
+        // Several runtime-only MDL fields are serialized after the root hierarchy pointer in the
+        // record. Re-synchronize every node after the complete definition has been parsed so linked
+        // runtime roots carry their own timed emitters, damage profile, fog and render flags.
+        for (auto& node : visual.hierarchy_nodes) {
+            node.simulation = visual.simulation;
+            node.research_technology_ids = visual.technology_panel_ids;
         }
         result.push_back(std::move(visual));
         offset += size;

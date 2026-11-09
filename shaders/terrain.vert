@@ -6,7 +6,8 @@ layout(location=3) in uint inMaterial0;
 layout(location=4) in uint inPackedLight;
 layout(location=5) in uvec3 inMaterial123;
 layout(location=6) in vec4 inBlendWeights;
-layout(set=0,binding=0) uniform Scene { mat4 viewProjection; vec4 camera; vec4 materialScale; vec4 animationControls; } scene;
+layout(location=7) in uint inFogCellIndex;
+layout(set=0,binding=0) uniform Scene { mat4 viewProjection; vec4 camera; vec4 materialScale; vec4 animationControls; mat4 shadowViewProjection; vec4 shadowParameters; } scene;
 
 struct ResourceShadingRecord {
     vec4 positionRadius;
@@ -17,6 +18,11 @@ layout(std430,set=0,binding=3) readonly buffer ResourceShadingBuffer {
     uvec4 header;
     ResourceShadingRecord records[];
 } resourceShading;
+
+layout(std430,set=0,binding=5) readonly buffer FogVisibilityBuffer {
+    uvec4 header; // x=enabled, y=cell count
+    uint cells[]; // low byte = temporally clamped FieldGrid runtime visibility byte
+} fogVisibility;
 
 layout(location=0) out vec3 normal;
 layout(location=1) out vec2 uv;
@@ -94,14 +100,23 @@ vec3 directDrawFinalizeVertexLighting(vec3 baseLightBytes, vec3 shadingWords) {
     return min(vec3(255.0), floor(litWords * modulationWords / 65536.0));
 }
 
+layout(location=4) out vec3 shadowWorldPosition;
 void main(){
+    shadowWorldPosition=inPosition;
     gl_Position=scene.viewProjection*vec4(inPosition,1.0);
     normal=inNormal;
     uv=inUv;
     materialId=inMaterial0;
-    // DirectDraw applies GraphicsShadingRuntime at terrain vertices before the textured packet is
-    // submitted. Let rasterization interpolate the resulting lighting just as the original D3D
-    // triangle does; never turn it into a translucent fragment overlay.
-    lightingBytes=directDrawFinalizeVertexLighting(
-        unpackRgbBytes(inPackedLight),directDrawResourceShadingWords(inPosition))/255.0;
+    // game.exe 0x0050054C consumes terrain lighting at the field vertex and checks cell +0x68
+    // before nearby-resource shading (0x0050056E). Fog is therefore cell/runtime colour state, not
+    // a second coplanar world polygon. Preserve G407's temporal byte and interpolate the resulting
+    // vertex colour across the exact BL->TR terrain triangles.
+    uint runtimeVisibility = 255u;
+    if (fogVisibility.header.x != 0u && inFogCellIndex < fogVisibility.header.y)
+        runtimeVisibility = fogVisibility.cells[inFogCellIndex] & 255u;
+    vec3 shadingWords = runtimeVisibility == 255u
+        ? directDrawResourceShadingWords(inPosition) : vec3(0.0);
+    vec3 retailLighting = directDrawFinalizeVertexLighting(
+        unpackRgbBytes(inPackedLight), shadingWords) / 255.0;
+    lightingBytes = retailLighting * (float(runtimeVisibility) / 255.0);
 }

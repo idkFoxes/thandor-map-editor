@@ -16,6 +16,10 @@ constexpr std::size_t kEntryNameBytes = 0x1EC;
 class BitReader {
 public:
     explicit BitReader(std::span<const std::byte> data) : data_(data) {}
+    void require_dword_window() const {
+        const auto token_byte = (cursor_ * 8U - bits_) / 8U;
+        if (data_.size() - token_byte < 4U) throw FormatError("PCK token lacks native dword lookahead");
+    }
     uint32_t read(unsigned count) {
         while (bits_ < count) {
             if (cursor_ >= data_.size()) throw FormatError("PCK bitstream ended early");
@@ -69,12 +73,15 @@ std::pair<std::array<HuffNode, 512>, int> build_huffman(std::span<const std::byt
 }
 
 std::vector<std::byte> decode_method0(std::span<const std::byte> payload, std::size_t output_size) {
-    if (payload.size() < 256) throw FormatError("PCK method 0 payload is too small");
+    // Match the native decoder's nonempty output and four-byte lookahead contract.
+    if (output_size==0 || payload.size() < 260) throw FormatError("PCK method 0 payload or output is too small");
     const auto [nodes, root] = build_huffman(payload.first(256));
+    if(root<256)throw FormatError("PCK method 0 requires at least two symbols");
     BitReader bits(payload.subspan(256));
     std::vector<std::byte> output;
     output.reserve(output_size);
     while (output.size() < output_size) {
+        bits.require_dword_window();
         const auto run_length = bits.read(1) ? bits.read(4) + 3U : 1U;
         int node = root;
         while (node >= 256) {
@@ -97,6 +104,7 @@ std::vector<std::byte> decode_method2(std::span<const std::byte> payload, std::s
     const auto width = read_u32(intermediate, 0xB8);
     const auto height = read_u32(intermediate, 0xBC);
     const uint64_t count = static_cast<uint64_t>(width) * height;
+    if(count==0)throw FormatError("PCK method 2 field has no cells");
     const uint64_t expected_intermediate = 0x200ULL + count * 0x10ULL;
     const uint64_t expected_output = 0x200ULL + count * 0x80ULL;
     if (intermediate.size() != expected_intermediate || output_size != expected_output) {
@@ -165,6 +173,10 @@ PckArchive PckArchive::parse(std::filesystem::path source, std::vector<std::byte
     archive.path_ = std::move(source);
     archive.bytes_ = std::move(bytes);
     const auto count = read_u32(archive.bytes_, 0xB0);
+    // Reject impossible counts before reserve(), which otherwise turns a
+    // malformed project directory into an opaque std::bad_alloc.
+    if(count > (archive.bytes_.size()-kHeaderSize)/kEntryHeaderSize)
+        throw FormatError("PCK directory count exceeds available entry headers");
     std::size_t offset = kHeaderSize;
     archive.entries_.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {

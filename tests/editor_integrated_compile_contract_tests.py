@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise SystemExit(message)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", type=Path, required=True)
+    args = parser.parse_args()
+    source = args.source.resolve()
+
+    build = (source / "build_windows_from_linux.sh").read_text(encoding="utf-8")
+    helper = source / "tools/clean_build_directory_preserving_artifacts.sh"
+    helper_text = helper.read_text(encoding="utf-8")
+    app = (source / "src/editor/editor_app.cpp").read_text(encoding="utf-8")
+    app_header = (source / "src/editor/editor_app.hpp").read_text(encoding="utf-8")
+    catalog_header = (source / "include/thandor/catalog.hpp").read_text(encoding="utf-8")
+    catalog = (source / "src/core/catalog.cpp").read_text(encoding="utf-8")
+    manifest = (source / "src/core/map_document.cpp").read_text(encoding="utf-8")
+    vertex = (source / "shaders/model.vert").read_text(encoding="utf-8")
+    fragment = (source / "shaders/model.frag").read_text(encoding="utf-8")
+
+    common = (source / "tools/build_common.sh").read_text(encoding="utf-8")
+    require("tools/build_common.sh" in build and "clean_build_directory_preserving_artifacts.sh" in common,
+            "Windows build does not use the artifact-preserving cleaner")
+    require("-iname '*.exe' -o -iname '*.pck'" in helper_text,
+            "artifact cleaner does not preserve case-insensitive EXE/PCK files")
+    require('rm -rf -- "${build_dir}"' in helper_text,
+            "artifact cleaner no longer removes stale CMake/object state")
+
+    with tempfile.TemporaryDirectory(prefix="thandor-g393-clean-") as temporary:
+        build_dir = Path(temporary) / "build"
+        (build_dir / "nested").mkdir(parents=True)
+        (build_dir / "CMakeFiles").mkdir()
+        (build_dir / "nested" / "keep.EXE").write_bytes(b"exe-authority")
+        (build_dir / "nested" / "keep.pck").write_bytes(b"pck-authority")
+        (build_dir / "CMakeFiles" / "stale.o").write_bytes(b"stale")
+        (build_dir / "stale.txt").write_text("stale", encoding="utf-8")
+        result = subprocess.run([str(helper), str(build_dir)], text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        require(result.returncode == 0, "artifact cleaner failed:\n" + result.stdout)
+        require(result.stdout.strip() == "2", "artifact cleaner reported wrong preserve count")
+        require((build_dir / "nested" / "keep.EXE").read_bytes() == b"exe-authority",
+                "nested EXE was not preserved byte-for-byte")
+        require((build_dir / "nested" / "keep.pck").read_bytes() == b"pck-authority",
+                "nested PCK was not preserved byte-for-byte")
+        require(not (build_dir / "CMakeFiles").exists() and
+                not (build_dir / "stale.txt").exists(),
+                "stale non-game build content survived the clean")
+
+    require("technology_level_previews" not in app and
+            "Select technology level##placement" not in app and
+            "placement_technology_level." not in manifest and
+            "placement_technology_effect." not in manifest,
+            "obsolete per-placement technology-level preview survived G400")
+    require("Research state (all technologies)" in app and
+            "faction_technology_mask." in manifest and
+            "resolve_faction_technology_hierarchy" in app and
+            "resolve_faction_technology_hierarchy" in catalog,
+            "faction-wide exact research preview path is incomplete")
+    require("placement_integrity_percent." in manifest and
+            "Integrity / damage preview %" in app and
+            "damage_effect_controllers_" in app_header,
+            "damage-state preview persistence/UI/runtime path is incomplete")
+    require("candidate.technology_unlock_id" in catalog and
+            "selected = &candidate" in catalog and
+            "first unlocked MDL +0x238..+0x24C wins" in catalog,
+            "ARM-last/MDL-first technology selection rules are missing")
+
+    require("normalize_model_texture_offset_u" in app,
+            "tank renderer does not consume the fixed-coordinate track offset helper")
+    track_section = app[app.index("normalize_model_texture_offset_u") - 1000:
+                        app.index("normalize_model_texture_offset_u") + 1500]
+    require("parent.root" not in track_section,
+            "tank texture scrolling is still incorrectly restricted to the root runtime node")
+
+    require("has_continuous_radar_subnode_animation" in catalog_header and
+            "!continuous_radar_placements_.empty()" in app and
+            "runtime_class_directly_dispatches_animated_model_subnodes" in app and
+            "model_runtime_child_yaw_step_turn16" in app,
+            "linked class-10 radar animation route is incomplete")
+    require("simulation_model_node_is_weapon_aim_axis" in app,
+            "ordinary weapon axes are not protected from ambient authored rotation")
+    require("out_static_animation_category = in_direct_tint_bypass >> 1u" in vertex and
+            "in_static_animation_category & 16u" in fragment,
+            "continuous-radar static replacement category is not wired through the shaders")
+
+    require("Selected faction" in app and "All active factions" in app and
+            "build_projected_fog_preview_occupancy" in app,
+            "faction-aware projected fog preview UI or occupancy mask is missing")
+    require("session-only" in app_header and
+            "fog_preview_occupancy_history_.clear()" in app and
+            "fog_preview_all_explored_" in app,
+            "fog preview overstates serialized history or unrecovered alliance-state support")
+
+    print("G393 editor source/build contracts PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

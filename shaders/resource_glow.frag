@@ -3,7 +3,7 @@ layout(location=0) in vec2 in_local_offset;
 layout(location=1) flat in uint in_packed_rgb;
 layout(location=2) flat in vec4 in_pulse0; // radius, period, phase, grow
 layout(location=3) flat in vec2 in_pulse1; // stop, release
-layout(set=0,binding=0) uniform Scene { mat4 view_projection; vec4 camera; vec4 material_scale; vec4 animation_controls; } scene;
+layout(set=0,binding=0) uniform Scene { mat4 view_projection; vec4 camera; vec4 material_scale; vec4 animation_controls; mat4 shadowViewProjection; vec4 shadowParameters; } scene;
 layout(location=0) out vec4 out_color;
 
 vec3 unpack_rgb(uint value) {

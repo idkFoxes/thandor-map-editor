@@ -6,7 +6,12 @@ layout(location=3) in uint inTextureLayer;
 layout(location=4) in uint inPackedDiffuse;
 layout(location=5) in uvec3 inWaveRecord;
 layout(location=6) in vec4 inEncodedLighting;
-layout(set=0,binding=0) uniform Scene { mat4 viewProjection; vec4 camera; vec4 materialScale; vec4 animationControls; } scene;
+layout(location=7) in uint inFogCellIndex;
+layout(set=0,binding=0) uniform Scene { mat4 viewProjection; vec4 camera; vec4 materialScale; vec4 animationControls; mat4 shadowViewProjection; vec4 shadowParameters; } scene;
+layout(std430,set=0,binding=5) readonly buffer FogVisibilityBuffer {
+    uvec4 header; // x=enabled, y=cell count
+    uint cells[];
+} fogVisibility;
 layout(location=0) out vec2 uv;
 layout(location=1) flat out uint textureLayer;
 layout(location=2) out vec4 vertexDiffuse;
@@ -30,6 +35,7 @@ vec4 unpackArgb(uint value) {
                 float((value >> 24u) & 255u)) / 255.0;
 }
 
+layout(location=4) out vec3 shadowWorldPosition;
 void main() {
     uint phaseXY = inWaveRecord.x & 65535u;
     uint phaseZ = (inWaveRecord.x >> 16u) & 65535u;
@@ -49,8 +55,15 @@ void main() {
                              sin(angleXY) * amplitudeXY,
                              cos(angleZ) * amplitudeZ);
     vec3 worldPosition = inPosition + displacement;
+    shadowWorldPosition=worldPosition;
     gl_Position = scene.viewProjection * vec4(worldPosition, 1.0);
     uv = inUv;
     textureLayer = inTextureLayer;
     vertexDiffuse = unpackArgb(inPackedDiffuse);
+    // Apply fog to the *same displaced water/lava/ice vertex*. A separate non-displaced fog mesh
+    // intersects the animated surface and caused the black/flickering wedges reported in G410.
+    uint runtimeVisibility = 255u;
+    if (fogVisibility.header.x != 0u && inFogCellIndex < fogVisibility.header.y)
+        runtimeVisibility = fogVisibility.cells[inFogCellIndex] & 255u;
+    vertexDiffuse.rgb *= float(runtimeVisibility) / 255.0;
 }

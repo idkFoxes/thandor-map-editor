@@ -1,5 +1,5 @@
 #version 450
-layout(set=0,binding=0) uniform Scene { mat4 view_projection; vec4 camera; vec4 material_scale; vec4 animation_controls; } scene;
+layout(set=0,binding=0) uniform Scene { mat4 view_projection; vec4 camera; vec4 material_scale; vec4 animation_controls; mat4 shadowViewProjection; vec4 shadowParameters; } scene;
 layout(location=0) in vec3 in_position;
 layout(location=1) in vec3 in_normal;
 layout(location=2) in vec2 in_uv;
@@ -8,6 +8,9 @@ layout(location=4) in uint in_argb;
 layout(location=5) in uint in_direct_tint_bypass;
 layout(location=6) in float in_animation_v_amplitude;
 layout(location=7) in float in_animation_cycle_ticks;
+layout(location=8) in uint in_casts_shadow;
+layout(location=4) out vec3 shadowWorldPosition;
+layout(location=6) flat out uint receivesShadow;
 
 struct ResourceShadingRecord {
     vec4 positionRadius;
@@ -86,6 +89,8 @@ vec3 direct_draw_finalize_vertex_lighting(vec3 base_light_bytes, vec3 shading_wo
 }
 
 void main() {
+    shadowWorldPosition=in_position;
+    receivesShadow=in_casts_shadow;
     gl_Position = scene.view_projection * vec4(in_position, 1.0);
     out_normal = normalize(in_normal);
     out_uv = in_uv;
@@ -101,7 +106,7 @@ void main() {
         out_uv.y += in_animation_v_amplitude * triangle_wave;
     }
     out_texture_layer = in_texture_layer;
-    out_static_animation_category = (in_direct_tint_bypass >> 1u) & 31u;
+    out_static_animation_category = in_direct_tint_bypass >> 1u;
     vec4 base = unpack_argb(in_argb);
     // game.exe 0x004BD5A2-0x004BD610: triangle flag 0x0200 copies the model tint
     // straight into the prepared vertex and returns before directional or nearby-resource

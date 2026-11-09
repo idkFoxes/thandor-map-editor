@@ -10,6 +10,8 @@
 #include "thandor/technology.hpp"
 
 #include <filesystem>
+#include <functional>
+#include <utility>
 #include <memory>
 #include <optional>
 #include <span>
@@ -36,8 +38,8 @@ enum class PlacementVisualKind {
     Tree,
     Rock,
     PlayerStart,
-    PowerResource,
-    BuildingResource,
+    PowerResource,    // Legacy internal spelling: V428 closes this blue deposit as Tritium.
+    BuildingResource, // Legacy internal spelling: V428 closes this gold deposit as Xenite.
     ResourceScenery
 };
 enum class PlacementBrowserKind { General, Element, Unit, Building };
@@ -67,7 +69,7 @@ struct TechnologyPanelEntry {
     uint32_t technology_id{};
     TechnologyCategory category{TechnologyCategory::Category0};
     uint32_t xenite_cost_q4{};
-    uint32_t energy_cost_q4{};
+    uint32_t energy_demand_q4{};
     uint32_t research_duration_q5{};
     std::string title;
     std::string special_features;
@@ -79,6 +81,10 @@ struct EffectPipelineReferenceInfo {
     EffectLifecycleTransitionKind transition_kind{
         EffectLifecycleTransitionKind::NoAdditionalAction};
     std::string sprite_path;
+    // Exact packed-key attachment classes in the EFF-owned SPR. Low nibble is class, upper bits
+    // are selector index. Masks retain indices 0..31 without flattening class-2/3/4/6 semantics.
+    std::array<uint32_t, 16> attachment_selector_masks{};
+    std::array<uint32_t, 16> attachment_counts{};
 };
 
 struct WeaponEffectPipelineInfo {
@@ -90,8 +96,16 @@ struct WeaponEffectPipelineInfo {
     EffectPipelineReferenceInfo primary_effect;
     EffectPipelineReferenceInfo launch_effect;
     EffectPipelineReferenceInfo secondary_effect;
+    // Unique effect lists remain for compatibility, but the indexed tables below preserve the
+    // actual runtime dispatch slots. SHT +0x90/+0xB0 are both indexed by hit MDL +0x5C (0..7).
+    // Terrain EFF +0x14 has 31 independent raycast-result slots; +0x1E0 is a parallel signed
+    // material-reference table and must not be falsely treated as a remap for the EFF table.
     std::vector<EffectPipelineReferenceInfo> terrain_impact_effects;
     std::vector<EffectPipelineReferenceInfo> target_class_impact_effects;
+    std::array<uint32_t, 31> terrain_impact_effect_ids{};
+    std::array<uint32_t, 8> target_class_impact_effect_ids{};
+    std::array<int32_t, 8> target_class_impact_damage_q12{};
+    std::array<int32_t, 31> terrain_material_indices{};
     std::string shot_sprite_path;
 };
 
@@ -172,6 +186,20 @@ struct ArmyAssetPreset {
     uint32_t traversal_low_band_index{};
     uint32_t traversal_high_band_index{};
     bool has_placement_occupancy_class{};
+    // Runtime class 14 only: low byte of MDL +0xC8. The game packs it into the field-cell
+    // extractor occupancy record and resolves actual production over the connected resource
+    // region. Keep this separate from placement_occupancy_class at MDL +0xC0.
+    uint32_t resource_extraction_weight_u8{};
+    uint32_t resource_storage_selector{};
+    uint32_t resource_storage_capacity_contribution_q4{};
+    bool has_resource_storage_capacity_contribution{};
+    int32_t water_damage_multiplier{};
+    int32_t water_damage_threshold_q12{};
+    int32_t ground_heading_interpolation_distance_q12{};
+    uint32_t ground_far_heading_error_limit_turn16{};
+    uint32_t ground_near_heading_error_limit_turn16{};
+    int32_t vertical_deployment_step_q12_per_tick{};
+    int32_t vertical_deployment_travel_limit_q12{};
     bool has_traversal_profile{};
     std::string display_name;
     std::string short_name;
@@ -194,16 +222,54 @@ struct ArmyAssetPreset {
     uint32_t secondary_animated_subresource{};
     bool has_primary_texture_animation{};
     bool has_secondary_texture_animation{};
+    // V519 proves ARM +0x14 is also consumed as a raw AI-candidate flag word: bit 0 gates the
+    // candidate scoring passes. Preserve the raw dword so this semantic view does not destroy the
+    // already-proven class-2 signed track-texture interpretation of the same storage.
+    uint32_t army_runtime_flags14_raw{};
+    bool ai_candidate_eligible_bit0{};
+    // V568: AiArmyCandidate_ComputeFactionWeightedScore reads these three raw ARM dwords
+    // directly at +0x70/+0x74/+0x78.  Their domain is still unresolved; preserve the exact
+    // serialized values instead of inventing gameplay names for them.
+    uint32_t ai_definition_class_value70{};
+    uint32_t ai_definition_class_value74{};
+    uint32_t ai_definition_class_value78{};
     // Runtime class 2 advances the two selected root texture U offsets independently. ARM +0x14
-    // is the class-specific distance-to-texture scale; it must not be treated as child[2] motion.
+    // is the class-specific signed distance-to-texture scale in that class-specific callback.
     int32_t track_texture_travel_scale{};
+    // Selected root MDL raw runtime-class fields needed by class 13 production. They deliberately
+    // coexist with the class-3 semantic aliases because +0xC4 is overloaded by runtime class.
+    int32_t runtime_class_step_q12{};
+    int32_t runtime_class_specific_c0_raw{};
+    uint32_t runtime_class_specific_c4_raw{};
+    int32_t runtime_class_specific_c8_raw{};
+    int32_t runtime_class_specific_cc_raw{};
+    int32_t runtime_class_specific_19c_raw{};
+    int32_t runtime_class_specific_1a8_raw{};
+    uint32_t runtime_class_effect_sound_asset_id_26c{};
+    uint32_t class13_completion_sound_asset_id{};
+    uint32_t creation_sound_asset_id_270{};
     // Runtime class 3 paired-foot support fields copied from the selected root MDL.
     int32_t articulated_root_height_q12{};
     int32_t articulated_contact_interpolation_rate_q12{};
     int32_t articulated_contact_lift_q12{};
+    uint32_t articulated_contact_steering_limit_turn16{};
+    uint32_t articulated_contact_sound_asset_id{};
+    uint32_t positioned_sound_gain_q15{};
+    uint32_t positioned_sound_maximum_distance_q12{};
+    uint32_t projected_sound_asset_id_d0{};
+    uint32_t projected_sound_asset_id_d8{};
+    uint32_t projected_sound_asset_id_primary{};
+    uint32_t projected_sound_asset_id_secondary{};
+    // Selected-root compatibility summary of the two retail timed-emitter channels. Runtime
+    // rendering walks ModelVisualNode::simulation so linked MDL roots keep their own slots too.
+    int32_t timed_shot_definition_id{-1};
+    uint32_t timed_shot_interval_ticks{};
+    uint32_t timed_shot_random_ticks{};
+    uint32_t timed_water_effect_id{};
     uint32_t timed_effect_id{};
     uint32_t timed_effect_interval_ticks{};
     uint32_t timed_effect_random_ticks{};
+    uint32_t construction_destruction_effect_id{};
     int32_t damage_effect_health_threshold_percent{};
     uint32_t damage_effect_id{};
     uint32_t damage_effect_min_cooldown_ticks{};
@@ -228,6 +294,9 @@ struct ArmyAssetPreset {
     // Runtime class 17 owns the dedicated movement/banking callback and must not be routed through
     // the generic child[0]/child[1] spin + child[2] bounce helper.
     bool runtime_uses_class17_movement_banking{};
+    // The class-17 initializer arms its three-child deployment state only when the live root owns
+    // more than two children. This is false for every Dragonfly variant and most Hornets.
+    bool runtime_uses_class17_root_child_deployment{};
     // Editor simulation profiles are recovered from the same MDL fields used by the 20 Hz
     // movement/aim/fire callbacks and from kind-2 launch attachments in the selected SPR LOD.
     SimulationMotionProfile simulation_motion_profile;
@@ -238,18 +307,22 @@ struct ArmyAssetPreset {
     uint32_t fog_uncover_scan_steps{};
     // Retail build-card statistics follow ArmyAssetRecord_RegisterAndRelocate and
     // InGameSelectionDetailPanel_Rebuild exactly. Each ARM hierarchy node contributes its selected
-    // MDL once: +0x60 armour, +0x180 build time Q5, +0x184 Xenite Q4 and +0x18C energy Q4.
+    // MDL once: +0x60 armour, +0x180 build time Q5, +0x184 Xenite Q4 and +0x18C Energy-demand Q4.
     // The loader accumulates +0x180/+0x184 into ARM runtime-record +0x24/+0x28 before the UI
     // applies >>5/>>4. Internal visual sprite nodes must not duplicate an owning MDL record.
     int32_t root_maximum_integrity{};
     int64_t retail_armour{};
-    uint64_t retail_energy_cost_q4{};
+    // ARM registration sums variant-0 MDL +0x188 over every ARM node, with dword wrap.
+    // This construction load is separate from selected-model operating demand.
+    uint32_t retail_build_energy_q4{};
+    uint64_t retail_energy_demand_q4{};
+    uint64_t retail_energy_generation_capacity_q4{};
     uint32_t retail_xenite_cost_q4{};
     uint32_t retail_build_time_q5{};
     uint32_t retail_stat_arm_node_count{};
     EffectPipelineValidationSummary effect_pipeline_validation;
     // Canonical browser placement ID. Stock maps also contain compatible active variants
-    // (810 for energy and 814 for building material), but new placements use 811/815.
+    // (810 for Tritium and 814 for Xenite), but new placements use 811/815.
     uint32_t canonical_registry_id{};
     uint32_t stock_placement_count{};
     bool visual_chain_complete{};
@@ -268,8 +341,8 @@ struct ArmyAssetPreset {
 const char* placement_browser_kind_name(PlacementBrowserKind kind) noexcept;
 bool placement_is_resource(const ArmyAssetPreset& preset) noexcept;
 bool placement_is_resource_scenery(const ArmyAssetPreset& preset) noexcept;
-// Energy deposits (810/811) require occupancy class 1 / FLD bit 0x1000.
-// Building-material deposits (814/815) require class 0 / FLD bit 0x0800.
+// Tritium deposits (810/811) require occupancy class 1 / FLD bit 0x1000.
+// Xenite deposits (814/815) require class 0 / FLD bit 0x0800.
 std::optional<uint32_t> resource_field_occupancy_class(uint32_t registry_id) noexcept;
 std::size_t stamp_resource_field_masks(FieldGrid& field,
                                        std::span<const LevelPlacement> placements,
@@ -278,11 +351,30 @@ uint32_t canonical_placement_registry_id(const ArmyAssetPreset& preset) noexcept
 PlacementBrowserKind classify_placement_browser_kind(const ArmyAssetPreset& preset) noexcept;
 bool placement_uses_neutral_source_color(PlacementVisualKind kind) noexcept;
 bool placement_uses_neutral_source_color(const ArmyAssetPreset& preset) noexcept;
-// game.exe selects an army GFX/PAL colour family from the frontend faction record;
-// it is not the raw faction index.  This stock default reproduces the standard
-// playable order (1 blue, 2 red, 3 green, 4 yellow, 5 orange, 6 brown, 7 purple).
+// Retail ArmyAssetRegistry_ResolveOrCreatePreviewTextureCf has a separate preview-only
+// color boundary: registry IDs below 400 use the selected faction, while 400+ use
+// neutral family 0. Keep this separate from world-placement source-color policy.
+bool army_asset_preview_uses_neutral_source_color(uint32_t registry_id) noexcept;
+bool army_asset_preview_uses_neutral_source_color(const ArmyAssetPreset& preset) noexcept;
+// game.exe selects an army GFX/PAL graphics family from a LEV-authored per-faction
+// offset; it is not a universal faction-index permutation. This fallback is used only
+// when no LevelAsset is available and therefore assumes a zero raw LEV offset.
 uint32_t default_faction_graphics_family(uint32_t faction_index) noexcept;
 const char* default_faction_color_name(uint32_t faction_index) noexcept;
+const char* graphics_family_color_name(uint32_t graphics_family) noexcept;
+// Retail Single Player task-assignment name for the effective army graphics family.
+// game.exe selects text 0x2173 + faction_index + the same LEV-authored family offset
+// used by the armyN graphics selector, yielding Ares..Golrathen for families 1..8.
+const char* graphics_family_single_player_faction_name(uint32_t graphics_family) noexcept;
+// Retail Single Player task-assignment text color, encoded 0xRRGGBB.  The stock
+// menue.str 0x2174..0x217B 0x8006 payload encodes BLUE/GREEN/RED/ALPHA nibbles;
+// game.exe unpacks these in B,G,R order. Separate from the darker armyN swatch.
+uint32_t graphics_family_single_player_text_rgb24(uint32_t graphics_family) noexcept;
+// Representative UI swatch for the packaged armyN family, encoded 0xRRGGBB.
+// Families 1..7 are the normal retail player-colour cycle; family 8 is the
+// conditional/special gray family and is not a normal eighth player colour.
+uint32_t graphics_family_representative_rgb24(uint32_t graphics_family) noexcept;
+bool graphics_family_is_standard_player_color(uint32_t graphics_family) noexcept;
 
 // Exact retail faction-technology model resolver. Each ARM hierarchy node starts at its first
 // serialized nonzero MDL, then later ARM variants replace it when their candidate MDL +0x1C0 bit
@@ -294,6 +386,12 @@ std::vector<ModelVisualNode> resolve_faction_technology_hierarchy(
     uint32_t* selected_root_model_definition_id = nullptr,
     uint32_t* linked_runtime_count = nullptr,
     uint32_t* deferred_attachment_count = nullptr);
+
+// Exact ARM linked-definition selection used by the AI workspace11 gate.  Each linked ARM node
+// starts from serialized slot zero and is replaced by later slots whose selected MDL +0x1C0
+// technology is unlocked.  The resulting selected MDL for every node must itself be unlocked.
+bool army_asset_all_selected_model_technologies_unlocked(
+    const ArmyAssetPreset& preset, const FactionTechnologyMask256& technology_mask) noexcept;
 
 struct PlacementCompatibilityIssue {
     std::size_t placement_index{};
@@ -329,9 +427,34 @@ struct MapAssetGroup {
     std::vector<uint32_t> placement_registry_ids;
 };
 
+// V533 InGameLevelRuntime_LoadResourcesAfterDefaultResetCf scans the ARM registry and retains the
+// last eligible definitions for class 11, class 14/+0xC0==0, class 14/+0xC0!=0 and class 16.  A
+// faction that owns class 18 and no Group-A runtime receives these four definitions in its runtime
+// primary/direct-place queue.  The queue itself is not LEV faction data; exposing the catalog
+// selection separately lets the editor explain the retail startup result without inventing a map
+// field.
+std::optional<std::array<std::uint32_t, 4>> retail_starting_primary_asset_ids(
+    std::span<const ArmyAssetPreset> presets) noexcept;
+
+// Shared pure builder: editor loads resources; Simulation Lab reads prepared immutable metadata.
+std::vector<SimulationWeaponProfile> simulation_weapon_profiles_from_hierarchy(
+    std::span<const ModelVisualNode> hierarchy,
+    const std::function<const ShotDefinitionRecord*(uint32_t)>& shot_lookup,
+    const std::function<std::pair<uint32_t,uint32_t>(std::string_view)>& launch_lookup);
+
 class AssetCatalog {
 public:
     static AssetCatalog scan_game_root(const std::filesystem::path& game_root);
+    // Read-only asset analysis without requiring an installed executable. The
+    // editor's game-installation picker retains scan_game_root's executable gate.
+    static AssetCatalog scan_archive_root(const std::filesystem::path& archive_root,
+        std::span<const std::string> model_load_order = {},
+        std::span<const std::string> army_load_order = {},
+        std::span<const std::string> effect_load_order = {},
+        std::span<const std::string> shot_load_order = {},
+        std::string_view technology_path = {});
+    static AssetCatalog scan_archive_root(const std::filesystem::path& archive_root, const LevelAsset& level);
+    std::span<const std::string> model_load_order() const noexcept { return model_load_order_; }
 
     const std::filesystem::path& game_root() const noexcept { return game_root_; }
     std::span<const AssetRecord> assets() const noexcept { return assets_; }
@@ -342,6 +465,11 @@ public:
     const ArmyAssetPreset* army_preset(uint32_t registry_id) const noexcept;
     const EffectDefinitionRecord* effect_definition(uint32_t definition_id) const noexcept;
     const ShotDefinitionRecord* shot_definition(uint32_t definition_id) const noexcept;
+    // Build weapon channels from the exact hierarchy currently selected by faction technology.
+    // This is deliberately hierarchy-scoped: base ARM models can carry class-7 placeholders with
+    // SHT 0 while unlocked replacement MDLs carry the actual weapon definition.
+    std::vector<SimulationWeaponProfile> simulation_weapon_profiles_for_hierarchy(
+        std::span<const ModelVisualNode> hierarchy) const;
     const TechnologyRecord* technology(uint32_t technology_id) const noexcept;
     std::span<const TechnologyRecord> technologies() const noexcept { return technologies_; }
     bool placement_available_in_level(const ArmyAssetPreset& preset,
@@ -356,9 +484,13 @@ public:
     std::vector<std::byte> load(const AssetRecord& record) const;
     std::vector<std::byte> load(std::string_view normalized_path) const;
     std::optional<std::size_t> find_asset_index(std::string_view normalized_path) const;
+    // Physical PCK that supplied this mounted asset. Used by stock-map in-place saves; callers
+    // still rewrite the archive transactionally rather than mutating the catalog's cached copy.
+    std::filesystem::path backing_archive_path(const AssetRecord& record) const;
 
 private:
     std::filesystem::path game_root_;
+    std::vector<std::string> model_load_order_;
     std::vector<std::shared_ptr<PckArchive>> archives_;
     std::vector<AssetRecord> assets_;
     std::vector<MapAssetGroup> map_groups_;

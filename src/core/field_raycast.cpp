@@ -126,6 +126,10 @@ struct CellHit {
 std::optional<CellHit> test_cell(const FieldGrid& field, uint32_t x, uint32_t y,
                                  Vec3f origin, Vec3f direction,
                                  FieldRaycastSurface surface) noexcept {
+    // V451/V448 boundary recovery makes the retail interpolation admission check explicit:
+    // c00 and c11 hard-boundary bits reject the quad before terrain/water sampling.  Editor
+    // picking must not acquire a drive/placement target through terrain the runtime would reject.
+    if (!field.runtime_interpolation_allowed(x, y)) return std::nullopt;
     const auto make_point = [&](uint32_t px, uint32_t py, bool secondary) {
         const auto& cell = field.at(px, py);
         return Vec3f{q12_to_float(cell.world_x_q12), q12_to_float(cell.world_y_q12),

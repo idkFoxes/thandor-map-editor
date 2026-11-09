@@ -42,6 +42,16 @@ const char* shot_trajectory_mode_name(ShotTrajectoryMode mode) noexcept {
     return "unknown";
 }
 
+ShotLineOfFirePolicy shot_line_of_fire_policy(ShotTrajectoryMode mode) noexcept {
+    switch (mode) {
+        case ShotTrajectoryMode::Ballistic: return {false, true};
+        case ShotTrajectoryMode::FixedRange: return {false, false};
+        case ShotTrajectoryMode::DirectLine:
+        case ShotTrajectoryMode::LeadAdjusted: return {true, true};
+    }
+    return {true, true};
+}
+
 const char* effect_lifecycle_transition_kind_name(
     EffectLifecycleTransitionKind kind) noexcept {
     switch (kind) {
@@ -115,6 +125,8 @@ ShotAsset ShotAsset::parse(std::span<const std::byte> data) {
                 read_u32(data, offset + 0x14 + effect_index * 4U);
             record.terrain_impact_effect_owner_slots[effect_index] =
                 read_u32(data, offset + 0xE0 + effect_index * 4U);
+            record.terrain_impact_radii_q12[effect_index] =
+                read_i32(data, offset + 0x160 + effect_index * 4U);
             record.terrain_material_indices[effect_index] =
                 read_i32(data, offset + 0x1E0 + effect_index * 4U);
         }
@@ -149,6 +161,25 @@ int32_t shot_selection_range_q12(const ShotDefinitionRecord& definition) noexcep
 
 float shot_selection_range_world(const ShotDefinitionRecord& definition) noexcept {
     return q12_to_float(shot_selection_range_q12(definition));
+}
+
+std::optional<int32_t> shot_line_of_fire_range_q12(
+    const ShotDefinitionRecord& definition) noexcept {
+    const auto mode = definition.trajectory_kind();
+    if (mode != ShotTrajectoryMode::DirectLine && mode != ShotTrajectoryMode::LeadAdjusted)
+        return std::nullopt;
+
+    // Exact V530 integer expression from ArmyWeaponRuntime_TestTargetLineOfFireCf. This differs
+    // from ShotDefinition_ComputeSelectionRange by the final -1 tick. Keep signed intermediates
+    // because the executable does; invalid/non-positive ranges remain unusable in the editor.
+    const std::int64_t ramp_bias_ticks =
+        (static_cast<std::int64_t>(definition.trajectory_ramp_duration_ticks) * -0xAAA) >> 12;
+    const std::int64_t effective_ticks =
+        ramp_bias_ticks + static_cast<std::int64_t>(definition.projectile_lifetime_ticks) - 1;
+    const std::int64_t value = effective_ticks * static_cast<std::int64_t>(definition.launch_speed_q12);
+    if (value <= 0) return 0;
+    return static_cast<int32_t>(std::min<std::int64_t>(
+        value, std::numeric_limits<int32_t>::max()));
 }
 
 ShotTerrainMaterialValidation validate_shot_terrain_material_references(
@@ -194,6 +225,7 @@ EffectAsset EffectAsset::parse(std::span<const std::byte> data) {
         record.linked_shot_present = read_u32(data, offset + 0x18);
         record.linked_shot_id = read_u32(data, offset + 0x1C);
         record.movement_speed_q12 = read_i32(data, offset + 0x20);
+        record.completion_countdown_ticks = read_u32(data, offset + 0x24);
         record.terrain_grid_mask_index = read_i32(data, offset + 0x2C);
         record.creation_flags = read_u32(data, offset + 0x30);
         record.shading_color_argb = read_u32(data, offset + 0x34);
@@ -206,6 +238,8 @@ EffectAsset EffectAsset::parse(std::span<const std::byte> data) {
         record.periodic_effect_interval_ticks = read_u32(data, offset + 0x4C);
         record.alpha_fade_in_ticks = read_u32(data, offset + 0x50);
         record.alpha_fade_out_ticks = read_u32(data, offset + 0x54);
+        record.terrain_pitch_drop_per_age_squared = read_u32(data, offset + 0x58);
+        record.terrain_contact_alpha_fade_step = read_u32(data, offset + 0x5C);
         record.state_tint_argb = read_u32(data, offset + 0x60);
         record.model_scale_x_q12 = read_i32(data, offset + 0x64);
         record.model_scale_y_q12 = read_i32(data, offset + 0x68);
@@ -377,7 +411,8 @@ uint32_t mix_resource_seed(uint32_t value) noexcept {
 
 ResourceEmitterSchedule build_resource_emitter_schedule(
     std::span<const ResourceEmitterTiming> emitters, uint32_t primary_rng_seed,
-    uint32_t preferred_cycle_ticks, uint32_t maximum_pulses) {
+    uint32_t preferred_cycle_ticks, uint32_t maximum_pulses,
+    const ResourceEmitterOrientationPredicate& consumes_orientation_random_for_pulse) {
     ResourceEmitterSchedule result;
     if (emitters.empty() || maximum_pulses == 0U) return result;
     if (preferred_cycle_ticks < 2U) preferred_cycle_ticks = 2U;
@@ -406,7 +441,11 @@ ResourceEmitterSchedule build_resource_emitter_schedule(
             const uint32_t attachment_random = timing.consumes_attachment_random
                 ? resource_random_next_primary(state) : occurrence_counts[index];
             ++occurrence_counts[index];
-            const uint32_t orientation_random = timing.consumes_orientation_random
+            const bool consumes_orientation = consumes_orientation_random_for_pulse
+                ? consumes_orientation_random_for_pulse(static_cast<uint32_t>(index), next_tick,
+                      attachment_random)
+                : timing.consumes_orientation_random;
+            const uint32_t orientation_random = consumes_orientation
                 ? resource_random_next_primary(state) : 0U;
             result.pulses.push_back({static_cast<uint32_t>(index), next_tick,
                                      attachment_random, orientation_random});
@@ -506,8 +545,25 @@ uint32_t effect_tick_for_completed_frames(const EffectDefinitionRecord& definiti
     return static_cast<uint32_t>(std::max<uint64_t>(completed_frames, accumulator_ticks));
 }
 
+std::optional<uint32_t> effect_model_completion_tick(const EffectDefinitionRecord& definition) noexcept {
+    // Expiry unlinks the EFF before its callback; zero wraps on DEC. Kind 4 also
+    // requires motion/contact state and must not use this frame-only timer.
+    if (definition.transition_kind != 1U || definition.completion_countdown_ticks == 0U ||
+        definition.completion_countdown_ticks >= definition.runtime_value_0c) return std::nullopt;
+    return effect_tick_for_completed_frames(definition, definition.completion_countdown_ticks);
+}
+
 uint32_t effect_lifetime_ticks(const EffectDefinitionRecord& definition) noexcept {
     return effect_tick_for_completed_frames(definition, definition.runtime_value_0c);
+}
+
+std::optional<uint32_t> effect_linked_effect_spawn_tick(
+    const EffectDefinitionRecord& definition) noexcept {
+    if ((definition.transition_kind != 0U && definition.transition_kind != 1U) ||
+        definition.linked_effect_present == 0U || definition.linked_effect_id == 0U ||
+        definition.linked_effect_present >= definition.runtime_value_0c)
+        return std::nullopt;
+    return effect_tick_for_completed_frames(definition, definition.linked_effect_present);
 }
 
 uint8_t effect_alpha_at_age(const EffectDefinitionRecord& definition,
@@ -528,6 +584,45 @@ uint8_t effect_alpha_at_age(const EffectDefinitionRecord& definition,
         }
     }
     return 255U;
+}
+
+namespace {
+uint8_t retail_mmx_modulate_byte(uint8_t first, uint8_t second) noexcept {
+    const uint32_t first_q12 = (static_cast<uint32_t>(first) * 0x101U) >> 4U;
+    const uint32_t second_q12 = (static_cast<uint32_t>(second) * 0x101U) >> 4U;
+    return static_cast<uint8_t>(std::min(255U, (first_q12 * second_q12) >> 16U));
+}
+}
+
+uint32_t retail_modulate_argb_mmx(uint32_t first_argb, uint32_t second_argb) noexcept {
+    uint32_t result = 0U;
+    for (unsigned shift : {0U, 8U, 16U, 24U}) {
+        const auto first = static_cast<uint8_t>((first_argb >> shift) & 0xFFU);
+        const auto second = static_cast<uint8_t>((second_argb >> shift) & 0xFFU);
+        result |= static_cast<uint32_t>(retail_mmx_modulate_byte(first, second)) << shift;
+    }
+    return result;
+}
+
+uint32_t retail_ui_state_tint_argb(uint32_t runtime_flags) noexcept {
+    if ((runtime_flags & 0x04U) != 0U) return 0xFFFFFFFFU;
+    if ((runtime_flags & 0x08U) == 0U) return 0x00000000U;
+    return (runtime_flags & 0x10U) == 0U ? 0xFF878787U : 0x00FFFFFFU;
+}
+
+std::optional<uint32_t> retail_effect_model_tint_argb(
+    const EffectDefinitionRecord& definition, uint32_t age_ticks, uint32_t runtime_flags) noexcept {
+    if (definition.transition_kind == 4U) return std::nullopt;
+    if ((runtime_flags & 0x04U) == 0U) return 0x00FFFFFFU;
+    const uint32_t runtime_tint =
+        (static_cast<uint32_t>(effect_alpha_at_age(definition, age_ticks)) << 24U) | 0x00FFFFFFU;
+    return retail_modulate_argb_mmx(runtime_tint, definition.state_tint_argb);
+}
+
+std::array<uint32_t, 3> timed_effect_transition2_runtime_angles(uint32_t random_word) noexcept {
+    const uint32_t azimuth = random_word & 0xFFFFU;
+    const uint32_t elevation = (0x4000U - (random_word >> 20U)) & 0xFFFFU;
+    return {azimuth, elevation, azimuth};
 }
 
 std::array<float, 3> effect_transition2_displacement_at_age_angles(
@@ -583,19 +678,34 @@ std::array<float, 3> effect_transition2_displacement_at_age(
 std::vector<LinkedShotEmission> build_linked_shot_emissions(
     const EffectDefinitionRecord& definition) {
     std::vector<LinkedShotEmission> result;
-    if (definition.transition_kind != 1U || definition.linked_shot_present == 0U ||
-        definition.linked_shot_id == 0U) return result;
-    // EffectModelRuntimeMaintenance decrements the runtime counter at +0x10 once per
-    // 20 Hz maintenance update, reloads it from EFF +0x18, and increments the type-2
-    // attachment index after every emission. It is independent from sprite-frame advance.
-    const uint32_t cadence_ticks = definition.linked_shot_present;
-    const uint32_t lifetime_ticks = effect_lifetime_ticks(definition);
-    for (uint32_t tick = cadence_ticks, attachment = 0U; tick <= lifetime_ticks;
-         tick += cadence_ticks, ++attachment) {
+    // Presence/cadence is explicit; SHT registry ID0 is a valid laser.
+    if (definition.transition_kind != 1U || definition.linked_shot_present == 0U) return result;
+    // Retail transition kind 1 decrements linkedShotPresent only when the Q4 animation
+    // accumulator advances a sprite frame (iVar32 != 0), not on every 20 Hz maintenance tick.
+    // The frame that exhausts animationFramesRemaining unlinks and returns before transition
+    // dispatch, so a linked shot is never emitted on the terminal frame advance.
+    const uint32_t cadence_frames = definition.linked_shot_present;
+    if (definition.runtime_value_0c <= 1U) return result;
+    uint32_t attachment = 0U;
+    for (uint64_t completed_frames = cadence_frames;
+         completed_frames < definition.runtime_value_0c;
+         completed_frames += cadence_frames, ++attachment) {
+        const uint32_t tick = effect_tick_for_completed_frames(
+            definition, static_cast<uint32_t>(completed_frames));
         result.push_back({tick, attachment});
-        if (lifetime_ticks - tick < cadence_ticks) break;
+        if (completed_frames > std::numeric_limits<uint32_t>::max() - cadence_frames) break;
     }
     return result;
+}
+
+std::optional<uint32_t> linked_shot_parent_effect_spawn_tick(
+    uint32_t current_tick, uint32_t cycle_ticks, uint32_t pulse_spawn_tick,
+    uint32_t parent_age_tick) noexcept {
+    if (cycle_ticks == 0U || pulse_spawn_tick >= cycle_ticks || current_tick < parent_age_tick)
+        return std::nullopt;
+    const uint32_t parent_spawn_tick = current_tick - parent_age_tick;
+    if (parent_spawn_tick % cycle_ticks != pulse_spawn_tick) return std::nullopt;
+    return parent_spawn_tick;
 }
 
 uint32_t deterministic_resource_emitter_period(uint32_t base_ticks, uint32_t random_range_ticks,

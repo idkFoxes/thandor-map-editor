@@ -29,7 +29,7 @@ TechnologyAsset TechnologyAsset::parse(std::span<const std::byte> data) {
         for (uint32_t word = 0U; word < record.prerequisite_masks.size(); ++word)
             record.prerequisite_masks[word] = read_u32(data, offset + word * 4U);
         record.xenite_cost_q4 = read_u32(data, offset + 0x20U);
-        record.energy_cost_q4 = read_u32(data, offset + 0x24U);
+        record.energy_demand_q4 = read_u32(data, offset + 0x24U);
         record.research_duration_q5 = read_u32(data, offset + 0x28U);
         record.dependency_technology_id = read_u32(data, offset + 0x2CU);
         record.completion_message_resource_id = read_u32(data, offset + 0x30U);
@@ -60,6 +60,9 @@ const char* technology_category_name(TechnologyCategory category) noexcept {
 }
 
 const char* technology_category_retail_label(TechnologyCategory category) noexcept {
+    // In-game TEC group letter (TEC record +0x34): 0 has no letter, then A/B/C.
+    // This is separate from a factory/unit family and from AI pressure channel.
+    // Stock example: TEC15 "TANK Badger" is A; TEC75 "SP Crow" has no letter.
     switch (category) {
         case TechnologyCategory::Category0: return "-";
         case TechnologyCategory::Category1: return "A";

@@ -1,5 +1,8 @@
 #include "editor_app.hpp"
+#include "editor_paths.hpp"
+#include "editor_theme.hpp"
 #include "vulkan_context.hpp"
+#include "thandor/editor_version.hpp"
 
 #include <imgui.h>
 #include <GLFW/glfw3.h>
@@ -15,42 +18,54 @@
 #endif
 
 namespace {
-std::filesystem::path executable_directory() {
-#ifdef _WIN32
-    std::wstring path(32768, L'\0');
-    const auto length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
-    if (length == 0 || length >= path.size()) return std::filesystem::current_path();
-    path.resize(length);
-    return std::filesystem::path(path).parent_path();
-#else
-    std::error_code error;
-    const auto path = std::filesystem::read_symlink("/proc/self/exe", error);
-    return error ? std::filesystem::current_path() : path.parent_path();
-#endif
-}
 
 int run(int argc, char** argv) {
-    auto root = executable_directory();
+    if (argc == 2 && std::string(argv[1]) == "--version") {
+        std::cout << thandor::kEditorBuildLabel << '\n';
+        return 0;
+    }
+    auto root = editor::default_game_root();
+    bool print_game_root=false;
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
-        if (argument == "--root" && i + 1 < argc) root = argv[++i];
+        if (argument == "--root" && i + 1 < argc) {
+            root = argv[++i];
+            if(root.is_relative())root=editor::invocation_directory()/root;
+        }
+        else if(argument=="--print-game-root")print_game_root=true;
         else if (argument == "--help") {
-            std::cout << "Usage: thandor-map-editor [--root <Thandor game directory>]\n";
+            std::cout << "Usage: thandor-map-editor [--root <Thandor game directory>] [--version] [--print-game-root]\n";
             return 0;
         }
     }
+    if(print_game_root) {
+        if(!editor::contains_game_files(root))
+            throw std::runtime_error("No game.exe/thandor.exe and PCK archives found. Put them beside the AppImage or use --root <game directory>.");
+        std::cout << root.lexically_normal().string() << '\n';
+        return 0;
+    }
+#ifdef _WIN32
+    // Resolve dynamically so older Windows releases can still use GLFW's fallback.
+    if(const auto user32=GetModuleHandleW(L"user32.dll")){
+        using SetDpiContext=BOOL(WINAPI*)(HANDLE);
+        if(const auto set_context=reinterpret_cast<SetDpiContext>(GetProcAddress(user32,"SetProcessDpiAwarenessContext")))
+            set_context(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4))); // per-monitor v2
+    }
+#endif
     if (glfwInit() != GLFW_TRUE) throw std::runtime_error("glfwInit failed");
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-    GLFWwindow* window = glfwCreateWindow(1600, 960, "Thandor Vulkan Map Editor", nullptr, nullptr);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+#ifdef GLFW_COCOA_RETINA_FRAMEBUFFER
+    glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
+#endif
+    GLFWwindow* window = glfwCreateWindow(1600, 960, thandor::kEditorWindowTitle, nullptr, nullptr);
     if (!window) { glfwTerminate(); throw std::runtime_error("glfwCreateWindow failed"); }
     try {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         // Keyboard arrows are reserved for map-camera positioning unless an ImGui widget is active.
-        ImGui::StyleColorsDark();
-        ImGui::GetStyle().WindowRounding = 4.0F;
-        ImGui::GetStyle().FrameRounding = 3.0F;
+        editor::apply_editor_theme();
         editor::VulkanContext vulkan(window);
         vulkan.initialize_imgui();
         editor::EditorApp app(window, vulkan, root);

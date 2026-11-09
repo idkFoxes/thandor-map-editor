@@ -13,6 +13,28 @@ inline constexpr uint32_t kObjectVertexSimulatedBuildingBit = 1U << 2U;
 inline constexpr uint32_t kObjectVertexSimulatedUnitBit = 1U << 3U;
 inline constexpr uint32_t kObjectVertexAuthoredAnimatedUnitBit = 1U << 4U;
 inline constexpr uint32_t kObjectVertexContinuousRadarBit = 1U << 5U;
+// Editor-only static-copy suppression while fog preview routes a placement through the dynamic
+// current-visibility path. It applies to scenery as well as units/buildings.
+inline constexpr uint32_t kObjectVertexFogDynamicReplacementBit = 1U << 6U;
+
+// The editor exposes timed-effect and authored-building animation as separate preview controls.
+// Retail ArmyRuntime_UpdateTimedShotAndEffectEmitters services a static class-4 building such as
+// the Special Research Lab even though that ARM has no authored child animation to advance.  Only
+// effects owned by a building that actually has authored model-subnode animation are coupled to
+// the building-animation preview toggle (the Headquarters smoke/radar case recovered in G368).
+inline constexpr bool timed_effect_requires_building_animation(
+    bool owner_is_building, bool owner_has_authored_model_animation) noexcept {
+    return owner_is_building && owner_has_authored_model_animation;
+}
+
+inline constexpr bool timed_effect_preview_enabled(
+    bool owner_is_building, bool owner_has_authored_model_animation,
+    bool animate_timed_effects, bool animate_buildings, bool runtime_preview_active) noexcept {
+    return animate_timed_effects &&
+        (!timed_effect_requires_building_animation(owner_is_building,
+                                                   owner_has_authored_model_animation) ||
+         animate_buildings || runtime_preview_active);
+}
 
 struct SimulationRenderPolicy {
     bool is_building{};

@@ -2,6 +2,8 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -16,6 +18,16 @@ enum class ShotTrajectoryMode : int32_t {
 };
 
 const char* shot_trajectory_mode_name(ShotTrajectoryMode mode) noexcept;
+
+struct ShotLineOfFirePolicy {
+    bool test_terrain{};
+    bool test_models{};
+};
+
+// V530 ArmyWeaponRuntime_TestTargetLineOfFireCf surface selection. Ballistic shots test model
+// candidates but do not terrain-raycast; fixed-range shots bypass both collision queries; direct
+// and lead-adjusted shots use both. Angular/range acceptance remains handled by weapon simulation.
+ShotLineOfFirePolicy shot_line_of_fire_policy(ShotTrajectoryMode mode) noexcept;
 
 enum class EffectLifecycleTransitionKind : uint32_t {
     SpawnLinkedEffectAfterCountdown = 0,
@@ -68,12 +80,14 @@ struct ShotDefinitionRecord {
     uint32_t state_tint_argb{};
     uint32_t positioned_sound_gain_q15{};
     uint32_t positioned_sound_maximum_distance_q12{};
+    // SHT+0x290 is the raw guidance turn-limit angle. The legacy API name is
+    // retained; nonzero also bypasses unguided LOS pitch/pre-lead checks.
     uint32_t mode3_lead_disabled{};
     std::array<uint32_t, 31> terrain_impact_effect_ids{};
-    // SHT +0xE0..+0x15B is a 31-entry parallel owner/address-storage array passed
-    // by address when the corresponding terrain-impact EFF is spawned. Payload semantics
-    // remain opaque, so the editor preserves these values without treating them as pointers.
+    // SHT +0xE0 holds signed height amplitudes. Native passes the address of
+    // the selected entry to the effect, with radius and material in parallel columns.
     std::array<uint32_t, 31> terrain_impact_effect_owner_slots{};
+    std::array<int32_t, 31> terrain_impact_radii_q12{};
     // SHT +0x1E0 is a signed 31-entry terrain-material reference array. Negative values are
     // valid sentinels; non-negative values must be below the retail 26-material limit.
     std::array<int32_t, 31> terrain_material_indices{};
@@ -81,6 +95,12 @@ struct ShotDefinitionRecord {
 
     ShotTrajectoryMode trajectory_kind() const noexcept {
         return static_cast<ShotTrajectoryMode>(trajectory_mode);
+    }
+    bool is_repair_or_recovery_shot() const noexcept {
+        return target_impact_damage_q12[0] < 0;
+    }
+    uint32_t positioned_sound_table_index() const noexcept {
+        return terrain_grid_mask_index > 0 ? static_cast<uint32_t>(terrain_grid_mask_index) : 0U;
     }
     uint32_t terrain_impact_effect_id(uint32_t material_index) const noexcept {
         return material_index < terrain_impact_effect_ids.size()
@@ -96,6 +116,11 @@ struct ShotDefinitionRecord {
 // target-selection information. The result remains in the game's Q12 distance domain.
 int32_t shot_selection_range_q12(const ShotDefinitionRecord& definition) noexcept;
 float shot_selection_range_world(const ShotDefinitionRecord& definition) noexcept;
+
+// V530 ArmyWeaponRuntime_TestTargetLineOfFireCf uses a distinct direct/lead acceptance range:
+// launchSpeedQ12 * (projectileLifetimeTicks + rampBiasTicks - 1). Ballistic and fixed-range
+// trajectories do not use this branch, so they return std::nullopt rather than a fabricated limit.
+std::optional<int32_t> shot_line_of_fire_range_q12(const ShotDefinitionRecord& definition) noexcept;
 
 struct ShotTerrainMaterialValidation {
     uint32_t sentinel_count{};
@@ -129,6 +154,7 @@ struct EffectDefinitionRecord {
     // Transition-state movement speed loaded from EFF +0x20. State 2 advances the
     // effect model in the randomized azimuth/elevation direction by this Q12 value each tick.
     int32_t movement_speed_q12{};
+    uint32_t completion_countdown_ticks{}; // EFF +0x24 owner completion countdown.
     int32_t terrain_grid_mask_index{};
     uint32_t creation_flags{};
     uint32_t shading_color_argb{};
@@ -145,12 +171,20 @@ struct EffectDefinitionRecord {
     // They are tick counts, not frame indices.
     uint32_t alpha_fade_in_ticks{};
     uint32_t alpha_fade_out_ticks{};
+    uint32_t terrain_pitch_drop_per_age_squared{};
+    uint32_t terrain_contact_alpha_fade_step{};
     uint32_t state_tint_argb{};
     int32_t model_scale_x_q12{};
     int32_t model_scale_y_q12{};
     uint32_t positioned_sound_argument0{};
     uint32_t positioned_sound_argument1{};
     std::string sprite_path;
+
+    uint32_t positioned_sound_table_index() const noexcept {
+        return terrain_grid_mask_index > 0 ? static_cast<uint32_t>(terrain_grid_mask_index) : 0U;
+    }
+    uint32_t positioned_sound_gain_q15() const noexcept { return positioned_sound_argument0; }
+    uint32_t positioned_sound_maximum_distance_q12() const noexcept { return positioned_sound_argument1; }
 
     EffectLifecycleTransitionKind lifecycle_transition_kind() const noexcept {
         return static_cast<EffectLifecycleTransitionKind>(transition_kind);
@@ -227,9 +261,13 @@ struct ResourceEmitterSchedule {
 // initial map resource emits at tick zero.  Each later event consumes the shared primary RNG for
 // its 80..89 tick interval and once more for the type-6 attachment selector, even when only one
 // attachment exists.  The LEV does not persist the live RNG state, so the editor exposes the seed.
+using ResourceEmitterOrientationPredicate =
+    std::function<bool(uint32_t emitter_index, uint32_t spawn_tick, uint32_t attachment_selector)>;
+
 ResourceEmitterSchedule build_resource_emitter_schedule(
     std::span<const ResourceEmitterTiming> emitters, uint32_t primary_rng_seed,
-    uint32_t preferred_cycle_ticks = 2048U, uint32_t maximum_pulses = 256U);
+    uint32_t preferred_cycle_ticks = 2048U, uint32_t maximum_pulses = 256U,
+    const ResourceEmitterOrientationPredicate& consumes_orientation_random_for_pulse = {});
 
 struct DamageEffectTiming {
     uint32_t base_cooldown_ticks{};
@@ -274,18 +312,46 @@ DamageEffectSchedule build_damage_effect_schedule_for_attachment_keys(
 // advances at most one texture frame per update. These helpers preserve that bounded recurrence.
 uint32_t effect_frame_index_at_age(const EffectDefinitionRecord& definition,
                                    uint32_t age_ticks) noexcept;
+std::optional<uint32_t> effect_model_completion_tick(const EffectDefinitionRecord& definition) noexcept;
+
 uint32_t effect_lifetime_ticks(const EffectDefinitionRecord& definition) noexcept;
 uint32_t effect_tick_for_completed_frames(const EffectDefinitionRecord& definition,
                                           uint32_t completed_frames) noexcept;
+// Transition states 0 and 1 decrement linkedEffectPresent only on completed sprite-frame
+// advances. The frame that exhausts animationFramesRemaining unlinks before transition dispatch,
+// so an authored countdown that lands on or beyond the terminal frame produces no linked effect.
+std::optional<uint32_t> effect_linked_effect_spawn_tick(
+    const EffectDefinitionRecord& definition) noexcept;
 // Exact runtime alpha used by EffectModelRuntimeMaintenance. The returned byte is multiplied
 // with the serialized state-tint alpha before the texture alpha participates in blending.
 uint8_t effect_alpha_at_age(const EffectDefinitionRecord& definition,
                             uint32_t age_ticks) noexcept;
 
+// Exact packed-byte modulation used by retail effect/shot state-tint maintenance. i386 MMX
+// duplicates each byte into a word, shifts Q8.8 by four, PMULHW-multiplies the two Q12 lanes,
+// then PACKUSWB-saturates back to ARGB8. This is intentionally not generic float x/255 math.
+uint32_t retail_modulate_argb_mmx(uint32_t first_argb, uint32_t second_argb) noexcept;
+
+// UiNode_GetStateTintArgb @ 0x004BD160. Bits 0x04/0x08/0x10 select the exact packed state
+// tint before model/effect-specific composition.
+uint32_t retail_ui_state_tint_argb(uint32_t runtime_flags) noexcept;
+
+// Non-transition-4 EffectModelRuntimeMaintenance_UpdateLifecycleTintScaleAndTransitions tint
+// result. Bit 0x04 is the retail render-state gate: when clear the model becomes transparent
+// white; when set, the runtime fade ARGB is MMX-modulated by EFF +0x60. Transition kind 4 has
+// a contact-driven alpha state machine and is deliberately excluded from this helper.
+std::optional<uint32_t> retail_effect_model_tint_argb(
+    const EffectDefinitionRecord& definition, uint32_t age_ticks, uint32_t runtime_flags) noexcept;
+
 // Transition state 2 calls the retail fixed-angle vector builder with runtime
 // {worldRotationAngle0, worldRotationAngle1, EFF +0x20} every 20 Hz update, then eases
 // worldRotationAngle1 toward 0x4000 with (angle*63 + 0x4000) >> 6. This overload is the exact
 // angle-state form used by damage-state effects and other callers that know the runtime angles.
+// ArmyRuntime_UpdateTimedShotAndEffectEmitters consumes one RNG dword for transition-kind-2
+// timed EFF creation. game.exe uses its low 16 bits for worldRotationAngle0 and angle2, while
+// worldRotationAngle1 is 0x4000 minus the high 12 bits.
+std::array<uint32_t, 3> timed_effect_transition2_runtime_angles(uint32_t random_word) noexcept;
+
 std::array<float, 3> effect_transition2_displacement_at_age_angles(
     const EffectDefinitionRecord& definition, uint32_t age_ticks,
     uint32_t world_rotation_angle0, uint32_t world_rotation_angle1) noexcept;
@@ -306,12 +372,21 @@ struct LinkedShotEmission {
     uint32_t attachment_index{};
 };
 
-// Transition state 1 decrements linkedShotPresent once per 20 Hz maintenance tick, reloads the
-// counter after each emission, resolves the next type-2 attachment, and creates linkedShotId.
-// Sprite-frame timing is independent. Invisible controller EFF records must therefore continue
-// processing this sequence even when their SPR contains no triangles.
+// Transition state 1 decrements linkedShotPresent only when the Q4 animation accumulator
+// advances a sprite frame. After each emission it reloads the frame-countdown, resolves the next
+// type-2 attachment, and creates linkedShotId. The terminal frame unlinks before transition
+// dispatch, so it cannot emit another linked shot. Invisible controller EFF records must still
+// process this sequence even when their SPR contains no triangles.
 std::vector<LinkedShotEmission> build_linked_shot_emissions(
     const EffectDefinitionRecord& definition);
+
+// Resolve the absolute parent EffectRuntime spawn tick for a linked-shot emission observed on
+// current_tick. The deterministic resource-emitter schedule repeats by cycle_ticks, while the
+// EffectRuntime itself is detached and persists from its original pulse pose. A result is returned
+// only when current_tick-parent_age_tick lands on this schedule pulse's spawn phase.
+std::optional<uint32_t> linked_shot_parent_effect_spawn_tick(
+    uint32_t current_tick, uint32_t cycle_ticks, uint32_t pulse_spawn_tick,
+    uint32_t parent_age_tick) noexcept;
 
 // Compatibility helpers retained for G339 source users.
 uint32_t deterministic_resource_emitter_period(uint32_t base_ticks, uint32_t random_range_ticks,

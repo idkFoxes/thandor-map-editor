@@ -33,6 +33,7 @@ private:
 
 enum class AiKnowledgeValueDomain : std::uint8_t {
     Q12Distance,
+    Q4Amount,
     Weight,
     Coefficient,
     CountLimit,
@@ -44,15 +45,34 @@ struct AiKnowledgeParameterSemantic {
     std::uint8_t index{};
     // Exact conservative V417 identifier recovered from the direct-index consumer equations.
     std::string_view identifier;
-    // Short label for editor presentation; it intentionally does not add semantics to identifier.
+    // Human-readable original-KI label; technical identifiers remain stable for provenance.
     std::string_view label;
     AiKnowledgeValueDomain domain{AiKnowledgeValueDomain::Scalar};
 };
 
-// V417 closes all 43 currently proven direct-index KI.DAT semantics. Indices not present in this
-// table remain raw. The underlying packedParameters[128] image is intentionally unchanged.
+// 62 named fields: 45 from the prior GZF census plus 17 from the current game source.
+// Three older class-142 coefficients were renamed after cross-checking the game.
+// Other indices remain raw; the 128-dword binary image is unchanged.
 std::span<const AiKnowledgeParameterSemantic> known_ai_knowledge_semantics() noexcept;
 const AiKnowledgeParameterSemantic* find_ai_knowledge_semantic(std::size_t index) noexcept;
 const char* ai_knowledge_value_domain_name(AiKnowledgeValueDomain domain) noexcept;
+struct AiWorkspaceDescription {
+    std::uint8_t index{};
+    std::string_view name;
+    std::string_view purpose;
+};
+std::span<const AiWorkspaceDescription> original_ai_workspace_descriptions() noexcept;
+
+struct AiKnowledgeConsumerReference {
+    std::uint8_t index{};
+    std::uint32_t function_address{};
+    std::string_view function_name;
+};
+
+// Fresh V530 GZF census: every named KI semantic is tied to one or more direct consumer
+// functions. The C export was used only to locate candidates; addresses/names were re-dumped
+// from the accepted GZF with Ghidra 12.1.2.
+std::span<const AiKnowledgeConsumerReference> known_ai_knowledge_consumers() noexcept;
+std::span<const AiKnowledgeConsumerReference> ai_knowledge_consumers(std::size_t index) noexcept;
 
 } // namespace thandor

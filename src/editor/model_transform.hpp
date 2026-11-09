@@ -1,6 +1,8 @@
 #pragma once
 
 #include "thandor/field.hpp"
+#include "thandor/retail_contact.hpp"
+#include "thandor/simulation.hpp"
 #include "thandor/semantic_types.hpp"
 
 #include <array>
@@ -33,21 +35,9 @@ inline ModelHierarchyTransform fixed_model_rotation_basis(
     // FixedTransform_BuildRotationBasis's formal {angle0, angle1, angle2}.
     // The field-to-formal permutation is essential; treating the field suffixes as the formal
     // parameter names collapses cardinal child rotations and breaks placed model hierarchies.
-    const float angle0 = model_turn32_to_radians(runtime_angle2);
-    const float angle1 = model_turn32_to_radians(runtime_angle1);
-    const float angle2 = model_turn32_to_radians(runtime_angle0);
-    const float angle0_minus_2angle2 = angle0 - 2.0F * angle2;
-    const float sin_angle1 = std::sin(angle1);
-    const float d = (std::cos(angle0) - std::cos(angle0_minus_2angle2)) * 0.5F;
-    const float c = (std::cos(angle0) + std::cos(angle0_minus_2angle2)) * 0.5F;
-    const float s = (std::sin(angle0) + std::sin(angle0_minus_2angle2)) * 0.5F;
-    const float t = (std::sin(angle0_minus_2angle2) - std::sin(angle0)) * 0.5F;
+    const auto fixed=thandor::retail_model_basis_q28(runtime_angle2.value(),runtime_angle1.value(),runtime_angle0.value());
     ModelHierarchyTransform result;
-    result.basis = {
-        d + c * sin_angle1, t - s * sin_angle1, std::cos(angle1) * std::cos(angle2),
-        s - t * sin_angle1, d * sin_angle1 + c, std::cos(angle1) * std::sin(angle2),
-        -std::cos(angle1) * std::cos(angle0 - angle2),
-        std::cos(angle1) * std::sin(angle0 - angle2), std::sin(angle1)};
+    for(size_t i=0;i<9;++i)result.basis[i]=float(fixed[i])/268435456.F;
     return result;
 }
 
@@ -76,6 +66,7 @@ struct PlacementContactPose {
     Vec3f normal{0.0F, 0.0F, 1.0F};
     bool align_to_normal{};
     bool exact_callback{};
+    std::optional<uint32_t> packed_normal_angles{};
 };
 
 inline const char* placement_contact_kind_name(int32_t kind) noexcept {
@@ -114,7 +105,13 @@ inline PlacementContactPose resolve_placement_contact_pose(
 }
 
 inline ModelHierarchyTransform terrain_contact_root_transform(
-    Vec3f position, float yaw, Vec3f normal) noexcept {
+    Vec3f position, float yaw, Vec3f normal, std::optional<uint32_t> packed={}) noexcept {
+    if(packed){
+        ModelHierarchyTransform result;result.translation=position;
+        const auto basis=thandor::retail_model_basis_q28(thandor::radians_to_turn16(yaw),*packed>>16,*packed&65535);
+        for(size_t i=0;i<9;++i)result.basis[i]=float(basis[i])/268435456.F;
+        return result;
+    }
     const float normal_length = std::sqrt(normal.x * normal.x + normal.y * normal.y +
                                           normal.z * normal.z);
     if (normal_length <= 1.0e-8F)

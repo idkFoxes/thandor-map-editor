@@ -48,7 +48,9 @@ struct TechnologyRecord {
     uint32_t technology_id{};
     std::array<uint32_t, 8> prerequisite_masks{};
     uint32_t xenite_cost_q4{};
-    uint32_t energy_cost_q4{};
+    // TEC +0x24 is active research Energy demand. Research pays Xenite once, then adds this
+    // Q4 demand until completion; it is not a Tritium payment.
+    uint32_t energy_demand_q4{};
     uint32_t research_duration_q5{};
     uint32_t dependency_technology_id{};
     uint32_t completion_message_resource_id{};

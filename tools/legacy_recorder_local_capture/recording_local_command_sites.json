@@ -1,0 +1,3548 @@
+{
+  "retail_exe_sha256": "53d097963e0b99c92b3b635255373d83f8b2ae5f65451ec76a11ff41588bd969",
+  "source_addresses_sha256": "cf6946598257b14df829fa2be79fa72ba7864bb3629a3ef8b8363a6389bc414d",
+  "handlers": [
+    {
+      "name": "InGameCommand_HandlePlayerDeparture",
+      "address": 5632640,
+      "code": 336,
+      "size": 5,
+      "bytes": "5053515755",
+      "instructions": [
+        [
+          5632640,
+          "50",
+          "push   eax"
+        ],
+        [
+          5632641,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5632642,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5632643,
+          "57",
+          "push   edi"
+        ],
+        [
+          5632644,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "UiCommandRuntimeFlags_ApplyClearSetToggleMasks",
+      "address": 5633088,
+      "code": 784,
+      "size": 6,
+      "bytes": "5051525589e5",
+      "instructions": [
+        [
+          5633088,
+          "50",
+          "push   eax"
+        ],
+        [
+          5633089,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5633090,
+          "52",
+          "push   edx"
+        ],
+        [
+          5633091,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5633092,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerRuntime_SetSlowRenderingFlagById",
+      "address": 5633136,
+      "code": 832,
+      "size": 6,
+      "bytes": "5051525589e5",
+      "instructions": [
+        [
+          5633136,
+          "50",
+          "push   eax"
+        ],
+        [
+          5633137,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5633138,
+          "52",
+          "push   edx"
+        ],
+        [
+          5633139,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5633140,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "InGameCommand_TogglePauseRequest",
+      "address": 5633184,
+      "code": 880,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5633184,
+          "50",
+          "push   eax"
+        ],
+        [
+          5633185,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5633186,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5633187,
+          "52",
+          "push   edx"
+        ],
+        [
+          5633188,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "InGameSimulationSpeed_AdjustPlayerAndRecomputeMinimumTicks",
+      "address": 5633312,
+      "code": 1008,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5633312,
+          "50",
+          "push   eax"
+        ],
+        [
+          5633313,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5633314,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5633315,
+          "52",
+          "push   edx"
+        ],
+        [
+          5633316,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerRuntime_MarkResultsReadyAndUpdateContinueButton",
+      "address": 5633440,
+      "code": 1136,
+      "size": 5,
+      "bytes": "5053515256",
+      "instructions": [
+        [
+          5633440,
+          "50",
+          "push   eax"
+        ],
+        [
+          5633441,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5633442,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5633443,
+          "52",
+          "push   edx"
+        ],
+        [
+          5633444,
+          "56",
+          "push   esi"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerRuntime_IncrementReadyCountAndResolveConsensus",
+      "address": 5633664,
+      "code": 1360,
+      "size": 6,
+      "bytes": "5051575589e5",
+      "instructions": [
+        [
+          5633664,
+          "50",
+          "push   eax"
+        ],
+        [
+          5633665,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5633666,
+          "57",
+          "push   edi"
+        ],
+        [
+          5633667,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5633668,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "GameFactionRuntime_AdvancePairwiseRelationState",
+      "address": 5633936,
+      "code": 1632,
+      "size": 6,
+      "bytes": "5051565589e5",
+      "instructions": [
+        [
+          5633936,
+          "50",
+          "push   eax"
+        ],
+        [
+          5633937,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5633938,
+          "56",
+          "push   esi"
+        ],
+        [
+          5633939,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5633940,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "GameFactionRuntime_ResetPairwiseRelationState",
+      "address": 5634320,
+      "code": 2016,
+      "size": 6,
+      "bytes": "5051565589e5",
+      "instructions": [
+        [
+          5634320,
+          "50",
+          "push   eax"
+        ],
+        [
+          5634321,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5634322,
+          "56",
+          "push   esi"
+        ],
+        [
+          5634323,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5634324,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "InGameSelection_SelectAllOwnAircraftPads",
+      "address": 5634592,
+      "code": 2288,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5634592,
+          "50",
+          "push   eax"
+        ],
+        [
+          5634593,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5634594,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5634595,
+          "52",
+          "push   edx"
+        ],
+        [
+          5634596,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerRuntime_AssignModelTokenAndRefreshSelection",
+      "address": 5634768,
+      "code": 2464,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5634768,
+          "50",
+          "push   eax"
+        ],
+        [
+          5634769,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5634770,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5634771,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "InGamePlayerSelection_ReplaceWithArmyRuntimeIndex",
+      "address": 5634864,
+      "code": 2560,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5634864,
+          "50",
+          "push   eax"
+        ],
+        [
+          5634865,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5634866,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5634867,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerSelection_InsertThreeEntriesAndRefresh",
+      "address": 5634960,
+      "code": 2656,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5634960,
+          "50",
+          "push   eax"
+        ],
+        [
+          5634961,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5634962,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5634963,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerSelection_RemoveThreeEntriesAndRefresh",
+      "address": 5635120,
+      "code": 2816,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5635120,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635121,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635122,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5635123,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerSelection_ClearAndRefreshLocalPanels",
+      "address": 5635280,
+      "code": 2976,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5635280,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635281,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635282,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5635283,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerSelection_TransferFactionGroupWithModeAndRefresh",
+      "address": 5635344,
+      "code": 3040,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5635344,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635345,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635346,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5635347,
+          "52",
+          "push   edx"
+        ],
+        [
+          5635348,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "InGamePlayerSelection_ApplyMoveCommand",
+      "address": 5635696,
+      "code": 3392,
+      "size": 6,
+      "bytes": "5053525589e5",
+      "instructions": [
+        [
+          5635696,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635697,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635698,
+          "52",
+          "push   edx"
+        ],
+        [
+          5635699,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5635700,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "InGamePlayerSelection_ApplyPositionCommand",
+      "address": 5635744,
+      "code": 3440,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5635744,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635745,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635746,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5635747,
+          "52",
+          "push   edx"
+        ],
+        [
+          5635748,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "InGamePlayerSelection_SelectArmyRuntimeIndex",
+      "address": 5635792,
+      "code": 3488,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5635792,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635793,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635794,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5635795,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "InGamePlayerSelection_ApplyTargetPositionCommand",
+      "address": 5635856,
+      "code": 3552,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5635856,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635857,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635858,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5635859,
+          "52",
+          "push   edx"
+        ],
+        [
+          5635860,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerSelection_ResetMovementPruneAndRecenterEntries",
+      "address": 5635904,
+      "code": 3600,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5635904,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635905,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635906,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5635907,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerSelection_StopMovement",
+      "address": 5635936,
+      "code": 3632,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5635936,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635937,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635938,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5635939,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerSelection_CancelTargets",
+      "address": 5635968,
+      "code": 3664,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5635968,
+          "50",
+          "push   eax"
+        ],
+        [
+          5635969,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5635970,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5635971,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerSelection_SelfDestruct",
+      "address": 5636000,
+      "code": 3696,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5636000,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636001,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636002,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5636003,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "InGameSelection_SetAircraftPadTargetLane1",
+      "address": 5636032,
+      "code": 3728,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5636032,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636033,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636034,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5636035,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "InGameSelection_SetAircraftPadTargetLane2",
+      "address": 5636080,
+      "code": 3776,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5636080,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636081,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636082,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5636083,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "SelectionMarkerCoordinates_ApplyType3",
+      "address": 5636128,
+      "code": 3824,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5636128,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636129,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636130,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5636131,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "SelectionMarkerCoordinates_ApplyType4",
+      "address": 5636176,
+      "code": 3872,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5636176,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636177,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636178,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5636179,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "SelectionMarkerCoordinates_ApplyType5",
+      "address": 5636224,
+      "code": 3920,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5636224,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636225,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636226,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5636227,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "SelectionMarkerCoordinates_ApplyType6",
+      "address": 5636272,
+      "code": 3968,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5636272,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636273,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636274,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5636275,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "SelectionMarkerCoordinates_ApplyType7",
+      "address": 5636320,
+      "code": 4016,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5636320,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636321,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636322,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5636323,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "GameFactionRuntime_RegisterArmyAssetPointers",
+      "address": 5636368,
+      "code": 4064,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5636368,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636369,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636370,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5636371,
+          "52",
+          "push   edx"
+        ],
+        [
+          5636372,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "GameFactionRuntime_CancelQueuedArmyAssetsAndRefund",
+      "address": 5636448,
+      "code": 4144,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5636448,
+          "50",
+          "push   eax"
+        ],
+        [
+          5636449,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5636450,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5636451,
+          "52",
+          "push   edx"
+        ],
+        [
+          5636452,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "GameFactionRuntime_RemoveArmyAssetAndStagePlayerTransfer",
+      "address": 5637120,
+      "code": 4816,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5637120,
+          "50",
+          "push   eax"
+        ],
+        [
+          5637121,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5637122,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5637123,
+          "52",
+          "push   edx"
+        ],
+        [
+          5637124,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "InGameCommand_ExecuteLocalPlacementFromSelection",
+      "address": 5637328,
+      "code": 5024,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5637328,
+          "50",
+          "push   eax"
+        ],
+        [
+          5637329,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5637330,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5637331,
+          "52",
+          "push   edx"
+        ],
+        [
+          5637332,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "GameFactionRuntime_ConsumePendingArmyAssetAndRefreshGrid",
+      "address": 5637664,
+      "code": 5360,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5637664,
+          "50",
+          "push   eax"
+        ],
+        [
+          5637665,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5637666,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5637667,
+          "52",
+          "push   edx"
+        ],
+        [
+          5637668,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "GameFactionRuntime_SellArmyAssetAndRefundSevenEighths",
+      "address": 5637792,
+      "code": 5488,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5637792,
+          "50",
+          "push   eax"
+        ],
+        [
+          5637793,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5637794,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5637795,
+          "52",
+          "push   edx"
+        ],
+        [
+          5637796,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerRuntime_AssignModelAndArmyTokensAndRefreshLocalPanel",
+      "address": 5637968,
+      "code": 5664,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5637968,
+          "50",
+          "push   eax"
+        ],
+        [
+          5637969,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5637970,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5637971,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerRuntime_AssignTechnologyBuildingAndHoldUnpaidResearch",
+      "address": 5638112,
+      "code": 5808,
+      "size": 6,
+      "bytes": "5053515589e5",
+      "instructions": [
+        [
+          5638112,
+          "50",
+          "push   eax"
+        ],
+        [
+          5638113,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5638114,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5638115,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5638116,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerRuntime_ClearArmyTokenAndRestoreOrApplyTechnology",
+      "address": 5638192,
+      "code": 5888,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5638192,
+          "50",
+          "push   eax"
+        ],
+        [
+          5638193,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5638194,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5638195,
+          "52",
+          "push   edx"
+        ],
+        [
+          5638196,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerTextCommand_SetPackedState",
+      "address": 5638304,
+      "code": 6000,
+      "size": 6,
+      "bytes": "5053525589e5",
+      "instructions": [
+        [
+          5638304,
+          "50",
+          "push   eax"
+        ],
+        [
+          5638305,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5638306,
+          "52",
+          "push   edx"
+        ],
+        [
+          5638307,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5638308,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerTextCommand_AppendTripleClamped",
+      "address": 5638352,
+      "code": 6048,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5638352,
+          "50",
+          "push   eax"
+        ],
+        [
+          5638353,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5638354,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5638355,
+          "52",
+          "push   edx"
+        ],
+        [
+          5638356,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerTextCommand_PublishConditionalRichText",
+      "address": 5638464,
+      "code": 6160,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5638464,
+          "50",
+          "push   eax"
+        ],
+        [
+          5638465,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5638466,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5638467,
+          "52",
+          "push   edx"
+        ],
+        [
+          5638468,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "InGameUiCommandRuntime_ApplyInteractionSubsystemActiveState",
+      "address": 5638640,
+      "code": 6336,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5638640,
+          "50",
+          "push   eax"
+        ],
+        [
+          5638641,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5638642,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5638643,
+          "52",
+          "push   edx"
+        ],
+        [
+          5638644,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerPairList_InsertRange",
+      "address": 5639728,
+      "code": 7424,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5639728,
+          "50",
+          "push   eax"
+        ],
+        [
+          5639729,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5639730,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5639731,
+          "52",
+          "push   edx"
+        ],
+        [
+          5639732,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerPairList_RemoveRange",
+      "address": 5639792,
+      "code": 7488,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5639792,
+          "50",
+          "push   eax"
+        ],
+        [
+          5639793,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5639794,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5639795,
+          "52",
+          "push   edx"
+        ],
+        [
+          5639796,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerPairList_InsertUnique",
+      "address": 5639856,
+      "code": 7552,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5639856,
+          "50",
+          "push   eax"
+        ],
+        [
+          5639857,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5639858,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5639859,
+          "52",
+          "push   edx"
+        ],
+        [
+          5639860,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerPairList_RemoveFirstMatch",
+      "address": 5640016,
+      "code": 7712,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5640016,
+          "50",
+          "push   eax"
+        ],
+        [
+          5640017,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5640018,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5640019,
+          "52",
+          "push   edx"
+        ],
+        [
+          5640020,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "SelectionPlayerRuntime_ClearTerrainEditSelectionState",
+      "address": 5640192,
+      "code": 7888,
+      "size": 6,
+      "bytes": "5053525589e5",
+      "instructions": [
+        [
+          5640192,
+          "50",
+          "push   eax"
+        ],
+        [
+          5640193,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5640194,
+          "52",
+          "push   edx"
+        ],
+        [
+          5640195,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5640196,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_ClearPlayerScratchPlane",
+      "address": 5640272,
+      "code": 7968,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5640272,
+          "50",
+          "push   eax"
+        ],
+        [
+          5640273,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5640274,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5640275,
+          "52",
+          "push   edx"
+        ],
+        [
+          5640276,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_ApplyPositiveCellDeltas",
+      "address": 5640352,
+      "code": 8048,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5640352,
+          "50",
+          "push   eax"
+        ],
+        [
+          5640353,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5640354,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5640355,
+          "52",
+          "push   edx"
+        ],
+        [
+          5640356,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_ApplyNegativeCellDeltas",
+      "address": 5641152,
+      "code": 8848,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5641152,
+          "50",
+          "push   eax"
+        ],
+        [
+          5641153,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5641154,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5641155,
+          "52",
+          "push   edx"
+        ],
+        [
+          5641156,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "TerrainEditBuffer_CommitHeightDeltasAndRefreshLighting",
+      "address": 5641936,
+      "code": 9632,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5641936,
+          "50",
+          "push   eax"
+        ],
+        [
+          5641937,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5641938,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5641939,
+          "52",
+          "push   edx"
+        ],
+        [
+          5641940,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "TerrainEditBuffer_CopyCellMaterialBytes",
+      "address": 5642288,
+      "code": 9984,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5642288,
+          "50",
+          "push   eax"
+        ],
+        [
+          5642289,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5642290,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5642291,
+          "52",
+          "push   edx"
+        ],
+        [
+          5642292,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_ApplyLocalCellUpdate",
+      "address": 5642400,
+      "code": 10096,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5642400,
+          "50",
+          "push   eax"
+        ],
+        [
+          5642401,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5642402,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5642403,
+          "52",
+          "push   edx"
+        ],
+        [
+          5642404,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "TerrainEditBuffer_SubtractCurrentCellMaterialBytes",
+      "address": 5642544,
+      "code": 10240,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5642544,
+          "50",
+          "push   eax"
+        ],
+        [
+          5642545,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5642546,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5642547,
+          "52",
+          "push   edx"
+        ],
+        [
+          5642548,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "TerrainEditBuffer_CommitFlagsAndMaterialDeltas",
+      "address": 5642656,
+      "code": 10352,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5642656,
+          "50",
+          "push   eax"
+        ],
+        [
+          5642657,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5642658,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5642659,
+          "52",
+          "push   edx"
+        ],
+        [
+          5642660,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "TerrainMaterialEdit_SeedMatchingRegionReplacement",
+      "address": 5642768,
+      "code": 10464,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5642768,
+          "50",
+          "push   eax"
+        ],
+        [
+          5642769,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5642770,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5642771,
+          "52",
+          "push   edx"
+        ],
+        [
+          5642772,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "TerrainMaterialEdit_SeedNonTargetRegionReplacement",
+      "address": 5642976,
+      "code": 10672,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5642976,
+          "50",
+          "push   eax"
+        ],
+        [
+          5642977,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5642978,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5642979,
+          "52",
+          "push   edx"
+        ],
+        [
+          5642980,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_ResetLocalInfluenceState",
+      "address": 5643184,
+      "code": 10880,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5643184,
+          "50",
+          "push   eax"
+        ],
+        [
+          5643185,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5643186,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5643187,
+          "52",
+          "push   edx"
+        ],
+        [
+          5643188,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_RebuildLocalInfluenceState",
+      "address": 5643280,
+      "code": 10976,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5643280,
+          "50",
+          "push   eax"
+        ],
+        [
+          5643281,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5643282,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5643283,
+          "52",
+          "push   edx"
+        ],
+        [
+          5643284,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "TerrainEditBuffer_ConvertHeightsToDeltas",
+      "address": 5643712,
+      "code": 11408,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5643712,
+          "50",
+          "push   eax"
+        ],
+        [
+          5643713,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5643714,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5643715,
+          "52",
+          "push   edx"
+        ],
+        [
+          5643716,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "WorldRuntime_TurnAuxiliaryAnglesClamped",
+      "address": 5643824,
+      "code": 11520,
+      "size": 6,
+      "bytes": "5053525589e5",
+      "instructions": [
+        [
+          5643824,
+          "50",
+          "push   eax"
+        ],
+        [
+          5643825,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5643826,
+          "52",
+          "push   edx"
+        ],
+        [
+          5643827,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5643828,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "TerrainLighting_AdjustDirectionAndRecomputeField",
+      "address": 5643936,
+      "code": 11632,
+      "size": 6,
+      "bytes": "5053525589e5",
+      "instructions": [
+        [
+          5643936,
+          "50",
+          "push   eax"
+        ],
+        [
+          5643937,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5643938,
+          "52",
+          "push   edx"
+        ],
+        [
+          5643939,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5643940,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FrontendPlayerSelection_ApplyEntryOrAll",
+      "address": 5644048,
+      "code": 11744,
+      "size": 5,
+      "bytes": "5053515755",
+      "instructions": [
+        [
+          5644048,
+          "50",
+          "push   eax"
+        ],
+        [
+          5644049,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5644050,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5644051,
+          "57",
+          "push   edi"
+        ],
+        [
+          5644052,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerRuntime_CreatePlacementArmy",
+      "address": 5644160,
+      "code": 11856,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5644160,
+          "50",
+          "push   eax"
+        ],
+        [
+          5644161,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5644162,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5644163,
+          "52",
+          "push   edx"
+        ],
+        [
+          5644164,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerRuntime_SetPlacementFaction",
+      "address": 5644272,
+      "code": 11968,
+      "size": 6,
+      "bytes": "5051525589e5",
+      "instructions": [
+        [
+          5644272,
+          "50",
+          "push   eax"
+        ],
+        [
+          5644273,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5644274,
+          "52",
+          "push   edx"
+        ],
+        [
+          5644275,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5644276,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerRuntime_SetPlacementArmy",
+      "address": 5644320,
+      "code": 12016,
+      "size": 6,
+      "bytes": "5051525589e5",
+      "instructions": [
+        [
+          5644320,
+          "50",
+          "push   eax"
+        ],
+        [
+          5644321,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5644322,
+          "52",
+          "push   edx"
+        ],
+        [
+          5644323,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5644324,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "SelectionPlayerRuntime_MovePrimarySelectionBy",
+      "address": 5644368,
+      "code": 12064,
+      "size": 5,
+      "bytes": "5053515257",
+      "instructions": [
+        [
+          5644368,
+          "50",
+          "push   eax"
+        ],
+        [
+          5644369,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5644370,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5644371,
+          "52",
+          "push   edx"
+        ],
+        [
+          5644372,
+          "57",
+          "push   edi"
+        ]
+      ]
+    },
+    {
+      "name": "SelectionPlayerRuntime_RotatePrimarySelectionBy",
+      "address": 5644832,
+      "code": 12528,
+      "size": 5,
+      "bytes": "5053515255",
+      "instructions": [
+        [
+          5644832,
+          "50",
+          "push   eax"
+        ],
+        [
+          5644833,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5644834,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5644835,
+          "52",
+          "push   edx"
+        ],
+        [
+          5644836,
+          "55",
+          "push   ebp"
+        ]
+      ]
+    },
+    {
+      "name": "PlayerRuntime_ClearPlacementArmy",
+      "address": 5644992,
+      "code": 12688,
+      "size": 5,
+      "bytes": "50525589e5",
+      "instructions": [
+        [
+          5644992,
+          "50",
+          "push   eax"
+        ],
+        [
+          5644993,
+          "52",
+          "push   edx"
+        ],
+        [
+          5644994,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5644995,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "InGameUiCommand_SaveFieldAndLevelAssetImages",
+      "address": 5645040,
+      "code": 12736,
+      "size": 5,
+      "bytes": "50535589e5",
+      "instructions": [
+        [
+          5645040,
+          "50",
+          "push   eax"
+        ],
+        [
+          5645041,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5645042,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5645043,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "TerrainGrid_RunDirectionalRelaxationPasses",
+      "address": 5645104,
+      "code": 12800,
+      "size": 6,
+      "bytes": "5053515589e5",
+      "instructions": [
+        [
+          5645104,
+          "50",
+          "push   eax"
+        ],
+        [
+          5645105,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5645106,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5645107,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5645108,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_ApplyEncodedCellUpdate",
+      "address": 5645200,
+      "code": 12896,
+      "size": 5,
+      "bytes": "5053515256",
+      "instructions": [
+        [
+          5645200,
+          "50",
+          "push   eax"
+        ],
+        [
+          5645201,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5645202,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5645203,
+          "52",
+          "push   edx"
+        ],
+        [
+          5645204,
+          "56",
+          "push   esi"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_SetCellFluidReceiverExcluded",
+      "address": 5645264,
+      "code": 12960,
+      "size": 6,
+      "bytes": "5053565589e5",
+      "instructions": [
+        [
+          5645264,
+          "50",
+          "push   eax"
+        ],
+        [
+          5645265,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5645266,
+          "56",
+          "push   esi"
+        ],
+        [
+          5645267,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5645268,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_SetCellFluidSourceExcluded",
+      "address": 5645328,
+      "code": 13024,
+      "size": 6,
+      "bytes": "5053565589e5",
+      "instructions": [
+        [
+          5645328,
+          "50",
+          "push   eax"
+        ],
+        [
+          5645329,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5645330,
+          "56",
+          "push   esi"
+        ],
+        [
+          5645331,
+          "55",
+          "push   ebp"
+        ],
+        [
+          5645332,
+          "89e5",
+          "mov    ebp,esp"
+        ]
+      ]
+    },
+    {
+      "name": "FieldGrid_SetCellResourceSupportFlag",
+      "address": 5645392,
+      "code": 13088,
+      "size": 5,
+      "bytes": "5053515256",
+      "instructions": [
+        [
+          5645392,
+          "50",
+          "push   eax"
+        ],
+        [
+          5645393,
+          "53",
+          "push   ebx"
+        ],
+        [
+          5645394,
+          "51",
+          "push   ecx"
+        ],
+        [
+          5645395,
+          "52",
+          "push   edx"
+        ],
+        [
+          5645396,
+          "56",
+          "push   esi"
+        ]
+      ]
+    }
+  ],
+  "issuers": [
+    {
+      "address": 5633664,
+      "name": "FrontendPlayerRuntime_IncrementReadyCountAndResolveConsensus",
+      "path": "src/ui/frontend/player.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5651408,
+      "name": "InGameHud_UpdateStatusCountersAndSessionPrompts",
+      "path": "src/ui/ingame/hud.cpp",
+      "sites": 2
+    },
+    {
+      "address": 5664864,
+      "name": "InGameHotkeys_DispatchCommandByFlags",
+      "path": "src/ui/ingame/hotkeys.cpp",
+      "sites": 7
+    },
+    {
+      "address": 5667008,
+      "name": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp",
+      "sites": 9
+    },
+    {
+      "address": 5672464,
+      "name": "InGameWorldInput_UpdateDragSelectionAndCamera",
+      "path": "src/ui/ingame/world_input.cpp",
+      "sites": 3
+    },
+    {
+      "address": 5673392,
+      "name": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp",
+      "sites": 13
+    },
+    {
+      "address": 5674880,
+      "name": "InGameUiRuntime_DispatchWorldContextActionCallback",
+      "path": "src/ui/ingame/key_commands.cpp",
+      "sites": 3
+    },
+    {
+      "address": 5678608,
+      "name": "InGameChatInput_SendLineOrCheckCheatPhrase",
+      "path": "src/ui/ingame/chat.cpp",
+      "sites": 6
+    },
+    {
+      "address": 5680016,
+      "name": "InGameQuitMenu_AbortMission",
+      "path": "src/ui/ingame/pages.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5680112,
+      "name": "InGameQuitMenu_Surrender",
+      "path": "src/ui/ingame/pages.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5680208,
+      "name": "InGameResultsScreen_ContinueOrMarkReady",
+      "path": "src/ui/ingame/pages.cpp",
+      "sites": 2
+    },
+    {
+      "address": 5680320,
+      "name": "InGameEndMovie_Skip",
+      "path": "src/ui/ingame/pages.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5680512,
+      "name": "InGameOtherPlayerCommand_DispatchSelectedTarget",
+      "path": "src/ui/ingame/hud.cpp",
+      "sites": 2
+    },
+    {
+      "address": 5680880,
+      "name": "InGameTechnologyResearch_StartSelected",
+      "path": "src/ui/ingame/technology.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5681104,
+      "name": "InGameCommandAction_ClearSelectedArmyTokenAndClosePage",
+      "path": "src/ui/ingame/commands.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5682464,
+      "name": "InGameTechnologyPanel_ToggleForSelection",
+      "path": "src/ui/ingame/pages.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5683344,
+      "name": "InGameSevenSlotCommand_SubmitTextAndSelectionMask",
+      "path": "src/ui/ingame/chat.cpp",
+      "sites": 6
+    },
+    {
+      "address": 5689248,
+      "name": "InGameBuildCatalog_QueueOrCancelEntry",
+      "path": "src/ui/ingame/build_catalog.cpp",
+      "sites": 2
+    },
+    {
+      "address": 5689488,
+      "name": "InGameSpecialBuildCatalog_QueueOrCancelEntry",
+      "path": "src/ui/ingame/build_catalog.cpp",
+      "sites": 2
+    },
+    {
+      "address": 5689728,
+      "name": "InGameArmyStock_TakeOrSellSlotArmy",
+      "path": "src/ui/ingame/army_stock.cpp",
+      "sites": 3
+    },
+    {
+      "address": 5690064,
+      "name": "InGameTargetingContext_AdvanceOrResolveTarget",
+      "path": "src/ui/ingame/targeting.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5690688,
+      "name": "InGameSelectionGroupButton_RecallOrStoreGroup",
+      "path": "src/ui/ingame/commands.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5691072,
+      "name": "InGameQuitMenu_RestartMission",
+      "path": "src/ui/ingame/pages.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5694112,
+      "name": "InGameCommandRange_DispatchState0",
+      "path": "src/ui/ingame/editor_tool_selection.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5694176,
+      "name": "InGameCommandRange_DispatchState1",
+      "path": "src/ui/ingame/editor_tool_selection.cpp",
+      "sites": 1
+    },
+    {
+      "address": 5694400,
+      "name": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp",
+      "sites": 14
+    },
+    {
+      "address": 5700208,
+      "name": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp",
+      "sites": 12
+    },
+    {
+      "address": 5702608,
+      "name": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp",
+      "sites": 14
+    },
+    {
+      "address": 5705056,
+      "name": "InGameUiCommand_EndInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp",
+      "sites": 3
+    },
+    {
+      "address": 5705520,
+      "name": "InGameUiCommand_ResetInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp",
+      "sites": 3
+    },
+    {
+      "address": 5712224,
+      "name": "FrontendClientSession_TickHostTimeout",
+      "path": "src/ui/frontend/session.cpp",
+      "sites": 1
+    }
+  ],
+  "sites": [
+    {
+      "return_pc": 5633839,
+      "opcode": "e851ffffff",
+      "handler_code": 1360,
+      "function": "FrontendPlayerRuntime_IncrementReadyCountAndResolveConsensus",
+      "path": "src/ui/frontend/player.cpp"
+    },
+    {
+      "return_pc": 5651599,
+      "opcode": "e8e1b7ffff",
+      "handler_code": 832,
+      "function": "InGameHud_UpdateStatusCountersAndSessionPrompts",
+      "path": "src/ui/ingame/hud.cpp"
+    },
+    {
+      "return_pc": 5651658,
+      "opcode": "e8a6b7ffff",
+      "handler_code": 832,
+      "function": "InGameHud_UpdateStatusCountersAndSessionPrompts",
+      "path": "src/ui/ingame/hud.cpp"
+    },
+    {
+      "return_pc": 5666204,
+      "opcode": "e8a47effff",
+      "handler_code": 784,
+      "function": "InGameHotkeys_DispatchCommandByFlags",
+      "path": "src/ui/ingame/hotkeys.cpp"
+    },
+    {
+      "return_pc": 5666316,
+      "opcode": "e8947effff",
+      "handler_code": 880,
+      "function": "InGameHotkeys_DispatchCommandByFlags",
+      "path": "src/ui/ingame/hotkeys.cpp"
+    },
+    {
+      "return_pc": 5666380,
+      "opcode": "e8d47effff",
+      "handler_code": 1008,
+      "function": "InGameHotkeys_DispatchCommandByFlags",
+      "path": "src/ui/ingame/hotkeys.cpp"
+    },
+    {
+      "return_pc": 5666444,
+      "opcode": "e8947effff",
+      "handler_code": 1008,
+      "function": "InGameHotkeys_DispatchCommandByFlags",
+      "path": "src/ui/ingame/hotkeys.cpp"
+    },
+    {
+      "return_pc": 5666700,
+      "opcode": "e8b47cffff",
+      "handler_code": 784,
+      "function": "InGameHotkeys_DispatchCommandByFlags",
+      "path": "src/ui/ingame/hotkeys.cpp"
+    },
+    {
+      "return_pc": 5666764,
+      "opcode": "e82492ffff",
+      "handler_code": 6336,
+      "function": "InGameHotkeys_DispatchCommandByFlags",
+      "path": "src/ui/ingame/hotkeys.cpp"
+    },
+    {
+      "return_pc": 5666981,
+      "opcode": "e8db79ffff",
+      "handler_code": 336,
+      "function": "InGameHotkeys_DispatchCommandByFlags",
+      "path": "src/ui/ingame/hotkeys.cpp"
+    },
+    {
+      "return_pc": 5668101,
+      "opcode": "e80b80ffff",
+      "handler_code": 3040,
+      "function": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5668181,
+      "opcode": "e8bb7fffff",
+      "handler_code": 3040,
+      "function": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5668261,
+      "opcode": "e86b7fffff",
+      "handler_code": 3040,
+      "function": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5668341,
+      "opcode": "e81b7fffff",
+      "handler_code": 3040,
+      "function": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5668781,
+      "opcode": "e8937fffff",
+      "handler_code": 3600,
+      "function": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5668877,
+      "opcode": "e8537fffff",
+      "handler_code": 3632,
+      "function": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5668973,
+      "opcode": "e8137fffff",
+      "handler_code": 3664,
+      "function": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5669161,
+      "opcode": "e8f778ffff",
+      "handler_code": 2288,
+      "function": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5669234,
+      "opcode": "e82e7effff",
+      "handler_code": 3696,
+      "function": "InGameUiRuntime_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5672677,
+      "opcode": "e8eb6dffff",
+      "handler_code": 2976,
+      "function": "InGameWorldInput_UpdateDragSelectionAndCamera",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5672987,
+      "opcode": "e8156cffff",
+      "handler_code": 2816,
+      "function": "InGameWorldInput_UpdateDragSelectionAndCamera",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5673067,
+      "opcode": "e8256bffff",
+      "handler_code": 2656,
+      "function": "InGameWorldInput_UpdateDragSelectionAndCamera",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5673641,
+      "opcode": "e82768ffff",
+      "handler_code": 2464,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5673801,
+      "opcode": "e88767ffff",
+      "handler_code": 2464,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5673851,
+      "opcode": "e8b567ffff",
+      "handler_code": 2560,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5673969,
+      "opcode": "e8df6affff",
+      "handler_code": 3488,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5674102,
+      "opcode": "e89a6affff",
+      "handler_code": 3552,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5674194,
+      "opcode": "e89e69ffff",
+      "handler_code": 3392,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5674254,
+      "opcode": "e89269ffff",
+      "handler_code": 3440,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5674337,
+      "opcode": "e86f65ffff",
+      "handler_code": 2464,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5674409,
+      "opcode": "e8e765ffff",
+      "handler_code": 2656,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5674465,
+      "opcode": "e84f66ffff",
+      "handler_code": 2816,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5674543,
+      "opcode": "e8a16effff",
+      "handler_code": 5024,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5674758,
+      "opcode": "ffd0",
+      "handler_code": 4294967295,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5674799,
+      "opcode": "e8a165ffff",
+      "handler_code": 2976,
+      "function": "InGameWorldInput_CommitPointerAction",
+      "path": "src/ui/ingame/world_input.cpp"
+    },
+    {
+      "return_pc": 5675015,
+      "opcode": "e8c964ffff",
+      "handler_code": 2976,
+      "function": "InGameUiRuntime_DispatchWorldContextActionCallback",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5675066,
+      "opcode": "e8e66dffff",
+      "handler_code": 5360,
+      "function": "InGameUiRuntime_DispatchWorldContextActionCallback",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5675113,
+      "opcode": "e86764ffff",
+      "handler_code": 2976,
+      "function": "InGameUiRuntime_DispatchWorldContextActionCallback",
+      "path": "src/ui/ingame/key_commands.cpp"
+    },
+    {
+      "return_pc": 5678879,
+      "opcode": "e88161ffff",
+      "handler_code": 6000,
+      "function": "InGameChatInput_SendLineOrCheckCheatPhrase",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5678932,
+      "opcode": "e87c61ffff",
+      "handler_code": 6048,
+      "function": "InGameChatInput_SendLineOrCheckCheatPhrase",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5678985,
+      "opcode": "e84761ffff",
+      "handler_code": 6048,
+      "function": "InGameChatInput_SendLineOrCheckCheatPhrase",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5679038,
+      "opcode": "e81261ffff",
+      "handler_code": 6048,
+      "function": "InGameChatInput_SendLineOrCheckCheatPhrase",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5679091,
+      "opcode": "e8dd60ffff",
+      "handler_code": 6048,
+      "function": "InGameChatInput_SendLineOrCheckCheatPhrase",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5679132,
+      "opcode": "e82461ffff",
+      "handler_code": 6160,
+      "function": "InGameChatInput_SendLineOrCheckCheatPhrase",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5680102,
+      "opcode": "e89a46ffff",
+      "handler_code": 336,
+      "function": "InGameQuitMenu_AbortMission",
+      "path": "src/ui/ingame/pages.cpp"
+    },
+    {
+      "return_pc": 5680198,
+      "opcode": "e83a46ffff",
+      "handler_code": 336,
+      "function": "InGameQuitMenu_Surrender",
+      "path": "src/ui/ingame/pages.cpp"
+    },
+    {
+      "return_pc": 5680265,
+      "opcode": "e81749ffff",
+      "handler_code": 1136,
+      "function": "InGameResultsScreen_ContinueOrMarkReady",
+      "path": "src/ui/ingame/pages.cpp"
+    },
+    {
+      "return_pc": 5680311,
+      "opcode": "e88947ffff",
+      "handler_code": 784,
+      "function": "InGameResultsScreen_ContinueOrMarkReady",
+      "path": "src/ui/ingame/pages.cpp"
+    },
+    {
+      "return_pc": 5680368,
+      "opcode": "e85047ffff",
+      "handler_code": 784,
+      "function": "InGameEndMovie_Skip",
+      "path": "src/ui/ingame/pages.cpp"
+    },
+    {
+      "return_pc": 5680684,
+      "opcode": "e86449ffff",
+      "handler_code": 1632,
+      "function": "InGameOtherPlayerCommand_DispatchSelectedTarget",
+      "path": "src/ui/ingame/hud.cpp"
+    },
+    {
+      "return_pc": 5680730,
+      "opcode": "e8b64affff",
+      "handler_code": 2016,
+      "function": "InGameOtherPlayerCommand_DispatchSelectedTarget",
+      "path": "src/ui/ingame/hud.cpp"
+    },
+    {
+      "return_pc": 5681082,
+      "opcode": "e87658ffff",
+      "handler_code": 5888,
+      "function": "InGameTechnologyResearch_StartSelected",
+      "path": "src/ui/ingame/technology.cpp"
+    },
+    {
+      "return_pc": 5681212,
+      "opcode": "e8f457ffff",
+      "handler_code": 5888,
+      "function": "InGameCommandAction_ClearSelectedArmyTokenAndClosePage",
+      "path": "src/ui/ingame/commands.cpp"
+    },
+    {
+      "return_pc": 5682619,
+      "opcode": "e82552ffff",
+      "handler_code": 5808,
+      "function": "InGameTechnologyPanel_ToggleForSelection",
+      "path": "src/ui/ingame/pages.cpp"
+    },
+    {
+      "return_pc": 5683615,
+      "opcode": "e8014fffff",
+      "handler_code": 6000,
+      "function": "InGameSevenSlotCommand_SubmitTextAndSelectionMask",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5683668,
+      "opcode": "e8fc4effff",
+      "handler_code": 6048,
+      "function": "InGameSevenSlotCommand_SubmitTextAndSelectionMask",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5683721,
+      "opcode": "e8c74effff",
+      "handler_code": 6048,
+      "function": "InGameSevenSlotCommand_SubmitTextAndSelectionMask",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5683774,
+      "opcode": "e8924effff",
+      "handler_code": 6048,
+      "function": "InGameSevenSlotCommand_SubmitTextAndSelectionMask",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5683827,
+      "opcode": "e85d4effff",
+      "handler_code": 6048,
+      "function": "InGameSevenSlotCommand_SubmitTextAndSelectionMask",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5683868,
+      "opcode": "e8a44effff",
+      "handler_code": 6160,
+      "function": "InGameSevenSlotCommand_SubmitTextAndSelectionMask",
+      "path": "src/ui/ingame/chat.cpp"
+    },
+    {
+      "return_pc": 5689422,
+      "opcode": "e8c230ffff",
+      "handler_code": 4064,
+      "function": "InGameBuildCatalog_QueueOrCancelEntry",
+      "path": "src/ui/ingame/build_catalog.cpp"
+    },
+    {
+      "return_pc": 5689470,
+      "opcode": "e8e230ffff",
+      "handler_code": 4144,
+      "function": "InGameBuildCatalog_QueueOrCancelEntry",
+      "path": "src/ui/ingame/build_catalog.cpp"
+    },
+    {
+      "return_pc": 5689662,
+      "opcode": "e8d22fffff",
+      "handler_code": 4064,
+      "function": "InGameSpecialBuildCatalog_QueueOrCancelEntry",
+      "path": "src/ui/ingame/build_catalog.cpp"
+    },
+    {
+      "return_pc": 5689710,
+      "opcode": "e8f22fffff",
+      "handler_code": 4144,
+      "function": "InGameSpecialBuildCatalog_QueueOrCancelEntry",
+      "path": "src/ui/ingame/build_catalog.cpp"
+    },
+    {
+      "return_pc": 5689940,
+      "opcode": "e8cc33ffff",
+      "handler_code": 5360,
+      "function": "InGameArmyStock_TakeOrSellSlotArmy",
+      "path": "src/ui/ingame/army_stock.cpp"
+    },
+    {
+      "return_pc": 5689995,
+      "opcode": "e87531ffff",
+      "handler_code": 4816,
+      "function": "InGameArmyStock_TakeOrSellSlotArmy",
+      "path": "src/ui/ingame/army_stock.cpp"
+    },
+    {
+      "return_pc": 5690043,
+      "opcode": "e8e533ffff",
+      "handler_code": 5488,
+      "function": "InGameArmyStock_TakeOrSellSlotArmy",
+      "path": "src/ui/ingame/army_stock.cpp"
+    },
+    {
+      "return_pc": 5690496,
+      "opcode": "e8d032ffff",
+      "handler_code": 5664,
+      "function": "InGameTargetingContext_AdvanceOrResolveTarget",
+      "path": "src/ui/ingame/targeting.cpp"
+    },
+    {
+      "return_pc": 5690888,
+      "opcode": "e80827ffff",
+      "handler_code": 3040,
+      "function": "InGameSelectionGroupButton_RecallOrStoreGroup",
+      "path": "src/ui/ingame/commands.cpp"
+    },
+    {
+      "return_pc": 5691158,
+      "opcode": "e86a1bffff",
+      "handler_code": 336,
+      "function": "InGameQuitMenu_RestartMission",
+      "path": "src/ui/ingame/pages.cpp"
+    },
+    {
+      "return_pc": 5694163,
+      "opcode": "e85d40ffff",
+      "handler_code": 12800,
+      "function": "InGameCommandRange_DispatchState0",
+      "path": "src/ui/ingame/editor_tool_selection.cpp"
+    },
+    {
+      "return_pc": 5694227,
+      "opcode": "e81d40ffff",
+      "handler_code": 12800,
+      "function": "InGameCommandRange_DispatchState1",
+      "path": "src/ui/ingame/editor_tool_selection.cpp"
+    },
+    {
+      "return_pc": 5695180,
+      "opcode": "e8243cffff",
+      "handler_code": 12736,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5695244,
+      "opcode": "e8e422ffff",
+      "handler_code": 6336,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5695340,
+      "opcode": "e8642fffff",
+      "handler_code": 9632,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5695404,
+      "opcode": "e8f431ffff",
+      "handler_code": 10352,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5695717,
+      "opcode": "e8bb35ffff",
+      "handler_code": 11632,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5695777,
+      "opcode": "e80f35ffff",
+      "handler_code": 11520,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5696085,
+      "opcode": "e84b34ffff",
+      "handler_code": 11632,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5696145,
+      "opcode": "e89f33ffff",
+      "handler_code": 11520,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5696453,
+      "opcode": "e8db32ffff",
+      "handler_code": 11632,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5696513,
+      "opcode": "e82f32ffff",
+      "handler_code": 11520,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5696821,
+      "opcode": "e86b31ffff",
+      "handler_code": 11632,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5696881,
+      "opcode": "e8bf30ffff",
+      "handler_code": 11520,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5698025,
+      "opcode": "e80718ffff",
+      "handler_code": 6336,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5698066,
+      "opcode": "e86e00ffff",
+      "handler_code": 336,
+      "function": "InGameUiRootKeyboardFallback_DispatchCommandByCodeAndModifierFlags",
+      "path": "src/ui/ingame/editor_keyboard.cpp"
+    },
+    {
+      "return_pc": 5700412,
+      "opcode": "e8c414ffff",
+      "handler_code": 7888,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5700680,
+      "opcode": "e80814ffff",
+      "handler_code": 7968,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5700872,
+      "opcode": "e84813ffff",
+      "handler_code": 7968,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5700924,
+      "opcode": "e8741effff",
+      "handler_code": 10880,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5701023,
+      "opcode": "e8911affff",
+      "handler_code": 9984,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5701174,
+      "opcode": "e8da1bffff",
+      "handler_code": 10464,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5701318,
+      "opcode": "e81a1cffff",
+      "handler_code": 10672,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5702041,
+      "opcode": "e8871effff",
+      "handler_code": 12016,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5702197,
+      "opcode": "e8db1cffff",
+      "handler_code": 11744,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5702267,
+      "opcode": "e8751dffff",
+      "handler_code": 11968,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5702305,
+      "opcode": "e8df1cffff",
+      "handler_code": 11856,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5702403,
+      "opcode": "e8cdf9feff",
+      "handler_code": 2976,
+      "function": "InGameUiCommand_BeginInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5702966,
+      "opcode": "e83a09ffff",
+      "handler_code": 7488,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5703110,
+      "opcode": "e86a08ffff",
+      "handler_code": 7424,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5703253,
+      "opcode": "e84b0affff",
+      "handler_code": 8048,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5703381,
+      "opcode": "e8eb0cffff",
+      "handler_code": 8848,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5703522,
+      "opcode": "e8ae14ffff",
+      "handler_code": 10976,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5703728,
+      "opcode": "e87010ffff",
+      "handler_code": 10096,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5703910,
+      "opcode": "e82a1bffff",
+      "handler_code": 13024,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5704054,
+      "opcode": "e85a1affff",
+      "handler_code": 12960,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5704193,
+      "opcode": "e88f19ffff",
+      "handler_code": 12896,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5704364,
+      "opcode": "e8a415ffff",
+      "handler_code": 12064,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5704472,
+      "opcode": "e80817ffff",
+      "handler_code": 12528,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5704795,
+      "opcode": "e8d5effeff",
+      "handler_code": 2816,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5704875,
+      "opcode": "e8e5eefeff",
+      "handler_code": 2656,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5705033,
+      "opcode": "e80717ffff",
+      "handler_code": 13088,
+      "function": "InGameUiCommand_UpdateInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5705228,
+      "opcode": "e8b40fffff",
+      "handler_code": 11408,
+      "function": "InGameUiCommand_EndInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5705363,
+      "opcode": "e89d0affff",
+      "handler_code": 10240,
+      "function": "InGameUiCommand_EndInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5705449,
+      "opcode": "e8d713ffff",
+      "handler_code": 12688,
+      "function": "InGameUiCommand_EndInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5705628,
+      "opcode": "e86400ffff",
+      "handler_code": 7888,
+      "function": "InGameUiCommand_ResetInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5705689,
+      "opcode": "e82700ffff",
+      "handler_code": 7888,
+      "function": "InGameUiCommand_ResetInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5705737,
+      "opcode": "e8c7ecfeff",
+      "handler_code": 2976,
+      "function": "InGameUiCommand_ResetInteractionByMode",
+      "path": "src/ui/ingame/editor_tools.cpp"
+    },
+    {
+      "return_pc": 5712460,
+      "opcode": "e834ccfeff",
+      "handler_code": 1360,
+      "function": "FrontendClientSession_TickHostTimeout",
+      "path": "src/ui/frontend/session.cpp"
+    }
+  ],
+  "policy": "Source-resolved UI issuers, including same-file helper closure. Direct calls are code-specific; indirect calls require a source-resolved dynamic command issuer and approved UI return PC. Local role/player checks exclude AI and network execution."
+}

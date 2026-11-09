@@ -27,6 +27,25 @@ std::size_t path_capacity(const std::array<uint32_t, 10>& offsets, std::size_t i
 
 } // namespace
 
+
+uint32_t LevelScheduledCondition::operand(std::size_t index) const {
+    if (index >= 3U) throw std::out_of_range("scheduled-condition operand index");
+    const std::size_t base = 3U + index * 4U;
+    return static_cast<uint32_t>(payload_bytes[base]) |
+        (static_cast<uint32_t>(payload_bytes[base + 1U]) << 8U) |
+        (static_cast<uint32_t>(payload_bytes[base + 2U]) << 16U) |
+        (static_cast<uint32_t>(payload_bytes[base + 3U]) << 24U);
+}
+
+void LevelScheduledCondition::set_operand(std::size_t index, uint32_t value) {
+    if (index >= 3U) throw std::out_of_range("scheduled-condition operand index");
+    const std::size_t base = 3U + index * 4U;
+    payload_bytes[base] = static_cast<uint8_t>(value);
+    payload_bytes[base + 1U] = static_cast<uint8_t>(value >> 8U);
+    payload_bytes[base + 2U] = static_cast<uint8_t>(value >> 16U);
+    payload_bytes[base + 3U] = static_cast<uint8_t>(value >> 24U);
+}
+
 LevelAsset LevelAsset::parse(std::span<const std::byte> data) {
     if (data.size() < 0x200 || read_u32(data, 0) != kLevelMagic) throw FormatError("invalid LEV magic");
     LevelAsset level;
@@ -91,19 +110,44 @@ void LevelAsset::read_lighting() {
     lighting_.color_128 = read_u32(fixed_image_, kLightingColorOffsets[5]);
     lighting_.ramp_124 = read_u32(fixed_image_, kLightingColorOffsets[6]);
     lighting_.base_color = read_u32(fixed_image_, kLightingColorOffsets[7]);
-    if (fixed_image_.size() >= 0x2F4) {
-        const auto packed = read_u32(fixed_image_, 0x2F0);
+    if (fixed_image_.size() >= 0x2F4U) {
+        // V537 LevelAssetRuntimeTail90 separates the packed light/field origin pair at +0x2E0
+        // from the packed field-region dimensions at +0x2F0. Both recovered level loaders,
         // InGameLevelRuntime_LoadResourcesAfterDefaultResetCf and
-        // InGameLevelRuntime_LoadResourcesAfterExternalTablesCf read LEV +0x2F0, push the low word
-        // second and the signed high word first, and WorldRuntime stores them as
-        // azimuth at +0xB8 and elevation at +0xBC respectively.
-        lighting_.azimuth = static_cast<uint16_t>(packed & 0xFFFFU);
-        lighting_.elevation = static_cast<uint16_t>(packed >> 16U);
+        // InGameLevelRuntime_LoadResourcesAfterExternalTablesCf, feed this runtime tail; +0x2E0
+        // is forwarded to WorldRuntime_RecomputeFieldRegionNormalsAndLighting as azimuth/elevation.
+        const auto packed_direction = read_u32(fixed_image_, 0x2E0U);
+        lighting_.azimuth = static_cast<uint16_t>(packed_direction & 0xFFFFU);
+        lighting_.elevation = static_cast<uint16_t>(packed_direction >> 16U);
+        const auto packed_dimensions = read_u32(fixed_image_, 0x2F0U);
+        lighting_.field_region_width = static_cast<uint16_t>(packed_dimensions & 0xFFFFU);
+        lighting_.field_region_height = static_cast<uint16_t>(packed_dimensions >> 16U);
+        lighting_.cycle_duration_ticks = read_u32(fixed_image_, 0x2ECU);
+    }
+    if (fixed_image_.size() >= 0x350U) {
+        const auto alternate_direction = read_u32(fixed_image_, 0x328U);
+        lighting_.alternate_azimuth = static_cast<uint16_t>(alternate_direction & 0xFFFFU);
+        lighting_.alternate_elevation = static_cast<uint16_t>(alternate_direction >> 16U);
+        const auto alternate_dimensions = read_u32(fixed_image_, 0x32CU);
+        lighting_.alternate_field_region_width = static_cast<uint16_t>(alternate_dimensions & 0xFFFFU);
+        lighting_.alternate_field_region_height = static_cast<uint16_t>(alternate_dimensions >> 16U);
+        lighting_.alternate_base_color = read_u32(fixed_image_, 0x330U);
+        lighting_.alternate_ramp_124 = read_u32(fixed_image_, 0x334U);
+        lighting_.alternate_color_128 = read_u32(fixed_image_, 0x338U);
+        lighting_.alternate_ramp_12c = read_u32(fixed_image_, 0x33CU);
+        lighting_.alternate_color_130 = read_u32(fixed_image_, 0x340U);
+        lighting_.alternate_color_134 = read_u32(fixed_image_, 0x344U);
+        lighting_.alternate_color_138 = read_u32(fixed_image_, 0x348U);
+        lighting_.alternate_color_13c = read_u32(fixed_image_, 0x34CU);
     }
 }
 
 void LevelAsset::read_resource_lists() {
     resource_paths_.clear();
+    model_resource_paths_.clear();
+    army_resource_paths_.clear();
+    effect_resource_paths_.clear();
+    shot_resource_paths_.clear();
     for (std::size_t pair = 0; pair < 4; ++pair) {
         const auto count_offset = 0xE0 + pair * 8;
         const auto list_count = read_u32(fixed_image_, count_offset);
@@ -113,7 +157,13 @@ void LevelAsset::read_resource_lists() {
         if (list_offset < 0x100 || end > fixed_image_.size()) throw FormatError("LEV resource path list exceeds fixed image");
         for (uint32_t i = 0; i < list_count; ++i) {
             auto path = normalize_asset_path(read_utf16le_z(fixed_image_, list_offset + i * 0x40, 0x40));
-            if (!path.empty()) resource_paths_.push_back(std::move(path));
+            if (!path.empty()) {
+                if (pair == 1U) model_resource_paths_.push_back(path);
+                if (pair == 0U) army_resource_paths_.push_back(path);
+                if (pair == 2U) effect_resource_paths_.push_back(path);
+                if (pair == 3U) shot_resource_paths_.push_back(path);
+                resource_paths_.push_back(std::move(path));
+            }
         }
     }
     std::sort(resource_paths_.begin(), resource_paths_.end());
@@ -142,8 +192,25 @@ void LevelAsset::write_lighting(std::span<std::byte> data) const {
         lighting_.ramp_12c, lighting_.color_128, lighting_.ramp_124, lighting_.base_color
     };
     for (std::size_t i = 0; i < values.size(); ++i) write_u32(data, kLightingColorOffsets[i], values[i]);
-    write_u32(data, 0x2F0, static_cast<uint32_t>(lighting_.azimuth) |
-                                 static_cast<uint32_t>(lighting_.elevation) << 16U);
+    write_u32(data, 0x2E0U, static_cast<uint32_t>(lighting_.azimuth) |
+                                  static_cast<uint32_t>(lighting_.elevation) << 16U);
+    write_u32(data, 0x2ECU, lighting_.cycle_duration_ticks);
+    write_u32(data, 0x2F0U, static_cast<uint32_t>(lighting_.field_region_width) |
+                                  static_cast<uint32_t>(lighting_.field_region_height) << 16U);
+    if (data.size() >= 0x350U) {
+        write_u32(data, 0x328U, static_cast<uint32_t>(lighting_.alternate_azimuth) |
+                                      static_cast<uint32_t>(lighting_.alternate_elevation) << 16U);
+        write_u32(data, 0x32CU, static_cast<uint32_t>(lighting_.alternate_field_region_width) |
+                                      static_cast<uint32_t>(lighting_.alternate_field_region_height) << 16U);
+        write_u32(data, 0x330U, lighting_.alternate_base_color);
+        write_u32(data, 0x334U, lighting_.alternate_ramp_124);
+        write_u32(data, 0x338U, lighting_.alternate_color_128);
+        write_u32(data, 0x33CU, lighting_.alternate_ramp_12c);
+        write_u32(data, 0x340U, lighting_.alternate_color_130);
+        write_u32(data, 0x344U, lighting_.alternate_color_134);
+        write_u32(data, 0x348U, lighting_.alternate_color_138);
+        write_u32(data, 0x34CU, lighting_.alternate_color_13c);
+    }
 }
 
 uint32_t LevelAsset::compatibility_alias_base() const {
@@ -176,6 +243,30 @@ uint32_t LevelAsset::frontend_assignable_faction_count() const {
 uint32_t LevelAsset::frontend_active_faction_count() const {
     if (fixed_image_.size() < 0x318U) throw FormatError("LEV fixed image lacks frontend count +0x314");
     return read_u32(fixed_image_, 0x314U);
+}
+
+uint32_t LevelAsset::relation_ui_flags() const {
+    if (fixed_image_.size() < 0x31CU) throw FormatError("LEV fixed image lacks relation UI flags +0x318");
+    return read_u32(fixed_image_, 0x318U);
+}
+
+uint32_t LevelAsset::relation_state8_faction_group_masks() const {
+    if (fixed_image_.size() < 0x320U) throw FormatError("LEV fixed image lacks relation-state-8 groups +0x31C");
+    return read_u32(fixed_image_, 0x31CU);
+}
+
+uint32_t LevelAsset::relation_state4_faction_group_masks() const {
+    if (fixed_image_.size() < 0x324U) throw FormatError("LEV fixed image lacks relation-state-4 groups +0x320");
+    return read_u32(fixed_image_, 0x320U);
+}
+
+void LevelAsset::set_initial_relation_setup(uint32_t ui_flags, uint32_t state8_group_masks,
+                                             uint32_t state4_group_masks) {
+    if (fixed_image_.size() < 0x324U)
+        throw FormatError("LEV fixed image lacks initial relation setup through +0x320");
+    write_u32(fixed_image_, 0x318U, ui_flags);
+    write_u32(fixed_image_, 0x31CU, state8_group_masks);
+    write_u32(fixed_image_, 0x320U, state4_group_masks);
 }
 
 uint32_t LevelAsset::embedded_minimum_player_count() const {
@@ -213,6 +304,92 @@ void LevelAsset::set_embedded_player_count_range(uint32_t minimum_count,
 void LevelAsset::set_skirmish_player_count(uint32_t count) {
     set_frontend_faction_counts(count, count);
     set_embedded_player_count_range(count, count);
+}
+
+namespace {
+constexpr std::size_t kScheduledConditionImageOffset = 0x380U;
+constexpr std::size_t kScheduledConditionRecordSize = 0x10U;
+constexpr std::size_t kEndConditionTriggerImageOffset = 0x780U;
+constexpr std::size_t kEndConditionTriggerRecordSize = 0x08U;
+}
+
+LevelScheduledCondition LevelAsset::scheduled_condition(uint32_t index) const {
+    if (index >= kScheduledConditionCount) throw FormatError("scheduled-condition index must be 0..63");
+    const std::size_t offset = kScheduledConditionImageOffset +
+        static_cast<std::size_t>(index) * kScheduledConditionRecordSize;
+    if (fixed_image_.size() < offset + kScheduledConditionRecordSize)
+        throw FormatError("LEV fixed image lacks scheduled-condition image");
+    LevelScheduledCondition condition;
+    condition.status_and_kind = static_cast<uint8_t>(fixed_image_[offset]);
+    for (std::size_t i = 0; i < condition.payload_bytes.size(); ++i)
+        condition.payload_bytes[i] = static_cast<uint8_t>(fixed_image_[offset + 1U + i]);
+    return condition;
+}
+
+void LevelAsset::set_scheduled_condition(uint32_t index, const LevelScheduledCondition& condition) {
+    if (index >= kScheduledConditionCount) throw FormatError("scheduled-condition index must be 0..63");
+    const std::size_t offset = kScheduledConditionImageOffset +
+        static_cast<std::size_t>(index) * kScheduledConditionRecordSize;
+    if (fixed_image_.size() < offset + kScheduledConditionRecordSize)
+        throw FormatError("LEV fixed image lacks scheduled-condition image");
+    // Satisfied bit is runtime state. Stock serialized LEVs keep it clear; never persist a
+    // condition as already satisfied when the editor changes a record.
+    fixed_image_[offset] = static_cast<std::byte>(condition.status_and_kind & 0xFEU);
+    for (std::size_t i = 0; i < condition.payload_bytes.size(); ++i)
+        fixed_image_[offset + 1U + i] = static_cast<std::byte>(condition.payload_bytes[i]);
+}
+
+LevelEndConditionTrigger LevelAsset::end_condition_trigger(uint32_t index) const {
+    if (index >= kEndConditionTriggerCount) throw FormatError("end-condition trigger index must be 0..15");
+    const std::size_t offset = kEndConditionTriggerImageOffset +
+        static_cast<std::size_t>(index) * kEndConditionTriggerRecordSize;
+    if (fixed_image_.size() < offset + kEndConditionTriggerRecordSize)
+        throw FormatError("LEV fixed image lacks end-condition trigger image");
+    LevelEndConditionTrigger trigger;
+    const auto* p = fixed_image_.data() + static_cast<std::ptrdiff_t>(offset);
+    trigger.state_flags = static_cast<uint8_t>(p[0]);
+    trigger.movie_variant_selector = static_cast<uint8_t>(p[1]);
+    trigger.skip_army_disable_when_one = static_cast<uint8_t>(p[2]);
+    trigger.reserved03 = static_cast<uint8_t>(p[3]);
+    trigger.faction_runtime_index = static_cast<uint8_t>(p[4]);
+    trigger.end_movie_selection_index = static_cast<uint8_t>(p[5]);
+    trigger.condition_index = static_cast<uint8_t>(p[6]);
+    trigger.reserved07 = static_cast<uint8_t>(p[7]);
+    return trigger;
+}
+
+void LevelAsset::set_end_condition_trigger(uint32_t index, const LevelEndConditionTrigger& trigger) {
+    if (index >= kEndConditionTriggerCount) throw FormatError("end-condition trigger index must be 0..15");
+    if (trigger.condition_index >= kScheduledConditionCount) throw FormatError("trigger condition index exceeds 63");
+    if (trigger.faction_runtime_index >= 8U) throw FormatError("trigger faction must be 0..7");
+    if (trigger.end_movie_selection_index >= 8U) throw FormatError("trigger outcome must be 0..7");
+    const std::size_t offset = kEndConditionTriggerImageOffset +
+        static_cast<std::size_t>(index) * kEndConditionTriggerRecordSize;
+    if (fixed_image_.size() < offset + kEndConditionTriggerRecordSize)
+        throw FormatError("LEV fixed image lacks end-condition trigger image");
+    // Bit 1 is runtime 'processed' state and must not be serialized as pre-fired.
+    fixed_image_[offset + 0U] = static_cast<std::byte>(trigger.state_flags & 1U);
+    fixed_image_[offset + 1U] = static_cast<std::byte>(trigger.movie_variant_selector);
+    fixed_image_[offset + 2U] = static_cast<std::byte>(trigger.skip_army_disable_when_one);
+    fixed_image_[offset + 3U] = static_cast<std::byte>(trigger.reserved03);
+    fixed_image_[offset + 4U] = static_cast<std::byte>(trigger.faction_runtime_index);
+    fixed_image_[offset + 5U] = static_cast<std::byte>(trigger.end_movie_selection_index);
+    fixed_image_[offset + 6U] = static_cast<std::byte>(trigger.condition_index);
+    fixed_image_[offset + 7U] = static_cast<std::byte>(trigger.reserved07);
+}
+
+uint32_t LevelAsset::active_scheduled_condition_count() const {
+    uint32_t count = 0U;
+    for (uint32_t i = 0; i < kScheduledConditionCount; ++i)
+        if ((static_cast<uint8_t>(scheduled_condition(i).kind()) & 0xFEU) != 0U) ++count;
+    return count;
+}
+
+uint32_t LevelAsset::active_end_condition_trigger_count() const {
+    uint32_t count = 0U;
+    for (uint32_t i = 0; i < kEndConditionTriggerCount; ++i)
+        if (end_condition_trigger(i).active()) ++count;
+    return count;
 }
 
 LevelFactionCameraStart LevelAsset::faction_camera_start(uint32_t faction_index) const {
@@ -253,7 +430,7 @@ void LevelAsset::set_faction_camera_start(uint32_t faction_index,
     write_u32(fixed_image_, offset + 0x10U, packed_angles);
 }
 
-uint32_t LevelAsset::faction_building_resource_q4(uint32_t faction_index) const {
+uint32_t LevelAsset::faction_xenite_q4(uint32_t faction_index) const {
     if (faction_index < 1U || faction_index > kFactionCameraStartCount)
         throw FormatError("faction resource index must be 1..7");
     const std::size_t base = 0x200U + static_cast<std::size_t>(faction_index - 1U) * 0x20U;
@@ -261,7 +438,7 @@ uint32_t LevelAsset::faction_building_resource_q4(uint32_t faction_index) const 
     return read_u32(fixed_image_, base + 0x14U);
 }
 
-uint32_t LevelAsset::faction_energy_resource_q4(uint32_t faction_index) const {
+uint32_t LevelAsset::faction_tritium_q4(uint32_t faction_index) const {
     if (faction_index < 1U || faction_index > kFactionCameraStartCount)
         throw FormatError("faction resource index must be 1..7");
     const std::size_t base = 0x200U + static_cast<std::size_t>(faction_index - 1U) * 0x20U;
@@ -291,8 +468,8 @@ LevelPlayerSlotRecord LevelAsset::faction_player_slot(uint32_t faction_index) co
     slot.start_camera_z_q12 = read_i32(fixed_image_, base + 0x08U);
     slot.start_camera_magnitude_q12 = read_u32(fixed_image_, base + 0x0CU);
     slot.packed_heading_low16_pitch_high16 = read_u32(fixed_image_, base + 0x10U);
-    slot.start_building_resource_q4 = read_u32(fixed_image_, base + 0x14U);
-    slot.start_energy_resource_q4 = read_u32(fixed_image_, base + 0x18U);
+    slot.start_xenite_q4 = read_u32(fixed_image_, base + 0x14U);
+    slot.start_tritium_q4 = read_u32(fixed_image_, base + 0x18U);
     slot.ai_class_or_mode = read_u32(fixed_image_, base + 0x1CU);
     return slot;
 }
@@ -308,21 +485,30 @@ void LevelAsset::set_faction_player_slot(uint32_t faction_index,
     write_i32(fixed_image_, base + 0x08U, slot.start_camera_z_q12);
     write_u32(fixed_image_, base + 0x0CU, slot.start_camera_magnitude_q12);
     write_u32(fixed_image_, base + 0x10U, slot.packed_heading_low16_pitch_high16);
-    write_u32(fixed_image_, base + 0x14U, slot.start_building_resource_q4);
-    write_u32(fixed_image_, base + 0x18U, slot.start_energy_resource_q4);
+    write_u32(fixed_image_, base + 0x14U, slot.start_xenite_q4);
+    write_u32(fixed_image_, base + 0x18U, slot.start_tritium_q4);
     write_u32(fixed_image_, base + 0x1CU, slot.ai_class_or_mode);
 }
 
-uint32_t LevelAsset::faction_ai_class_or_mode(uint32_t faction_index) const {
+uint32_t LevelAsset::faction_graphics_family_offset_raw(uint32_t faction_index) const {
     return faction_player_slot(faction_index).ai_class_or_mode;
 }
 
-void LevelAsset::set_faction_ai_class_or_mode(uint32_t faction_index, uint32_t value) {
+void LevelAsset::set_faction_graphics_family_offset_raw(uint32_t faction_index, uint32_t value) {
     if (faction_index < 1U || faction_index > kFactionCameraStartCount)
         throw FormatError("faction AI class/mode index must be 1..7");
     const std::size_t base = 0x200U + static_cast<std::size_t>(faction_index - 1U) * 0x20U;
     if (fixed_image_.size() < base + 0x20U) throw FormatError("LEV faction AI class/mode record is truncated");
     write_u32(fixed_image_, base + 0x1CU, value);
+}
+
+uint32_t LevelAsset::faction_graphics_family_selector(uint32_t faction_index) const {
+    if (faction_index == 0U) return 0U;
+    if (faction_index > kFactionCameraStartCount)
+        throw FormatError("faction graphics-family index must be 0..7");
+    // Intentionally use uint32 wraparound.  Retail does a 32-bit ADD and the
+    // frontend stores negative family offsets (for example 4 + -2 => army2).
+    return resolve_faction_graphics_family(faction_index, faction_graphics_family_offset_raw(faction_index));
 }
 
 void LevelAsset::add_placement(LevelPlacement placement) {

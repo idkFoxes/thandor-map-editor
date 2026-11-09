@@ -6,7 +6,7 @@ layout(location=3) in uint inTextureLayer;
 layout(location=4) in uint inPackedDiffuse;
 layout(location=5) in uvec3 inWaveRecord;
 layout(location=6) in vec4 inEncodedLighting;
-layout(set=0,binding=0) uniform Scene { mat4 viewProjection; vec4 camera; vec4 materialScale; vec4 animationControls; } scene;
+layout(set=0,binding=0) uniform Scene { mat4 viewProjection; vec4 camera; vec4 materialScale; vec4 animationControls; mat4 shadowViewProjection; vec4 shadowParameters; } scene;
 layout(location=0) out vec2 uv;
 layout(location=1) flat out uint textureLayer;
 layout(location=2) out vec4 vertexDiffuse;

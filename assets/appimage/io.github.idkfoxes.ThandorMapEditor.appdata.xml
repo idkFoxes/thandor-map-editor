@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.idkfoxes.ThandorMapEditor</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>Thandor Map Editor</name>
+  <summary>Edit Thandor maps and investigate AI in the Simulation Lab</summary>
+  <description>
+    <p>
+      Thandor Map Editor is a Vulkan-based editor for stock Thandor maps and
+      custom map projects. Browse game assets, edit terrain and placed objects,
+      generate landscapes and rivers, and configure map lighting and players.
+    </p>
+    <p>
+      The Simulation Lab runs independent simulations on a map and compares
+      original KI.DAT parameter settings. Inspect units, buildings, visibility
+      and per-run results in the editor. Original game data is required and is
+      not included in the AppImage.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.idkfoxes.ThandorMapEditor.desktop</launchable>
+  <provides>
+    <binary>thandor-map-editor</binary>
+  </provides>
+  <developer id="io.github.idkfoxes">
+    <name>idkFoxes</name>
+  </developer>
+  <url type="homepage">https://github.com/idkFoxes/thandor-map-editor</url>
+  <url type="vcs-browser">https://github.com/idkFoxes/thandor-map-editor</url>
+  <url type="contact">https://github.com/idkFoxes</url>
+  <categories>
+    <category>Game</category>
+    <category>Development</category>
+  </categories>
+</component>

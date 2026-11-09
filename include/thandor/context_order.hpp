@@ -19,6 +19,9 @@ struct ContextOrderActorCapabilities {
     bool building{};
     bool production_rally{};
     uint32_t faction_index{};
+    // Recovery/repair SHTs use negative target-class damage and select same-faction runtimes.
+    // Keep this distinct from hostile weapon capability so normal weapons cannot target allies.
+    bool friendly_support{};
 };
 
 // The retail pointer-command path resolves an army runtime under the pointer before its
@@ -28,9 +31,19 @@ struct ContextOrderActorCapabilities {
 constexpr ContextOrderKind resolve_context_order(
     const ContextOrderActorCapabilities actor,
     const std::optional<uint32_t> hovered_faction,
+    const bool pointer_entity_hit,
     const bool terrain_hit) noexcept {
-    if (actor.armed && hovered_faction && *hovered_faction != actor.faction_index)
-        return ContextOrderKind::AttackPlacement;
+    // InGameWorldInput_CommitPointerActionCf resolves the entity candidate before its terrain
+    // fallback. In the editor a visible placement therefore blocks a drive/rally point beneath
+    // it even when it is friendly, neutral scenery, or the selected actor itself. Only a
+    // non-neutral different-faction placement is a valid attack entity.
+    if ((actor.armed || actor.friendly_support) && hovered_faction && *hovered_faction != 0U) {
+        if (actor.armed && *hovered_faction != actor.faction_index)
+            return ContextOrderKind::AttackPlacement;
+        if (actor.friendly_support && *hovered_faction == actor.faction_index)
+            return ContextOrderKind::AttackPlacement;
+    }
+    if (pointer_entity_hit) return ContextOrderKind::None;
     if (!terrain_hit) return ContextOrderKind::None;
     if (actor.movable) return ContextOrderKind::MoveToTerrain;
     if (actor.armed) return ContextOrderKind::AttackTerrainPoint;

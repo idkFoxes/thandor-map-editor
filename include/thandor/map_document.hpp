@@ -50,6 +50,13 @@ struct ScenarioFrontendMetadata {
     uint32_t map_size_category_index{};
 };
 
+struct StockMapSaveResult {
+    std::vector<std::filesystem::path> updated_archives;
+    std::vector<std::filesystem::path> backup_archives;
+    std::size_t replaced_entries{};
+    std::size_t inserted_entries{};
+};
+
 struct PlacementTag {
     std::size_t placement_index{};
     PlacementRole role{PlacementRole::Generic};
@@ -79,6 +86,10 @@ public:
     void set_map_name(std::string value);
     const std::string& display_name() const noexcept { return display_name_; }
     void set_display_name(std::string value);
+    const std::string& author() const noexcept { return author_; }
+    void set_author(std::string value);
+    uint32_t default_human_faction() const;
+    void set_default_human_faction(uint32_t faction);
     void resize_field(uint32_t width, uint32_t height, bool center_existing = true);
     FieldGrid& field() noexcept { return field_; }
     const FieldGrid& field() const noexcept { return field_; }
@@ -97,6 +108,7 @@ public:
     PlayerAiConfiguration player_ai_configuration() const;
     void set_player_ai_configuration(const PlayerAiConfiguration& configuration);
     bool dirty() const noexcept { return dirty_; }
+    bool is_campaign_mission_project() const noexcept { return campaign_mission_project_; }
     void mark_dirty() noexcept { dirty_ = true; }
     void mark_clean() noexcept { dirty_ = false; }
 
@@ -107,7 +119,15 @@ public:
                                                    const Patch00ExportOptions& options,
                                                    bool create_backup = true) const;
     void export_loose(const std::filesystem::path& directory) const;
-    void save_project(const std::filesystem::path& project_path) const;
+    // Rewrites the exact stock PCK archive(s) that supplied this map. Runtime simulation state is
+    // intentionally not an input: only authored MapDocument LEV/FLD/text/catalog/custom assets
+    // are emitted. Every touched archive is backed up and the whole operation rolls back on error.
+    StockMapSaveResult save_stock_map_in_place(const AssetCatalog& catalog,
+                                                const MapAssetGroup& group,
+                                                bool create_backup = true) const;
+    void save_project(const std::filesystem::path& project_path, bool preserve_mission_state = false) const;
+    // Campaign missions retain authored faction counts, zero resources, scripts and shared terrain identity.
+    std::vector<PckWriteEntry> campaign_package_entries() const;
 
     std::vector<PlacementTag>& placement_tags() noexcept { return placement_tags_; }
     std::span<const PlacementTag> placement_tags() const noexcept { return placement_tags_; }
@@ -138,6 +158,8 @@ public:
 private:
     std::string map_name_;
     std::string display_name_;
+    std::string author_;
+    uint32_t default_human_faction_{};
     FieldGrid field_;
     LevelAsset level_;
     std::vector<PlacementTag> placement_tags_;
@@ -147,6 +169,7 @@ private:
     ScenarioCatalogRecord scenario_record_;
     TextResourceAsset level_text_;
     bool dirty_{};
+    bool campaign_mission_project_{};
 
     static std::string sanitize_map_name(std::string value);
     static std::string sanitize_display_name(std::string value);

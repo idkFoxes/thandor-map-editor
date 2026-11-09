@@ -1,0 +1,5 @@
+dist
+build-windows-x64
+.deps
+build
+__pycache__

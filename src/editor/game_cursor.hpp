@@ -117,10 +117,10 @@ private:
     std::vector<thandor::RgbaImage> images_;
 };
 
-// InGameWorldInput_UpdateDragSelectionAndCameraCf adds pointerDelta * 0x40 to a
-// 16-bit heading. Preserve that exact turn granularity for editor camera dragging.
+// WorldMotion_AdjustHeadingAndRecomputePosition uses 16 turn16 units per pixel.
+// Building placement separately uses 64; these are different native input paths.
 constexpr float game_camera_turn_radians_per_pixel() noexcept {
-    return 64.0F * (2.0F * std::numbers::pi_v<float> / 65536.0F);
+    return 16.0F * (2.0F * std::numbers::pi_v<float> / 65536.0F);
 }
 
 // WorldRuntime_TranslateCameraByScreenDelta multiplies each screen delta by
