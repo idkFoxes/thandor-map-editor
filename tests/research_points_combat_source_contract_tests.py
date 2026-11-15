@@ -55,7 +55,7 @@ req('event.kind==thandor::SimulationLabOneShotEventKind::WeaponLaunchEffect||' i
     'event.kind==thandor::SimulationLabOneShotEventKind::WeaponImpactEffect' in app and
     'movement_ground_effects_.push_back(MovementGroundEffectInstance{' in app,
     'selected 3D Lab run does not consume combat EFF events')
-req('ImGui::TreeNode("Faction results")' in app and
+req('ImGui::TreeNode(tr_label("Faction results"))' in app and
     'graphics_family_single_player_faction_name(family)' in app and
     'run.faction_score[faction].points' in app,
     'retail Points calculation is not visible in the Simulation Lab UI')

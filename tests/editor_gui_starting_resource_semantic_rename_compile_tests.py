@@ -26,8 +26,8 @@ def main() -> int:
     args = ap.parse_args()
     root = args.source.resolve()
     editor = (root / "src/editor/editor_app.cpp").read_text(encoding="utf-8")
-    begin = editor.find('ImGui::SeparatorText("Starting resources by active faction")')
-    end = editor.find('ImGui::SeparatorText("Placement readiness")', begin)
+    begin = editor.find('ImGui::SeparatorText(tr("Starting resources by active faction"))')
+    end = editor.find('ImGui::SeparatorText(tr("Placement readiness"))', begin)
     if begin < 0 or end < 0:
         fail("starting-resource GUI block not found")
     block = editor[begin:end]
@@ -36,7 +36,7 @@ def main() -> int:
     for token in ["xenite_units", "tritium_units", '"Starts with no Xenite or Tritium."']:
         if token not in block:
             fail(f"required semantic token missing: {token}")
-    m = re.search(r'if\(([^\n]+)\)\s*\n\s*ImGui::(?:TextColored|TextDisabled)\([^\n]*"Starts with no Xenite or Tritium\."\);', block)
+    m = re.search(r'if\(([^\n]+)\)\s*\n\s*ImGui::(?:TextColored|TextDisabled)\([^\n]*tr\("Starts with no Xenite or Tritium\."\)\);', block)
     if not m:
         fail("zero-resource condition not found beside current message")
     expr = m.group(1).strip()

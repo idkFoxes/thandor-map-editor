@@ -33,7 +33,7 @@ req('lab_snapshot_rebuild=simulation_lab_active()&&simulation_lab_snapshot_dirty
     '(!simulation_lab_active()&&dynamic_geometry_present)' in app,
     'dynamic scene is still forced to rebuild every presentation tick merely because the lab is active')
 req('bool simulation_lab_show_all_runs_{};' in app_h and
-    'Checkbox("Show other runs",&simulation_lab_show_all_runs_)' in app,
+    'Checkbox(tr_label("Show other runs"),&simulation_lab_show_all_runs_)' in app,
     'all-run lightweight marker rendering is not explicit opt-in')
 req('std::jthread thread_' in worker_h and 'std::stop_token' in worker,
     'worker is not owned/stopped with C++20 jthread semantics')

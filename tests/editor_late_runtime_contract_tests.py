@@ -11,6 +11,7 @@ hdr = (root / 'src/editor/editor_app.hpp').read_text()
 cat = (root / 'src/core/catalog.cpp').read_text()
 model = (root / 'src/core/model.cpp').read_text()
 doc = (root / 'src/core/map_document.cpp').read_text()
+archive = (root / 'src/core/map_project_archive.cpp').read_text()
 effect = (root / 'src/core/effect.cpp').read_text()
 tech = (root / 'include/thandor/technology.hpp').read_text()
 
@@ -47,18 +48,21 @@ for rejected in [
     if rejected in combined:
         raise SystemExit(f'superseded/legacy technology path survived: {rejected}')
 
-# Legacy .thmap projects may be imported with empty/default editor-only masks,
-# but all newly saved projects must carry V3 metadata.
+# ZIP projects now carry the same editor metadata in map.ini. The explicit
+# PCK export retains the legacy V3 manifest, and the loader accepts V1–V3.
 for required_compatibility_token in [
     'constexpr std::string_view kProjectMagic = "THANDOR_MAP_EDITOR_PROJECT_V3"',
     'manifest << kProjectMagic',
-    'line != "THANDOR_MAP_EDITOR_PROJECT_V2"',
-    'line != "THANDOR_MAP_EDITOR_PROJECT_V1"',
+    'write_zip_map_project(project_path, entries)',
+    'legacy ? kLegacyMapManifest : kZipMapManifest',
     'document.faction_technology_masks_[faction][word]',
     'document.placement_tags_[index].preview_integrity_percent = 100U',
 ]:
     if required_compatibility_token not in doc:
-        raise SystemExit(f'V3 save/V1-V2 load contract missing: {required_compatibility_token}')
+        raise SystemExit(f'ZIP/legacy save contract missing: {required_compatibility_token}')
+for version in (1, 2, 3):
+    if f'trim(line) != "THANDOR_MAP_EDITOR_PROJECT_V{version}"' not in archive:
+        raise SystemExit(f'Archive parser no longer accepts legacy V{version}')
 
 # The source must not consume a random number merely to compute a fixed cooldown. This checks the
 # implementation shape in addition to the C++ behavioral test.

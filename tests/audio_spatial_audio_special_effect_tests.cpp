@@ -76,7 +76,7 @@ int main(int argc,char** argv) try {
     const auto editor_header=read_text(source/"src/editor/editor_app.hpp");
     const auto model=read_text(source/"src/core/model.cpp");
     const auto effect=read_text(source/"src/core/effect.cpp");
-    require(editor.find("SliderInt(\"Sound volume\"")!=std::string::npos&&
+    require(editor.find("SliderInt(tr_label(\"Sound volume\")")!=std::string::npos&&
             editor_header.find("sound_effects_gain_q15_{0x8000U}")!=std::string::npos,
             "master Sound volume UI/default missing");
     require(editor.find("spatial_audio_listener()")!=std::string::npos&&
@@ -112,7 +112,7 @@ int main(int argc,char** argv) try {
         const std::unordered_map<uint32_t,uint32_t> tower_base_shots{
             {345U,19U},{350U,9U},{351U,18U},{352U,20U},{360U,2U},{361U,17U},
             {362U,27U},{363U,11U},{364U,10U},{365U,30U},{366U,31U},{370U,6U},
-            {371U,3U},{372U,12U},{373U,25U},{374U,14U},{376U,32U},{377U,4U}};
+            {371U,3U},{372U,12U},{373U,25U},{374U,14U},{375U,0U},{376U,32U},{377U,4U}};
         for(const auto& [arm_id,shot_id]:tower_base_shots){
             const auto* preset=catalog.army_preset(arm_id);
             require(preset!=nullptr,"missing tower ARM "+std::to_string(arm_id));
@@ -140,18 +140,16 @@ int main(int argc,char** argv) try {
             }
             require(arm_pipeline_count==preset->effect_pipeline_validation.weapon_pipeline_count,
                     "tower variant pipeline census disagrees with catalog validation ARM "+std::to_string(arm_id));
-            const uint32_t expected=arm_id==375U?2U:3U;
-            require(arm_pipeline_count==expected,
+            require(arm_pipeline_count==3U,
                     "tower technology pipeline count drift ARM "+std::to_string(arm_id));
         }
-        require(tower_variant_pipeline_count==56U,"stock tower technology pipeline census drift");
+        require(tower_variant_pipeline_count==57U,"stock tower technology pipeline census drift");
         const auto* radar=catalog.army_preset(340U);
         require(radar&&radar->simulation_weapon_profiles.empty(),"radar turret invented a projectile weapon");
 
-        // ARM 375 is intentionally SHT-0 in the base hierarchy. Technology 91 replaces that MDL
-        // with 1224/SHT1000; the runtime weapon profile must follow the resolved hierarchy too.
+        // The base laser uses valid SHT 0. Technology 91 replaces the weapon MDL
+        // with 1224/SHT 1000, which the resolved runtime profile must retain.
         const auto* laser_turret=catalog.army_preset(375U);require(laser_turret,"missing ARM 375");
-        require(laser_turret->simulation_weapon_profiles.empty(),"ARM375 base hierarchy unexpectedly armed");
         thandor::FactionTechnologyMask256 laser_mask{};
         thandor::set_faction_technology_unlocked(laser_mask,91U,true);
         const auto laser_hierarchy=thandor::resolve_faction_technology_hierarchy(*laser_turret,laser_mask);

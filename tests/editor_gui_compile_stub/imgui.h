@@ -48,6 +48,7 @@ inline constexpr int ImGuiWindowFlags_NoMove=1<<0, ImGuiWindowFlags_NoResize=1<<
  ImGuiWindowFlags_NoDecoration=1<<6, ImGuiWindowFlags_NoFocusOnAppearing=1<<7, ImGuiWindowFlags_NoInputs=1<<8,
  ImGuiWindowFlags_NoNav=1<<9, ImGuiWindowFlags_NoNavInputs=1<<10, ImGuiWindowFlags_NoSavedSettings=1<<11,
  ImGuiWindowFlags_NoScrollWithMouse=1<<12, ImGuiWindowFlags_NoScrollbar=1<<13;
+inline constexpr int ImGuiComboFlags_HeightLarge=1<<3;
 inline constexpr int ImGuiChildFlags_AutoResizeY=1, ImGuiChildFlags_Border=2;
 inline constexpr int ImGuiTableFlags_Borders=1, ImGuiTableFlags_BordersInnerV=2, ImGuiTableFlags_NoSavedSettings=4,
  ImGuiTableFlags_RowBg=8, ImGuiTableFlags_ScrollY=16, ImGuiTableFlags_SizingStretchProp=32;
@@ -97,6 +98,8 @@ inline ImVec4 ColorConvertU32ToFloat4(ImU32){return {};}
 inline void SetNextWindowPos(ImVec2, ImGuiCond=0, ImVec2={}) {}
 inline void SetNextWindowSize(ImVec2, ImGuiCond=0) {}
 inline void SetNextWindowSizeConstraints(ImVec2, ImVec2) {}
+inline bool IsWindowAppearing() { return false; }
+inline void SetScrollHereY(float = 0.5f) {}
 inline bool InvisibleButton(const char*, ImVec2, int=0) { return true; }
 inline bool BeginChild(const char*, ImVec2={}, ImGuiChildFlags=0, ImGuiWindowFlags=0) { return true; }
 inline void ProgressBar(float, ImVec2 = {}, const char* = nullptr) {}

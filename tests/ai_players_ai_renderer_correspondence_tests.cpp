@@ -71,7 +71,7 @@ int main(int argc, char** argv) try {
     const auto map_cpp = read_text(source / "src/core/map_document.cpp");
     const auto terrain_shader = read_text(source / "shaders/terrain.frag");
     const auto model_shader = read_text(source / "shaders/model.frag");
-    check(editor.find("begin_inspector_tab(\"Players\",2)") != std::string::npos &&
+    check(editor.find("begin_inspector_tab(tr_label(\"Players\"),2)") != std::string::npos &&
           editor.find("Total active factions") != std::string::npos &&
           editor.find("Human player slots") != std::string::npos &&
           editor.find("Starting resources by active faction") != std::string::npos &&

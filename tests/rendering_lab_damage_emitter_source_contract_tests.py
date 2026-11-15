@@ -18,7 +18,7 @@ transient=text[text.index('const auto append_runtime_transient_model='):text.ind
 assert 'simulation_lab_damage_emitter_for_model(' in transient
 assert 'lab_runtime!=nullptr ||' in transient
 assert 'if(lab_runtime){' in transient
-start=text.index('if(animate_timed_effects_&&!damage_effect_controllers_.empty())')
+start=text.index('if(!jandrenator_scene_&&animate_timed_effects_&&!damage_effect_controllers_.empty())')
 end=text.index('const auto& placement=placements[source.placement_index];',start)
 block=text[start:end]
 assert 'simulation_lab_damage_emitter_for_model(' in block

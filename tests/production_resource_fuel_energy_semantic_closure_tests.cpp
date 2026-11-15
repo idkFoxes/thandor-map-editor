@@ -109,8 +109,8 @@ int main() try {
     require(editor.find("Xenite (gold)") != std::string::npos &&
             editor.find("Tritium (blue)") != std::string::npos,
             "resource-field paint choices still expose pre-V428 semantics");
-    require(editor.find("InputInt(\"Xenite\"") != std::string::npos &&
-            editor.find("InputInt(\"Tritium\"") != std::string::npos,
+    require(editor.find("InputInt(tr_label(\"Xenite\")") != std::string::npos &&
+            editor.find("InputInt(tr_label(\"Tritium\")") != std::string::npos,
             "faction starting-resource editor does not expose Xenite/Tritium");
     require(editor.find("Energy generation +") != std::string::npos &&
             editor.find("Demand %llu MWh · Xenite ") != std::string::npos,

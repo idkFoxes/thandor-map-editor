@@ -63,7 +63,7 @@ int main() {
     assert(editor.find("Player / AI starting cameras") != std::string::npos);
     assert(editor.find("frontend_active_faction_count()") != std::string::npos);
     assert(editor.find("frontend_assignable_faction_count()") != std::string::npos);
-    assert(editor.find("human?\"Player\":\"AI\"") != std::string::npos);
+    assert(editor.find("human?tr(\"Player\"):tr(\"AI\")") != std::string::npos);
     assert(editor.find("void EditorApp::draw_faction_camera_start_cards()") != std::string::npos);
     assert(editor.find("View stored") != std::string::npos);
     assert(editor.find("Aim at start") != std::string::npos);

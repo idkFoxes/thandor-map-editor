@@ -1,6 +1,7 @@
 #include "thandor/binary.hpp"
 #include "thandor/catalog.hpp"
 #include "thandor/effect.hpp"
+#include "thandor/map_project_archive.hpp"
 #include "thandor/model.hpp"
 #include "thandor/technology.hpp"
 
@@ -253,16 +254,35 @@ int main() try {
             "damage preview does not resolve model lookup key class 3 attachment points");
     require(editor.find("origin=runtime_transform.translation") != std::string::npos,
             "damage preview has no model-root fallback when class-3 attachments are absent");
-    // The writer emits only V3, but the loader must migrate older saved
-    // user maps rather than rejecting their missing editor-only research masks.
-    require(document.find("constexpr std::string_view kProjectMagic = \"THANDOR_MAP_EDITOR_PROJECT_V3\"") != std::string::npos &&
-                document.find("manifest << kProjectMagic <<") != std::string::npos &&
-                document.find("line != \"THANDOR_MAP_EDITOR_PROJECT_V2\"") != std::string::npos &&
-                document.find("line != \"THANDOR_MAP_EDITOR_PROJECT_V1\"") != std::string::npos,
-            "V3 write format or backward-compatible V1/V2 import was lost");
+    require(document.find("write_zip_map_project(project_path, entries)") != std::string::npos &&
+                document.find("legacy ? kLegacyMapManifest : kZipMapManifest") != std::string::npos &&
+                document.find("manifest << kProjectMagic <<") != std::string::npos,
+            "ZIP project write or legacy V3 export was lost");
     require(document.find("faction_technology_mask.") != std::string::npos &&
                 document.find("placement_integrity_percent.") != std::string::npos,
-            "project V3 does not persist exact faction research and damage-preview state");
+            "project does not persist exact faction research and damage-preview state");
+
+    const auto parse_manifest = [](bool zip, const std::string& header) {
+        const std::string text = header +
+            "\nfaction_technology_mask.1.0=00000010\nplacement_integrity_percent.0=63\n";
+        const auto bytes = std::as_bytes(std::span(text.data(), text.size()));
+        thandor::MapProjectArchive archive;
+        archive.zip = zip;
+        archive.files.emplace(zip ? thandor::kZipMapManifest : thandor::kLegacyMapManifest,
+                              std::vector<std::byte>(bytes.begin(), bytes.end()));
+        return archive.manifest();
+    };
+    const auto zip_metadata = parse_manifest(true, "[map]\nformat=1");
+    require(zip_metadata.at("format") == "1" &&
+                zip_metadata.at("faction_technology_mask.1.0") == "00000010" &&
+                zip_metadata.at("placement_integrity_percent.0") == "63",
+            "ZIP manifest dropped research or damage-preview metadata");
+    for (unsigned version = 1; version <= 3; ++version) {
+        const auto metadata = parse_manifest(false, "THANDOR_MAP_EDITOR_PROJECT_V" + std::to_string(version));
+        require(metadata.at("faction_technology_mask.1.0") == zip_metadata.at("faction_technology_mask.1.0") &&
+                    metadata.at("placement_integrity_percent.0") == zip_metadata.at("placement_integrity_percent.0"),
+                "legacy manifest dropped research or damage-preview metadata");
+    }
 
     std::cout << "G400_FACTION_TECHNOLOGY_DAMAGE_STATE_PREVIEW PASS\n";
     return 0;

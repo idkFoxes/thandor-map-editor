@@ -23,12 +23,12 @@ int main()try{
  lab.step(field,1);check(r.entities[1].root_model_integrity==990,"beam did not apply one divided damage tick");
  r.entities[1].actor.position.y+=2;lab.step(field,1);
  check(r.entities[1].root_model_integrity==990,"moved target kept taking stale beam damage");
- check(!r.projectiles[0].impact_target_placement_index&&r.projectiles[0].impact_kind==SimulationImpactKind::None,"beam miss retained the previous entity/material");
+ check(r.projectiles.size()==1&&!r.projectiles.front().impact_target_placement_index&&r.projectiles.front().impact_kind==SimulationImpactKind::None,"active beam miss retained the previous entity/material");
  r.entities[2].actor.position.y=origin.y;lab.step(field,1);
  check(r.entities[2].root_model_integrity==990,"crossing unit did not receive beam damage");
  check(r.metrics.weapon_impact_effect_events==1,"beam emitted its once-only impact effect again");
  lab.step(field,4);check(r.entities[2].root_model_integrity==950,"beam active ages1..7 damage cadence drifted");
- lab.step(field,1);check(r.entities[2].root_model_integrity==950&&r.projectiles[0].impact_damage_applied,"beam expired after servicing an extra damage tick");
+ lab.step(field,1);check(r.entities[2].root_model_integrity==950&&r.projectiles.empty(),"expired beam was retained or serviced an extra damage tick");
  check(r.metrics.projectile_damage_applied==60,"beam cumulative real-contact damage incorrect");
  std::cout<<"V621_BEAM_DAMAGE PASS; target-left damage=10, crossing damage=50, one impact EFF, no expiry hit\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

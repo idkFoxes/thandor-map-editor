@@ -28,7 +28,7 @@ require('active primary route segment reconstructed from V530' in simulation_h,
         'move_waypoint is not documented as the V530 primary solver segment')
 require('queuedWaypoints[8]' in simulation_h and 'separately' in simulation_h,
         'V528 command queue is not explicitly separated from solver segments')
-require('Checkbox("Show route / 4x pathing cells",&v519_path_diagnostics_)' in app,
+require('Checkbox(tr_label("Show route / 4x pathing cells"),&v519_path_diagnostics_)' in app,
         'V530 route diagnostic control missing')
 require('if(!v519_path_diagnostics_||index>=placements.size())continue;' in app and 'live_influence_bands_complete{}' in (root/'include/thandor/v528_pathing.hpp').read_text(),
         'path overlay gate or explicit incomplete live-influence state missing')
