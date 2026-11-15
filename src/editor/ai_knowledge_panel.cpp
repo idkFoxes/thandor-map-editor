@@ -1,3 +1,4 @@
+#include "editor_strings.hpp"
 #include "ai_knowledge_panel.hpp"
 #include "editor_ui_scale.hpp"
 
@@ -33,13 +34,13 @@ void draw_parameter_row(const thandor::AiKnowledgeData& knowledge,
                               semantic->identifier.data());
         }
     } else {
-        ImGui::TextDisabled("unresolved");
+        ImGui::TextDisabled(tr("unresolved"));
     }
     ImGui::TableSetColumnIndex(2);
     ImGui::Text("0x%08X", raw);
     ImGui::TableSetColumnIndex(3);
     ImGui::TextUnformatted(semantic != nullptr
-        ? thandor::ai_knowledge_value_domain_name(semantic->domain) : "raw");
+        ? thandor::ai_knowledge_value_domain_name(semantic->domain) : tr("raw"));
     ImGui::TableSetColumnIndex(4);
     if (semantic != nullptr && semantic->domain == thandor::AiKnowledgeValueDomain::Q12Distance) {
         ImGui::Text("%.3f", thandor::q12_to_float(signed_value));
@@ -58,9 +59,9 @@ void draw_parameter_row(const thandor::AiKnowledgeData& knowledge,
 void draw_ai_knowledge_panel(const std::optional<thandor::AiKnowledgeData>& knowledge,
                              const std::string& load_error,
                              AiKnowledgeUiState& state) {
-    ImGui::SeparatorText("Original KI parameters");
+    ImGui::SeparatorText(tr("Original KI parameters"));
     if (!knowledge) {
-        ImGui::TextDisabled("engine/ki.dat unavailable");
+        ImGui::TextDisabled(tr("engine/ki.dat unavailable"));
         if (!load_error.empty() && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", load_error.c_str());
         return;
     }
@@ -73,7 +74,7 @@ void draw_ai_knowledge_panel(const std::optional<thandor::AiKnowledgeData>& know
     }
 
     const char* preview = selected != nullptr ? selected->label.data() : "Q12 distance";
-    if (ImGui::BeginCombo("Diagnostic distance", preview)) {
+    if (ImGui::BeginCombo(tr_label("Diagnostic distance"), preview)) {
         for (const auto& semantic : thandor::known_ai_knowledge_semantics()) {
             if (semantic.domain != thandor::AiKnowledgeValueDomain::Q12Distance) continue;
             const bool active = semantic.index == state.distance_parameter_index;
@@ -87,33 +88,33 @@ void draw_ai_knowledge_panel(const std::optional<thandor::AiKnowledgeData>& know
 
     if (selected != nullptr) {
         const std::int32_t value_q12 = knowledge->signed_raw(selected->index);
-        ImGui::Text("KI[0x%02X] = %d Q12 = %.3f world units", selected->index, value_q12,
+        ImGui::Text(tr("KI[0x%02X] = %d Q12 = %.3f world units"), selected->index, value_q12,
                     thandor::q12_to_float(value_q12));
     }
-    ImGui::Checkbox("Show diagnostic distance ring", &state.show_distance_overlay);
+    ImGui::Checkbox(tr_label("Show diagnostic distance ring"), &state.show_distance_overlay);
     if (state.show_distance_overlay) {
         ImGui::SameLine();
-        ImGui::Checkbox("All placements", &state.show_distance_for_all_placements);
+        ImGui::Checkbox(tr_label("All placements"), &state.show_distance_for_all_placements);
     }
     ImGui::TextWrapped(
-        "The ring visualizes one proven KI.DAT distance term only. It is not a universal LEV "
+        tr("The ring visualizes one proven KI.DAT distance term only. It is not a universal LEV "
         "validity rule. Retail AI placement combines class-specific rules, candidate/runtime "
         "clearance, model radius, terrain and occupancy tests. Manual placement and export are "
-        "never blocked by this diagnostic overlay.");
+        "never blocked by this diagnostic overlay."));
 
-    ImGui::Checkbox("Show 62 sourced KI parameters", &state.show_parameter_table);
+    ImGui::Checkbox(tr_label("Show 62 sourced KI parameters"), &state.show_parameter_table);
     ImGui::SameLine();
-    ImGui::Checkbox("Include unresolved raw entries", &state.show_all_raw_parameters);
+    ImGui::Checkbox(tr_label("Include unresolved raw entries"), &state.show_all_raw_parameters);
     if (!state.show_parameter_table && !state.show_all_raw_parameters) return;
 
     if (ImGui::BeginTable("ki-parameters", 5,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
                           ImVec2(0.0F, ui_px(260.0F)))) {
-        ImGui::TableSetupColumn("Index");
-        ImGui::TableSetupColumn("Semantic");
-        ImGui::TableSetupColumn("Raw");
-        ImGui::TableSetupColumn("Domain");
-        ImGui::TableSetupColumn("Decoded");
+        ImGui::TableSetupColumn(tr("Index"));
+        ImGui::TableSetupColumn(tr("Semantic"));
+        ImGui::TableSetupColumn(tr("Raw"));
+        ImGui::TableSetupColumn(tr("Domain"));
+        ImGui::TableSetupColumn(tr("Decoded"));
         ImGui::TableHeadersRow();
         if (state.show_all_raw_parameters) {
             for (std::uint16_t index = 0; index < thandor::AiKnowledgeData::kParameterCount; ++index) {

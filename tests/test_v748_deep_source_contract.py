@@ -16,7 +16,7 @@ for p in ROOT.rglob("*"):
     if not p.is_file() or p.suffix.lower() not in PROD_EXT:
         continue
     rel=p.relative_to(ROOT).as_posix().lower()
-    if rel.startswith("tests/") or rel.startswith("docs/") or "third_party/" in rel:
+    if rel.startswith(("tests/", "docs/", "exclude/")) or "third_party/" in rel:
         continue
     try:
         parts.append(p.read_text(errors="ignore"))

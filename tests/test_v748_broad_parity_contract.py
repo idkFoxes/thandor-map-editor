@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TEXT_EXTS = {".cpp", ".cc", ".c", ".h", ".hpp", ".py", ".md", ".txt", ".json", ".cmake"}
 texts = []
 for path in ROOT.rglob("*"):
+    if path.relative_to(ROOT).parts[0] == "exclude":
+        continue
     if path.is_file() and (path.suffix.lower() in TEXT_EXTS or path.name == "CMakeLists.txt"):
         try:
             texts.append(path.read_text(errors="ignore"))

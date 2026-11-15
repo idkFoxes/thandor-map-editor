@@ -26,6 +26,8 @@ DOMAINS={
 def source_text(root:Path):
     index={}
     for p in root.rglob("*"):
+        if p.relative_to(root).parts[0] == "exclude":
+            continue
         if p.is_file() and p.suffix.lower() in {".cpp",".cc",".c",".h",".hpp"}:
             try:index[p.relative_to(root).as_posix()]=p.read_text(errors="ignore")
             except OSError:pass

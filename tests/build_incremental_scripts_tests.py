@@ -9,6 +9,11 @@ with tempfile.TemporaryDirectory(prefix='thandor-build-test-') as tmp:
     root=Path(tmp)/'source with spaces'; root.mkdir(); (root/'tools').mkdir()
     for name in ('build_linux.sh','build_linux_andassets.sh','build_windows_from_linux.sh','tools/build_common.sh','tools/clean_build_directory_preserving_artifacts.sh'):
         shutil.copy2(source/name,root/name)
+    miniz_license=Path('third_party/miniz/LICENSE')
+    open_thandor_license=Path('third_party/open-thandor/LICENSE')
+    for license_file in (miniz_license,open_thandor_license):
+        (root/license_file).parent.mkdir(parents=True)
+        shutil.copy2(source/license_file,root/license_file)
     fake=Path(tmp)/'fake';fake.mkdir();calls=Path(tmp)/'calls.jsonl'
     cmake=fake/'cmake'
     cmake.write_text('''#!/usr/bin/env python3
@@ -23,6 +28,7 @@ if '--build' in args:
  p=Path(args[1]);(p/'thandor-map-editor').write_text('fake');(p/'thandor-map-editor').chmod(0o755)
  (p/'thandor-map-editor.exe').write_text('fake');(p/'shaders').mkdir(exist_ok=True);(p/'shaders/main.spv').write_bytes(b'fake')
  (p/'assets/fonts').mkdir(parents=True,exist_ok=True);(p/'assets/fonts/DejaVuSans.ttf').write_bytes(b'font');(p/'assets/fonts/LICENSE').write_text('font license')
+ (p/'assets/localization').mkdir(parents=True,exist_ok=True);(p/'assets/localization/editor.tsv').write_text('translations')
 if args[:2]==['-E','tar']:Path(args[3]).touch()
 ''');cmake.chmod(0o755)
     ctest=fake/'ctest';ctest.write_text('''#!/usr/bin/env python3
@@ -102,12 +108,17 @@ exit "${FAIL_APPIMAGE:-0}"
     import shlex
     (deps/'prepared.env').write_text(''.join('THANDOR_WINDOWS_'+k+'='+shlex.quote(str(v))+'\n' for k,v in paths.items())+'THANDOR_WINDOWS_TRIPLET=test-missing-triplet\n')
     dist=root/'dist/windows-x64';dist.mkdir(parents=True);(dist/'keep.PCK').write_text('package asset')
+    (dist/'jandrenator-headless.exe').write_bytes(b'old companion')
     rows=run('build_windows_from_linux.sh',{'THANDOR_WINDOWS_DEPS_DIR':str(deps),'THANDOR_WINDOWS_BUILD_DIR':str(build),'THANDOR_WINDOWS_DIST_DIR':str(dist),'THANDOR_WINE_SMOKE_TEST':'0'})
     assert '-G' not in rows[0] and rows[1][-2:]==['--parallel','2']
     assert (dist/'keep.PCK').read_text()=='package asset'
     assert (dist/'thandor-map-editor.exe').exists() and (dist/'shaders/main.spv').exists()
     assert (dist/'assets/fonts/DejaVuSans.ttf').read_bytes()==b'font'
     assert (dist/'assets/fonts/LICENSE').read_text()=='font license'
+    assert (dist/'assets/localization/editor.tsv').read_text()=='translations'
+    assert (dist/'MINIZ-LICENSE.txt').read_bytes()==(source/miniz_license).read_bytes()
+    assert (dist/'OPEN-THANDOR-LICENSE.txt').read_bytes()==(source/open_thandor_license).read_bytes()
+    assert not (dist/'jandrenator-headless.exe').exists()
     assert 'assets/fonts/DejaVuSans.ttf' in (dist/'SHA256SUMS.txt').read_text()
     assert (root/'dist/ThandorMapEditor-windows-x64.zip').exists()
     assert all(x[0]!='ctest' for x in rows),'cross compiled tests require an explicit emulator'

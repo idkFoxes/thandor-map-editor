@@ -15,6 +15,28 @@ struct SimulationLabEffectPose {
     std::optional<std::array<uint32_t,3>> native_angles{};
     std::optional<std::array<int32_t,9>> native_basis{};
 };
+struct SimulationLabNativeModelPose {
+    uint64_t child_path{1};
+    SimulationLabEffectPose pose;
+    uint32_t primary_texture{}, secondary_texture{};
+    std::array<int32_t, 4> texture_offsets{};
+};
+
+struct SimulationLabNativeVisual {
+    SimulationLabEffectPose pose;
+    uint32_t definition_id{}, age{}, frame{}, tint{};
+    float scale{1.0F};
+    float beam_length{};
+    uint32_t faction{};
+    bool shot{};
+};
+
+struct SimulationLabNativeLight {
+    Vec3f position{};
+    float radius{};
+    uint32_t rgb{};
+};
+
 struct SimulationLabScenerySeed {
     std::size_t placement_index{};
     uint32_t army_asset_id{},yaw{};

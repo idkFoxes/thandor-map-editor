@@ -1420,6 +1420,8 @@ AssetCatalog AssetCatalog::scan_archive_root(const std::filesystem::path& game_r
                 auto localized = normalize_localized_asset_name(army_asset_name_text->string(text_index));
                 if (localized.empty()) continue;
                 preset.localized_name = std::move(localized);
+                if (text_index < army_asset_name_text->string_count(49U))
+                    preset.localized_name_de = normalize_localized_asset_name(army_asset_name_text->string(text_index, 49U));
             } catch (const std::exception&) {
                 // Keep this one asset on the exact SPR-derived fallback label.
             }
@@ -1998,6 +2000,11 @@ AssetCatalog AssetCatalog::scan_archive_root(const std::filesystem::path& game_r
     }
 
     std::set<std::size_t> map_owned;
+    std::optional<TextResourceAsset> level_titles;
+    if (const auto* titles = catalog.find("texte/level.str")) {
+        try { level_titles = TextResourceAsset::parse(catalog.load(*titles)); }
+        catch (const FormatError&) {}
+    }
     for (std::size_t i = 0; i < catalog.assets_.size(); ++i) {
         const auto& level_record = catalog.assets_[i];
         if (level_record.kind != AssetKind::Level) continue;
@@ -2010,6 +2017,27 @@ AssetCatalog AssetCatalog::scan_archive_root(const std::filesystem::path& game_r
                 group.display_name = parent.substr(6) + " / " + group.display_name;
             }
             group.level_path = level_record.normalized_path;
+            const auto text_path = group.level_path.substr(0, group.level_path.size() - 4) + ".str";
+            const auto* own_text = catalog.find(text_path);
+            try {
+                if (own_text && own_text->archive_name == level_record.archive_name) {
+                    const auto text = TextResourceAsset::parse(catalog.load(*own_text));
+                    group.game_title_en = text.compatibility_display_name(44U);
+                    group.game_title_de = text.compatibility_display_name(49U);
+                } else if (level_titles && level.compatibility_alias_base() < 0xD0U) {
+                    const auto title_index = 0x30U + level.compatibility_alias_base();
+                    const auto read_title = [&](uint32_t country) {
+                        if (title_index >= level_titles->string_count(country)) return std::string{};
+                        auto title = level_titles->string(title_index, country);
+                        const auto first = title.find_first_not_of(" \t");
+                        return first == std::string::npos ? std::string{} : title.substr(first);
+                    };
+                    group.game_title_en = read_title(44U);
+                    group.game_title_de = read_title(49U);
+                }
+            } catch (const FormatError&) {
+                // A broken title does not prevent selecting the map by its asset name.
+            }
             // The LEV resource path owns its FLD reference. Tutorial scenarios can
             // share a terrain file (T02_tut references T01_tut); the LEV filename
             // is not the field identity. Retail replaces the referenced path's extension.

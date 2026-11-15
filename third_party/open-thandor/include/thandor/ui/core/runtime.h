@@ -1,0 +1,112 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/ui/core/runtime.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_UI_CORE_RUNTIME_H
+#define THANDOR_UI_CORE_RUNTIME_H
+
+#include <thandor/core/memory/types.h>
+#include <thandor/core/types.h>
+#include <thandor/network/protocol/types.h>
+#include <thandor/ui/controls/types.h>
+#include <thandor/ui/core/types.h>
+#include <thandor/core/contracts.h>
+
+/* Receive ring of network packets (g_UiRuntimeRecordRing, 0x100-byte UiRuntimeRecord slots) with a parallel
+   array of 0x80-byte sender-endpoint slots (g_UiRuntimeRecordEndpointSlots); indices wrap after 256. */
+inline constexpr int32_t UI_RUNTIME_RECORD_RING_LAST_INDEX = 0xff;
+inline constexpr int32_t UI_RUNTIME_RECORD_RING_CAPACITY = 0x100;
+inline constexpr int32_t UI_RUNTIME_RECORD_ENDPOINT_SLOT_SIZE = 0x80;
+
+/* ARGB8888 opaque black, the clear colour of full-screen fills */
+inline constexpr uint32_t UI_ARGB_OPAQUE_BLACK = 0xff000000u;
+/* Buffers UiRuntime_Initialize allocates for the mailbox transfer (g_UiTransferEndpointBuffer,
+   g_UiTransferDataBuffer) */
+inline constexpr int32_t UI_TRANSFER_ENDPOINT_BUFFER_BYTES = 0x1000;
+inline constexpr int32_t UI_TRANSFER_DATA_BUFFER_BYTES = 0x2000;
+
+/* Action queue (g_UiActionQueueEntries, allocated by UiRuntime_Initialize): 16 entries (actionId, source;
+   8 bytes each on x86), filled by UiActionQueue_Enqueue and drained once per frame by
+   UiActionQueue_DispatchPending. actionId -1 means "no action" and is never queued. */
+#define UI_ACTION_QUEUE_BYTES (16 * sizeof(UiActionQueueEntry))
+inline constexpr int32_t UI_ACTION_NONE = -1;
+/* Dirty rectangles collected by UiNode_InvalidateRoot per frame (0x18-byte UiDirtyRectEntry each). */
+inline constexpr int32_t UI_DIRTY_RECT_CAPACITY = 0x40;
+/* Action handler table g_UiActionHandlerPages: 256 pages of 256 handlers; action id bits 8..15 pick the page,
+   bits 0..7 the handler (UiActionQueue_DispatchPending). */
+inline constexpr int32_t UI_ACTION_HANDLER_PAGE_COUNT = 256;
+/* Handler pages Game_LoadCoreAssets installs (UiActionHandlers_SetPage); page = action id >> 8 */
+inline constexpr int32_t UI_ACTION_PAGE_INGAME = 0x10; /* g_InGameUiActionHandlersPage10: INGAME_ACTION_* 0x10xx */
+inline constexpr int32_t UI_ACTION_PAGE_INGAME_COMMAND_MODE = 0x11; /* g_InGameUiActionHandlersPage11 */
+inline constexpr int32_t UI_ACTION_PAGE_INGAME_MENU = 0x12; /* g_InGameUiActionHandlersPage12: settings and save pages, 0x12xx */
+inline constexpr int32_t UI_ACTION_PAGE_FRONTEND = 0x20; /* g_FrontendUiActionHandlersPage20: frontend menus, 0x20xx */
+
+bool UiRootCallbacks_Free(UiRootNode *root);
+
+bool UiModalDialogRoot_BlockMissedPointerPress(UiRootNode *root);
+
+bool UiRuntimeRecordRing_TakeOldest(void **outPacket,void **outEndpoint);
+
+void UiRuntimeRecordRing_Clear();
+
+bool UiRuntimeRecordRing_ContainsId(UiTransferSequenceToken sessionToken);
+
+void UiRuntime_SetSynchronizationHooks
+          (UiRuntimePostUnlockCallbackProc *postUnlockCallback,RuntimeSpinLockValue *frameLock);
+
+void UiRuntime_Initialize();
+
+void UiRuntime_Shutdown();
+
+void UiRuntime_IncrementPeriodicTickCounter();
+
+void UiActionQueue_DispatchPending();
+
+void UiNode_DefaultMethod04_NoOp(UiNodeBase *node);
+
+void UiNode_DefaultNonRightPress(UiPointerWheelDelta wheelDelta,UiPixelCoordinate pointerY,UiPixelCoordinate pointerX,
+          UiNodeBase *control);
+
+void UiNode_DefaultNonRightRelease(UiPointerWheelDelta wheelDelta,UiPixelCoordinate pointerY,UiPixelCoordinate pointerX,
+          UiNodeBase *control);
+
+void UiNode_ForwardRightPressToParent
+          (UiPointerWheelDelta wheelDelta,UiPixelCoordinate pointerY,UiPixelCoordinate pointerX,
+          UiNodeBase *control);
+
+void UiNode_DefaultRightRelease(UiPointerWheelDelta wheelDelta,UiPixelCoordinate pointerY,UiPixelCoordinate pointerX,
+          UiNodeBase *control);
+
+void UiNode_DefaultNonRightDrag (UiPointerWheelDelta wheelDelta,UiPixelCoordinate pointerY,UiPixelCoordinate pointerX ,UiNodeBase *control);
+
+void UiNode_DefaultRightDrag(UiPointerWheelDelta wheelDelta,UiPixelCoordinate pointerY,UiPixelCoordinate pointerX,
+          UiNodeBase *control);
+
+void UiNode_ApplyFlagsRecursive(UiNodeFlags setMask,UiNodeFlags retainMask,UiNodeBase *control);
+
+void UiNode_DefaultTick(UiNodeBase *control);
+
+void UiActionHandlers_SetPage(UiActionHandlerPageIndex pageIndex,UiActionHandlerPage *page);
+
+UiNodeBase * UiNode_GetRoot(UiNodeBase *node);
+
+void UiNode_InvalidateRoot(UiNodeBase *node);
+
+void UiActionQueue_Enqueue(UiActionId actionId,void *source);
+
+int UiModalDialogRoot_BlockMissedPointerMotion(UiRootNode *root);
+
+extern RuntimeSpinLockValue *g_UiRuntimeFrameLock;
+extern UiRuntimePostUnlockCallbackProc *g_UiRuntimePostUnlockCallback;
+
+extern UiRuntimeRecord *g_UiRuntimeRecordRing;
+extern uintptr_t g_UiRuntimeRecordEndpointSlots;
+extern uint8_t *g_UiTransferDataBuffer;
+extern UiTransferEndpointDescriptor *g_UiTransferEndpointBuffer;
+extern RuntimeSpinLockValue g_UiRuntimeRecordRingLock;
+extern UiDirtyRectCount g_UiDirtyRectCount;
+
+#endif /* THANDOR_UI_CORE_RUNTIME_H */

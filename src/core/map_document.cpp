@@ -1,4 +1,5 @@
 #include "thandor/map_document.hpp"
+#include "thandor/map_project_archive.hpp"
 
 #include <algorithm>
 #include <array>
@@ -12,7 +13,6 @@
 
 namespace thandor {
 namespace {
-constexpr std::string_view kProjectManifest = "editor/project.txt";
 constexpr std::string_view kProjectMagic = "THANDOR_MAP_EDITOR_PROJECT_V3";
 constexpr std::string_view kScenarioEntry = "editor/scenario_record.dat";
 
@@ -51,47 +51,12 @@ std::string percent_encode(std::string_view value) {
     return result;
 }
 
-int hex_value(char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    return -1;
-}
-
-std::string percent_decode(std::string_view value) {
-    std::string result;
-    for (std::size_t i = 0; i < value.size(); ++i) {
-        if (value[i] == '%' && i + 2 < value.size()) {
-            const int high = hex_value(value[i + 1]);
-            const int low = hex_value(value[i + 2]);
-            if (high >= 0 && low >= 0) {
-                result.push_back(static_cast<char>((high << 4) | low));
-                i += 2;
-                continue;
-            }
-        }
-        result.push_back(value[i]);
-    }
-    return result;
-}
-
 std::vector<std::byte> text_bytes_padded(std::string text) {
     while ((text.size() & 3U) != 0U) text.push_back('\0');
     std::vector<std::byte> result(text.size());
     std::transform(text.begin(), text.end(), result.begin(), [](char c) {
         return static_cast<std::byte>(static_cast<unsigned char>(c));
     });
-    return result;
-}
-
-std::string bytes_text(std::span<const std::byte> bytes) {
-    std::string result;
-    result.reserve(bytes.size());
-    for (const auto value : bytes) {
-        const char c = static_cast<char>(std::to_integer<unsigned char>(value));
-        if (c == '\0') break;
-        result.push_back(c);
-    }
     return result;
 }
 
@@ -104,28 +69,6 @@ uint32_t parse_manifest_u32(std::string_view value, std::string_view field_name)
         throw FormatError(std::string("invalid unsigned project-manifest value for ") +
                           std::string(field_name));
     return parsed;
-}
-
-std::unordered_map<std::string, std::string> parse_manifest(std::string_view text) {
-    std::unordered_map<std::string, std::string> result;
-    std::istringstream stream{std::string(text)};
-    std::string line;
-    if (!std::getline(stream, line)) throw FormatError("empty .thmap project manifest");
-    if (line.size() >= 3U && static_cast<unsigned char>(line[0]) == 0xEFU &&
-        static_cast<unsigned char>(line[1]) == 0xBBU &&
-        static_cast<unsigned char>(line[2]) == 0xBFU) line.erase(0, 3);
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    if (line != kProjectMagic && line != "THANDOR_MAP_EDITOR_PROJECT_V2" &&
-        line != "THANDOR_MAP_EDITOR_PROJECT_V1") {
-        throw FormatError("unsupported .thmap manifest (expected map-editor V1, V2 or V3 project)");
-    }
-    while (std::getline(stream, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        const auto equals = line.find('=');
-        if (equals == std::string::npos) continue;
-        result.emplace(line.substr(0, equals), percent_decode(line.substr(equals + 1)));
-    }
-    return result;
 }
 
 PlacementRole role_for(const AssetCatalog& catalog, const LevelPlacement& placement) {
@@ -903,20 +846,18 @@ MapDocument MapDocument::open_loose(const AssetCatalog& catalog,
 
 MapDocument MapDocument::open_project(const AssetCatalog& catalog,
                                       const std::filesystem::path& project_path) {
-    const auto archive = PckArchive::open(project_path);
-    const auto* manifest_entry = archive.find(kProjectManifest);
-    if (manifest_entry == nullptr) throw FormatError("map project lacks editor/project.txt");
-    const auto manifest = parse_manifest(bytes_text(archive.extract(*manifest_entry)));
+    const auto archive = MapProjectArchive::open(project_path);
+    const auto manifest = archive.manifest();
     const auto level_it = manifest.find("level_entry");
     const auto field_it = manifest.find("field_entry");
     if (level_it == manifest.end() || field_it == manifest.end()) {
         throw FormatError("map project manifest lacks LEV/FLD entries");
     }
     MapDocument document;
-    document.level_ = LevelAsset::parse(archive.extract(level_it->second));
+    document.level_ = LevelAsset::parse(archive.require(level_it->second));
     const auto mission_mode = manifest.find("preserve_mission_state");
     document.campaign_mission_project_ = mission_mode != manifest.end() && mission_mode->second == "1";
-    document.field_ = FieldGrid::parse(archive.extract(field_it->second));
+    document.field_ = FieldGrid::parse(archive.require(field_it->second));
     document.map_name_ = sanitize_map_name(manifest.at("map_name"));
     const auto display = manifest.find("display_name");
     document.display_name_ = display == manifest.end() ? document.map_name_ : sanitize_display_name(display->second);
@@ -926,26 +867,27 @@ MapDocument MapDocument::open_project(const AssetCatalog& catalog,
 
     const auto scenario_it = manifest.find("scenario_entry");
     const auto string_it = manifest.find("string_entry");
-    if (scenario_it != manifest.end() && archive.find(scenario_it->second) != nullptr) {
-        document.scenario_record_ = ScenarioCatalogRecord::parse(archive.extract(scenario_it->second));
+    if (scenario_it != manifest.end() && archive.files.contains(normalize_project_path(scenario_it->second))) {
+        document.scenario_record_ = ScenarioCatalogRecord::parse(archive.require(scenario_it->second));
     } else {
         document.scenario_record_ = ScenarioCatalogRecord::minimal(
             document.map_name_, document.level_.compatibility_alias_base());
     }
-    if (string_it != manifest.end() && archive.find(string_it->second) != nullptr) {
-        document.level_text_ = TextResourceAsset::parse(archive.extract(string_it->second));
+    if (string_it != manifest.end() && archive.files.contains(normalize_project_path(string_it->second))) {
+        document.level_text_ = TextResourceAsset::parse(archive.require(string_it->second));
         document.level_text_.replace_string_zero_all_locales(document.display_name_);
     } else {
         document.level_text_ = TextResourceAsset::minimal_level_compatibility(document.display_name_);
     }
 
-    for (const auto& entry : archive.entries()) {
-        if (entry.normalized_name == normalize_asset_path(kProjectManifest) ||
-            entry.normalized_name == normalize_asset_path(level_it->second) ||
-            entry.normalized_name == normalize_asset_path(field_it->second) ||
-            (scenario_it != manifest.end() && entry.normalized_name == normalize_asset_path(scenario_it->second)) ||
-            (string_it != manifest.end() && entry.normalized_name == normalize_asset_path(string_it->second))) continue;
-        document.custom_assets_.emplace(entry.normalized_name, archive.extract(entry));
+    for (const auto& [path, bytes] : archive.files) {
+        if (path == kZipMapManifest || path == kLegacyMapManifest ||
+            (archive.zip && path.starts_with(kEditableTerrainDirectory)) ||
+            path == normalize_project_path(level_it->second) ||
+            path == normalize_project_path(field_it->second) ||
+            (scenario_it != manifest.end() && path == normalize_project_path(scenario_it->second)) ||
+            (string_it != manifest.end() && path == normalize_project_path(string_it->second))) continue;
+        document.custom_assets_.emplace(path, bytes);
     }
     const std::string base = terrain_base_path(document.level_.paths().ground_textures);
     for (uint32_t material = 0; material < 26U; ++material) {
@@ -953,6 +895,10 @@ MapDocument MapDocument::open_project(const AssetCatalog& catalog,
         const auto found = manifest.find(key);
         document.terrain_material_sources_[material] = found == manifest.end()
             ? terrain_material_path(base, material) : found->second;
+    }
+    for (auto& [slot, gfx] : read_edited_terrain_images(archive, manifest)) {
+        document.import_terrain_material_bytes(catalog, static_cast<uint8_t>(slot),
+                                               editable_terrain_image_path(slot), std::move(gfx));
     }
     initialize_placement_tags(document, catalog);
     for (uint32_t faction = 0U; faction < document.faction_technology_masks_.size(); ++faction) {
@@ -1619,7 +1565,8 @@ std::vector<PckWriteEntry> MapDocument::campaign_package_entries() const {
     return entries;
 }
 
-void MapDocument::save_project(const std::filesystem::path& project_path, bool preserve_mission_state) const {
+void MapDocument::save_project(const std::filesystem::path& project_path, bool preserve_mission_state,
+                               const AssetCatalog* texture_catalog) const {
     preserve_mission_state = preserve_mission_state || campaign_mission_project_;
     auto emitted_level = level_;
     auto emitted_record = scenario_record_;
@@ -1629,7 +1576,9 @@ void MapDocument::save_project(const std::filesystem::path& project_path, bool p
     const std::string field_entry = "level/" + map_name_ + ".fld";
     const std::string string_entry = level_string_path(map_name_);
     std::ostringstream manifest;
-    manifest << kProjectMagic << '\n';
+    const bool legacy = lower_ascii(project_path.extension().string()) == ".pck";
+    if (legacy) manifest << kProjectMagic << '\n';
+    else manifest << "[map]\nformat=1\n";
     manifest << "preserve_mission_state=" << (preserve_mission_state ? 1 : 0) << '\n';
     manifest << "map_name=" << percent_encode(map_name_) << '\n';
     manifest << "display_name=" << percent_encode(display_name_) << '\n';
@@ -1655,13 +1604,38 @@ void MapDocument::save_project(const std::filesystem::path& project_path, bool p
                  << placement_tags_[index].preview_integrity_percent << '\n';
     }
     std::vector<PckWriteEntry> entries;
-    entries.push_back({std::string(kProjectManifest), text_bytes_padded(manifest.str()), fourcc("txt")});
+    if (!legacy) {
+        std::array<bool, 26> used{};
+        for (const auto& cell : field_.cells()) {
+            const auto slot = cell.material();
+            if (slot < used.size()) used[slot] = true;
+        }
+        const auto base = terrain_base_path(level_.paths().ground_textures);
+        for (uint32_t slot = 0; slot < used.size(); ++slot) {
+            if (!used[slot] || base.empty()) continue;
+            const auto path = terrain_material_path(base, slot);
+            const auto custom = custom_assets_.find(path);
+            if (custom == custom_assets_.end() && (!texture_catalog || !texture_catalog->find(path))) continue;
+            const auto gfx = GfxAsset::parse(custom != custom_assets_.end() ? custom->second : texture_catalog->load(path));
+            auto image = gfx.decode(GraphicsSubresourceIndex{0}, false);
+            // Only the game's standard editable ground tile size can be compiled back into GFX.
+            if (image.width != 256 || image.height != 256) continue;
+            auto bytes = encode_tga_rgba(image);
+            manifest << "terrain_crc." << slot << '=' << map_project_crc32(bytes) << '\n';
+            entries.push_back({editable_terrain_image_path(slot), std::move(bytes), 0});
+        }
+    }
+    auto manifest_bytes = text_bytes_padded(manifest.str());
+    if (!legacy) while (!manifest_bytes.empty() && manifest_bytes.back() == std::byte{0}) manifest_bytes.pop_back();
+    entries.push_back({std::string(legacy ? kLegacyMapManifest : kZipMapManifest),
+                       std::move(manifest_bytes), fourcc("txt")});
     entries.push_back({level_entry, emitted_level.serialize(), fourcc("lev")});
     entries.push_back({field_entry, field_.serialize(), fourcc("fld")});
     entries.push_back({std::string(kScenarioEntry), emitted_record.serialize(), fourcc("dat")});
     entries.push_back({string_entry, level_text_.serialize(), fourcc("str")});
     for (const auto& [path, data] : custom_assets_) entries.push_back({path, data, 0});
-    write_stored_pck(project_path, entries);
+    if (legacy) write_stored_pck(project_path, entries);
+    else write_zip_map_project(project_path, entries);
 }
 
 } // namespace thandor

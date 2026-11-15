@@ -19,7 +19,7 @@ int main(){
 
     check(!initial.logging_enabled&&initial.ui_scale_percent==0,"default editor preferences");
     editor::EditorUserSettings a;
-    a.logging_enabled=true;a.ui_scale_percent=200;
+    a.logging_enabled=true;a.ui_scale_percent=200;a.language="de";
     a.last_map_type="file";
     a.last_map_value="/tmp/my map/quotes\\\" and space.lev";
     auto& c=a.simulation_lab;

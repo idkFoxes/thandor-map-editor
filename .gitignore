@@ -3,3 +3,5 @@ build-windows-x64
 .deps
 build
 __pycache__
+
+/exclude/

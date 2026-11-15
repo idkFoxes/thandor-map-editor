@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <fstream>
 #include <limits>
 
 namespace thandor {
@@ -42,76 +41,82 @@ void append_argb(std::vector<uint8_t>& out, uint32_t value, bool zero_alpha_is_o
 
 } // namespace
 
-RgbaImage load_tga_rgba(const std::filesystem::path& path) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) throw FormatError("could not open TGA texture: " + path.string());
-    std::array<uint8_t, 18> header{};
-    input.read(reinterpret_cast<char*>(header.data()), static_cast<std::streamsize>(header.size()));
-    if (!input) throw FormatError("TGA header is truncated");
-    const uint8_t id_length = header[0];
-    const uint8_t color_map_type = header[1];
-    const uint8_t image_type = header[2];
-    const uint16_t width = static_cast<uint16_t>(header[12] | (header[13] << 8U));
-    const uint16_t height = static_cast<uint16_t>(header[14] | (header[15] << 8U));
-    const uint8_t bits_per_pixel = header[16];
-    const uint8_t descriptor = header[17];
-    if (color_map_type != 0U || image_type != 2U || (bits_per_pixel != 24U && bits_per_pixel != 32U)) {
-        throw FormatError("TGA import requires an uncompressed 24-bit or 32-bit true-colour image");
-    }
-    if (width == 0U || height == 0U) throw FormatError("TGA texture has zero dimensions");
-    if ((descriptor & 0x10U) != 0U) throw FormatError("right-to-left TGA images are not supported");
-    input.seekg(static_cast<std::streamoff>(id_length), std::ios::cur);
-    if (!input) throw FormatError("TGA identification field is truncated");
-    const std::size_t source_stride = bits_per_pixel / 8U;
-    const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
-    std::vector<uint8_t> source(pixel_count * source_stride);
-    input.read(reinterpret_cast<char*>(source.data()), static_cast<std::streamsize>(source.size()));
-    if (!input) throw FormatError("TGA pixel payload is truncated");
+RgbaImage decode_tga_rgba(std::span<const std::byte> bytes) {
+    constexpr std::size_t header_size = 18;
+    if (bytes.size() < header_size) throw FormatError("TGA header is truncated");
+    const auto byte = [&](std::size_t offset) { return std::to_integer<uint8_t>(bytes[offset]); };
+    const uint8_t image_type = byte(2);
+    const uint32_t width = read_u16(bytes, 12), height = read_u16(bytes, 14);
+    const uint8_t depth = byte(16), descriptor = byte(17);
+    if (byte(1) != 0 || (image_type != 2 && image_type != 10) || (depth != 24 && depth != 32))
+        throw FormatError("TGA requires a 24-bit or 32-bit true-colour image");
+    if (width == 0 || height == 0 || uint64_t(width) * height > 16U * 1024 * 1024)
+        throw FormatError("invalid or oversized TGA dimensions");
+    if ((descriptor & 0xc0u) != 0) throw FormatError("interleaved TGA is unsupported");
 
-    RgbaImage image{width, height, std::vector<uint8_t>(pixel_count * 4U)};
-    const bool top_origin = (descriptor & 0x20U) != 0U;
-    for (uint32_t y = 0; y < height; ++y) {
-        const uint32_t source_y = top_origin ? y : static_cast<uint32_t>(height - 1U - y);
-        for (uint32_t x = 0; x < width; ++x) {
-            const std::size_t source_offset =
-                (static_cast<std::size_t>(source_y) * width + x) * source_stride;
-            const std::size_t destination_offset =
-                (static_cast<std::size_t>(y) * width + x) * 4U;
-            image.pixels[destination_offset + 0U] = source[source_offset + 2U];
-            image.pixels[destination_offset + 1U] = source[source_offset + 1U];
-            image.pixels[destination_offset + 2U] = source[source_offset + 0U];
-            image.pixels[destination_offset + 3U] =
-                bits_per_pixel == 32U ? source[source_offset + 3U] : 0xFFU;
+    std::size_t offset = header_size + byte(0);
+    if (offset > bytes.size()) throw FormatError("TGA identification field is truncated");
+    const std::size_t stride = depth / 8;
+    const std::size_t count = std::size_t(width) * height;
+    RgbaImage image{width, height, std::vector<uint8_t>(count * 4)};
+    const bool top_origin = (descriptor & 0x20u) != 0;
+    const bool right_origin = (descriptor & 0x10u) != 0;
+    const auto read_pixel = [&]() -> std::array<uint8_t, 4> {
+        if (stride > bytes.size() - offset) throw FormatError("TGA pixels are truncated");
+        const std::array<uint8_t, 4> rgba{byte(offset + 2), byte(offset + 1), byte(offset),
+            stride == 4 ? byte(offset + 3) : uint8_t{255}};
+        offset += stride;
+        return rgba;
+    };
+    for (std::size_t pixel = 0; pixel < count;) {
+        std::size_t length = count - pixel;
+        bool repeated = false;
+        if (image_type == 10) {
+            if (offset == bytes.size()) throw FormatError("TGA packet is truncated");
+            const auto packet = byte(offset++);
+            length = (packet & 127u) + 1u;
+            repeated = (packet & 128u) != 0;
+            if (length > count - pixel) throw FormatError("TGA packet exceeds image dimensions");
+        }
+        std::array<uint8_t, 4> rgba{};
+        for (std::size_t i = 0; i < length; ++i, ++pixel) {
+            if (i == 0 || !repeated) rgba = read_pixel();
+            auto x = pixel % width, y = pixel / width;
+            if (right_origin) x = width - 1 - x;
+            if (!top_origin) y = height - 1 - y;
+            std::copy(rgba.begin(), rgba.end(), image.pixels.data() + 4 * (y * width + x));
         }
     }
     return image;
 }
 
-void save_tga_rgba(const std::filesystem::path& path, const RgbaImage& image) {
+std::vector<std::byte> encode_tga_rgba(const RgbaImage& image) {
     require_rgba_image(image, "TGA export image");
-    if (image.width > std::numeric_limits<uint16_t>::max() ||
-        image.height > std::numeric_limits<uint16_t>::max()) {
-        throw FormatError("TGA export dimensions exceed the format limit");
+    std::vector<std::byte> bytes(18 + image.pixels.size());
+    bytes[2] = std::byte{2};
+    bytes[12] = std::byte(image.width & 255u);
+    bytes[13] = std::byte(image.width >> 8);
+    bytes[14] = std::byte(image.height & 255u);
+    bytes[15] = std::byte(image.height >> 8);
+    bytes[16] = std::byte{32};
+    bytes[17] = std::byte{0x28}; // top-left origin with eight alpha bits
+    for (std::size_t i = 0; i < image.pixels.size(); i += 4) {
+        bytes[18 + i] = std::byte(image.pixels[i + 2]);
+        bytes[19 + i] = std::byte(image.pixels[i + 1]);
+        bytes[20 + i] = std::byte(image.pixels[i]);
+        bytes[21 + i] = std::byte(image.pixels[i + 3]);
     }
-    if (!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path());
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    if (!output) throw FormatError("could not create TGA texture: " + path.string());
-    std::array<uint8_t, 18> header{};
-    header[2] = 2U;
-    header[12] = static_cast<uint8_t>(image.width & 0xFFU);
-    header[13] = static_cast<uint8_t>((image.width >> 8U) & 0xFFU);
-    header[14] = static_cast<uint8_t>(image.height & 0xFFU);
-    header[15] = static_cast<uint8_t>((image.height >> 8U) & 0xFFU);
-    header[16] = 32U;
-    header[17] = 0x28U; // top-left origin, eight alpha bits
-    output.write(reinterpret_cast<const char*>(header.data()), static_cast<std::streamsize>(header.size()));
-    std::array<uint8_t, 4> bgra{};
-    for (std::size_t offset = 0; offset < image.pixels.size(); offset += 4U) {
-        bgra = {image.pixels[offset + 2U], image.pixels[offset + 1U],
-                image.pixels[offset + 0U], image.pixels[offset + 3U]};
-        output.write(reinterpret_cast<const char*>(bgra.data()), 4);
-    }
-    if (!output) throw FormatError("failed while writing TGA texture: " + path.string());
+    return bytes;
+}
+
+RgbaImage load_tga_rgba(const std::filesystem::path& path) {
+    if (std::filesystem::file_size(path) > 64ULL * 1024 * 1024)
+        throw FormatError("TGA texture exceeds 64 MiB");
+    return decode_tga_rgba(read_file(path));
+}
+
+void save_tga_rgba(const std::filesystem::path& path, const RgbaImage& image) {
+    write_file_atomic(std::filesystem::absolute(path), encode_tga_rgba(image));
 }
 
 std::vector<std::byte> encode_single_rgba_gfx(const RgbaImage& image) {

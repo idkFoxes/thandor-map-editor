@@ -22,7 +22,7 @@ req('lab_append_resource08' in core and 'ws.resource08' in core and
     'resource site workspace08 separation/replacement is missing')
 req('run.ai_parameters[80U]' in core and '0x55' in core,
     'retail resource-site KI[0x50] evidence is not retained')
-req('if(ImGui::Checkbox("Show other runs"' in editor and
+req('if(ImGui::Checkbox(tr_label("Show other runs")' in editor and
     'simulation_static_replacement_dirty_=true' in editor,
     'other-run marker toggle does not invalidate dynamic geometry for the next update')
 req('OpaqueDepthWrite' in g410 and ('alpha' in g410.lower()),

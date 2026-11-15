@@ -5,7 +5,7 @@ build="${1:?Usage: build_appimage.sh BUILD_DIRECTORY}"
 build="$(cd "$build" && pwd)"
 arch="$(uname -m)"
 case "$arch" in x86_64|aarch64) ;; *) echo "Unsupported AppImage architecture: $arch" >&2; exit 64 ;; esac
-for required in thandor-map-editor shaders assets/fonts/DejaVuSans.ttf assets/fonts/LICENSE; do
+for required in thandor-map-editor shaders assets/fonts/DejaVuSans.ttf assets/fonts/LICENSE assets/localization/editor.tsv; do
   [[ -e "$build/$required" ]] || { echo "Missing AppImage input: $build/$required" >&2; exit 1; }
 done
 version="$(sed -n 's/.*kEditorVersion = "\([^"]*\)".*/\1/p' "$root/include/thandor/editor_version.hpp")"
@@ -44,7 +44,9 @@ tool="$(cd "$(dirname "$tool")" && pwd)/$(basename "$tool")"
 stage="$(mktemp -d "$build/.appimage-stage.XXXXXX")"
 trap 'rm -rf -- "$stage"' EXIT
 appdir="$stage/AppDir"
-mkdir -p "$appdir/usr/bin" "$appdir/usr/share/metainfo"
+mkdir -p "$appdir/usr/bin" "$appdir/usr/share/metainfo" "$appdir/usr/share/licenses/miniz" "$appdir/usr/share/licenses/open-thandor"
+cp "$root/third_party/miniz/LICENSE" "$appdir/usr/share/licenses/miniz/LICENSE"
+cp "$root/third_party/open-thandor/LICENSE" "$appdir/usr/share/licenses/open-thandor/LICENSE"
 cp "$build/thandor-map-editor" "$appdir/usr/bin/"
 cp -a "$build/shaders" "$build/assets" "$appdir/usr/bin/"
 # appimagetool discovers upstream AppStream metadata by the desktop-file stem.

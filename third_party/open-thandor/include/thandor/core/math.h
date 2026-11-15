@@ -1,0 +1,20 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/core/math.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_CORE_MATH_H
+#define THANDOR_CORE_MATH_H
+
+#include <thandor/core/math/types.h>
+#include <thandor/core/math/fixed_point.h>
+#include <thandor/core/math/fixed_transform.h>
+#include <thandor/core/math/fixed_trig.h>
+#include <thandor/core/math/fixed_vector.h>
+#include <thandor/core/math/geometry.h>
+#include <thandor/core/math/random.h>
+#include <thandor/core/math/spline.h>
+
+#endif /* THANDOR_CORE_MATH_H */

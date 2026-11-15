@@ -40,7 +40,7 @@ req('faction_economy' in worker and 'production_assets' in worker and
     'parallel worker does not snapshot faction economy/production/research/score inputs into each experiment')
 req('faction_xenite_q4(faction)' in app and 'faction_tritium_q4(faction)' in app,
     'Simulation Lab does not seed exact LEV current Xenite/Tritium values')
-req('ImGui::Checkbox("Override storage capacity"' in app and
+req('ImGui::Checkbox(tr_label("Override storage capacity")' in app and
     '&simulation_lab_storage_limit_overrides_enabled_' in app and
     'derive_storage_limits_from_components=true' in app,
     'UI/editor seed does not disclose or enable V537-derived storage capacity with experiment-only overrides')

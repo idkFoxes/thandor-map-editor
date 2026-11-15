@@ -22,7 +22,7 @@ req('primary_queue_overridden' in core and 'lab_primary_queue_override_assets' i
     'override no longer replaces the retail-derived startup queue')
 req('production_asset(army_asset_id) == nullptr' in core,
     'unresolved override ARM ids can poison the primary queue again')
-req('ImGui::CollapsingHeader("Starting inventory")' in editor and
+req('ImGui::CollapsingHeader(tr_label("Starting inventory"))' in editor and
     'simulation_lab_config_.primary_queue_overrides[faction]' in editor and
     'ImGui::Checkbox(faction_label.c_str(),&override.enabled)' in editor and
     'catalog_.army_preset(override.army_asset_ids[index])' in editor,

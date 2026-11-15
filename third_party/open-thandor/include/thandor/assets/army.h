@@ -1,0 +1,14 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/assets/army.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_ASSETS_ARMY_H
+#define THANDOR_ASSETS_ARMY_H
+
+#include <thandor/assets/army/types.h>
+#include <thandor/assets/army/catalog.h>
+
+#endif /* THANDOR_ASSETS_ARMY_H */

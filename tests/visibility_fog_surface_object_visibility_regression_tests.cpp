@@ -74,8 +74,12 @@ int main() try {
             editor.find("fog_preview_model_intensity(shadow_position,shadow_model_flags)==0U") != std::string::npos,
             "effects or generated shadows can leak through unseen terrain");
 
-    require(editor.find("renderer_.update_fog_visibility(frame_index,fog_preview_runtime_cells_,fog_preview_mode_!=0)") != std::string::npos,
+    require(editor.find("renderer_.update_fog_visibility(frame_index,fog_preview_runtime_cells_,fog_preview_mode_!=0,") != std::string::npos &&
+            renderer.find("faction_tints[index] << 8U") != std::string::npos &&
+            terrain_vert.find("fogVisibility.cells[inFogCellIndex] >> 8u") != std::string::npos,
             "temporally clamped fog runtime bytes are not uploaded each dynamic scene revision");
+    require(terrain_vert.find("min(runtimeVisibility, 0x87u)") != std::string::npos,
+            "the faction tint should use discovered brightness without lifting darker terrain");
 
     require(editor.find("Fog is uploaded as per-cell runtime visibility") != std::string::npos &&
             editor.find("append_fog_vertex") == std::string::npos &&

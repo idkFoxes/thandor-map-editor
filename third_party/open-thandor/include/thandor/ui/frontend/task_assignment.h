@@ -1,0 +1,21 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/ui/frontend/task_assignment.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_UI_FRONTEND_TASK_ASSIGNMENT_H
+#define THANDOR_UI_FRONTEND_TASK_ASSIGNMENT_H
+
+#include <thandor/ui/controls/types.h>
+#include <thandor/ui/frontend/types.h>
+#include <thandor/core/contracts.h>
+
+void FrontendTaskAssignmentPage_Initialize(FrontendTaskAssignmentPageInitView *frontendRootPage);
+
+void FrontendTaskAssignmentPage_RefreshFactionAndPlayerControls(UiRootNode *taskAssignmentRoot);
+
+extern FrontendTaskAssignmentControlOffsetTables g_FrontendTaskAssignmentControlOffsets;
+
+#endif /* THANDOR_UI_FRONTEND_TASK_ASSIGNMENT_H */

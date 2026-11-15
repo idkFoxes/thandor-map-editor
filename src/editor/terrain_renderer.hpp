@@ -98,7 +98,7 @@ public:
     // Retail fog is per-FLD-cell runtime state. Upload the temporally clamped visibility byte
     // instead of drawing a second terrain mesh, so hills and animated water/lava share depth.
     void update_fog_visibility(uint32_t frame_index, std::span<const uint8_t> runtime_visibility,
-                               bool enabled);
+                               bool enabled, std::span<const uint32_t> faction_tints = {});
     // The original primitive queue keeps opaque packets in material order and stable-sorts every
     // alpha/additive packet by projected depth. Re-sort only the retained static index packets when
     // the camera changes; vertices and texture arrays stay untouched.

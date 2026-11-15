@@ -536,6 +536,7 @@ struct SimulationLabEntity {
     // Copy-on-upgrade hierarchy: snapshots share geometry while runtime definitions stay historical.
     std::shared_ptr<const std::vector<ModelVisualNode>> runtime_model_hierarchy;
     std::vector<std::size_t> native_world_model_slots;
+    std::vector<SimulationLabNativeModelPose> native_model_poses;
     bool native_world_bank_pose_initialized{};
     std::size_t native_army_pool_slot{SIZE_MAX};
     std::size_t source_placement_index{};
@@ -1368,6 +1369,8 @@ struct SimulationLabRun {
     std::vector<SimulationProjectileState> projectiles;
     std::vector<SimulationLabEnvironmentalEmitterState> environmental_emitter_states;
     std::vector<SimulationLabEnvironmentalEffect> environmental_effects;
+    std::vector<SimulationLabNativeVisual> native_visuals;
+    std::vector<SimulationLabNativeLight> native_lights;
     std::vector<std::size_t> environmental_emitter_world_handles;
     std::uint64_t next_projectile_serial{1U};
     // Monotonic, run-local one-shot journal. Nodes are persistent/immutable so published snapshots

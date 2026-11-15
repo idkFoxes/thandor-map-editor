@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/thandor/editor_version.hpp"
     THANDOR_EDITOR_VERSION_LINE REGEX "kEditorVersion =")
 string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" THANDOR_EDITOR_VERSION "${THANDOR_EDITOR_VERSION_LINE}")
-project(ThandorMapEditor VERSION ${THANDOR_EDITOR_VERSION} LANGUAGES CXX)
+project(ThandorMapEditor VERSION ${THANDOR_EDITOR_VERSION} LANGUAGES C CXX)
 
 option(THANDOR_EDITOR_BUILD_APP "Build the Vulkan/ImGui editor" ON)
 option(THANDOR_EDITOR_BUILD_TESTS "Build core format tests" ON)
@@ -33,6 +33,7 @@ add_library(thandor_map_core
     src/core/ai_knowledge.cpp
     src/core/pck.cpp
     src/core/field.cpp
+    src/core/access_routes.cpp
     src/core/terrain_generator.cpp
     src/core/terrain_generation_quality.cpp
     src/core/new_map_terrain.cpp
@@ -70,7 +71,12 @@ add_library(thandor_map_core
     src/core/simulation_lab_worker.cpp
     src/core/catalog.cpp
     src/core/map_document.cpp
+    src/core/map_project_archive.cpp
 )
+add_library(thandor_miniz STATIC third_party/miniz/miniz.c)
+target_include_directories(thandor_miniz PUBLIC third_party/miniz)
+target_compile_definitions(thandor_miniz PUBLIC MINIZ_NO_STDIO MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
+target_link_libraries(thandor_map_core PRIVATE thandor_miniz)
 target_include_directories(thandor_map_core PUBLIC include)
 target_link_libraries(thandor_map_core PUBLIC Threads::Threads)
 add_executable(stock_navigation_grid_audit EXCLUDE_FROM_ALL tools/stock_navigation_grid_audit.cpp)
@@ -1421,6 +1427,10 @@ if(THANDOR_EDITOR_BUILD_TESTS)
     add_test(NAME editor_resource_camera_classification_tests
              COMMAND editor_resource_camera_classification_tests)
 
+    add_executable(access_routes_tests tests/access_routes_tests.cpp)
+    target_link_libraries(access_routes_tests PRIVATE thandor_map_core)
+    add_test(NAME access_routes_tests COMMAND access_routes_tests)
+
     add_executable(terrain_game_ready_object_terrain_compatibility_tests
                    tests/terrain_game_ready_object_terrain_compatibility_tests.cpp)
     target_link_libraries(terrain_game_ready_object_terrain_compatibility_tests PRIVATE thandor_map_core)
@@ -2102,14 +2112,23 @@ if(THANDOR_EDITOR_BUILD_APP)
         src/editor/editor_app.cpp
         src/editor/editor_workspace_ui.cpp
         src/editor/editor_campaign_ui.cpp
+        src/editor/editor_jandrenator.cpp
         src/editor/editor_terrain_generator.cpp
         src/editor/editor_ui_scale.cpp
+        src/editor/editor_strings.cpp
         src/editor/ai_knowledge_panel.cpp
         src/editor/vulkan_context.cpp
         src/editor/terrain_renderer.cpp
     )
     target_compile_definitions(thandor-map-editor PRIVATE
-        THANDOR_UI_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/DejaVuSans.ttf")
+        THANDOR_UI_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/DejaVuSans.ttf"
+        THANDOR_EDITOR_LOCALE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets/localization")
+    add_custom_target(thandor_editor_localization ALL
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:thandor-map-editor>/assets/localization"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/localization/editor.tsv"
+            "$<TARGET_FILE_DIR:thandor-map-editor>/assets/localization/editor.tsv")
+    add_dependencies(thandor-map-editor thandor_editor_localization)
     add_custom_command(TARGET thandor-map-editor POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:thandor-map-editor>/assets/fonts"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -2123,6 +2142,29 @@ if(THANDOR_EDITOR_BUILD_APP)
     endif()
     target_include_directories(thandor-map-editor PRIVATE src/editor)
     target_link_libraries(thandor-map-editor PRIVATE thandor_map_core thandor_imgui glfw Vulkan::Vulkan)
+    set(jandrenator_supported OFF)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+       AND (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR MINGW))
+        set(jandrenator_supported ON)
+    endif()
+    option(THANDOR_EDITOR_JANDRENATOR "Build Jandrenator AI into Simulation Lab" ${jandrenator_supported})
+    message(STATUS "Editor Jandrenator AI: ${THANDOR_EDITOR_JANDRENATOR}")
+    if(THANDOR_EDITOR_JANDRENATOR)
+        if(NOT jandrenator_supported)
+            message(FATAL_ERROR "Jandrenator requires Linux x86-64 GCC or Windows x64 MinGW-w64.")
+        endif()
+        add_subdirectory(third_party/open-thandor)
+        target_link_libraries(thandor-map-editor PRIVATE thandor_jandrenator_engine)
+        # The engine stores pointers to static data in 32-bit fields.
+        if(MINGW)
+            target_link_options(thandor-map-editor PRIVATE -flto -fwhole-program
+                -Wl,--gc-sections,--image-base,0x400000,--disable-dynamicbase,--disable-high-entropy-va)
+        else()
+            target_link_options(thandor-map-editor PRIVATE -no-pie -Wl,--gc-sections)
+        endif()
+        target_compile_definitions(thandor-map-editor PRIVATE THANDOR_EDITOR_JANDRENATOR)
+    endif()
+
     target_compile_definitions(thandor-map-editor PRIVATE GLFW_INCLUDE_NONE)
     target_compile_definitions(thandor-map-editor PRIVATE ${THANDOR_IMGUI_VULKAN_API_COMPILE_DEFINITION})
     if(THANDOR_IMGUI_VULKAN_HAS_API_VERSION)

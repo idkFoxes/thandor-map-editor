@@ -22,13 +22,13 @@ require('select_simulation_lab_run(row);' in source, 'inspector and viewport mus
 require('select_simulation_lab_run(index);' in source, 'viewport selector must actually switch run')
 require('if(simulation_lab_run_selector_hovered_&&!right_pointer_capture_active_)return;' in source,
         'canvas editing must not consume viewport selector clicks')
-require('Checkbox("Show other runs",&simulation_lab_show_all_runs_)' in source,
+require('Checkbox(tr_label("Show other runs"),&simulation_lab_show_all_runs_)' in source,
         'comparison overlay must remain an explicit opt-in control')
 require('if(selected){' in source and 'if(!simulation_lab_show_all_runs_)continue;' in source,
         'only selected run should use full model rendering')
 require('bool simulation_lab_run_selector_hovered_' in header, 'pointer capture field not declared')
 
-ui_toggle=source.split('if(ImGui::Checkbox("Show other runs"',1)[1].split('}',1)[0]
+ui_toggle=source.split('if(ImGui::Checkbox(tr_label("Show other runs")',1)[1].split('}',1)[0]
 require('rebuild_objects();' not in ui_toggle and 'simulation_static_replacement_dirty_=true' in ui_toggle,
         'switching ghost comparison mode must not synchronously rebuild and then rebuild again')
 

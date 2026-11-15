@@ -1,0 +1,25 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/ui/frontend/page_actions.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_UI_FRONTEND_PAGE_ACTIONS_H
+#define THANDOR_UI_FRONTEND_PAGE_ACTIONS_H
+
+#include <thandor/ui/controls/types.h>
+#include <thandor/ui/frontend/types.h>
+#include <thandor/core/contracts.h>
+
+void FrontendCallback_NoOpArg1(void *source);
+
+void FrontendCallback_ReturnToMainPageOrDispatchState4(uint32_t callbackArgument);
+
+void FrontendQuitDialogAction_ReturnToMainPage(uint32_t callbackArgument);
+
+void FrontendOptionsAction_ReturnToMainOrOptionsPage(UiNodeBase *sourceNode);
+
+extern FrontendUiActionHandlerPage20Prefix g_FrontendUiActionHandlersPage20;
+
+#endif /* THANDOR_UI_FRONTEND_PAGE_ACTIONS_H */

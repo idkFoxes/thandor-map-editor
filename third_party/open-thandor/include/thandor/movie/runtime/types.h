@@ -1,0 +1,117 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/movie/runtime/types.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_MOVIE_RUNTIME_TYPES_H
+#define THANDOR_MOVIE_RUNTIME_TYPES_H
+
+#include <stdint.h>
+#include <thandor/core/flags.h>
+#include <thandor/core/ptr32.h> /* Ptr32: the pointer fields of these 32-bit layouts */
+#include <thandor/core/types.h>
+#include <thandor/graphics/resources/types.h>
+
+struct MovieRuntime;
+struct MovieFileHeader;
+struct FrameProviderResult;
+
+using MovieFrameIndex = uint32_t;
+
+using MovieWorkerActiveFlag = uint32_t;
+
+using MoviePaletteBankCount = uint32_t;
+
+using MovieAudioGainQ15 = uint32_t;
+
+using MovieSubresourceCount = uint32_t;
+
+using MovieSubresourceTableOffset = uint32_t;
+
+/* Movie_Open flags (MovieRuntime.openFlags). Intro and end movies are streamed; in-game and briefing movies are
+   loaded from the packages only. Movie_Open clears MOVIE_OPEN_PACKAGE_ONLY when the loose path was not used, so
+   a nonzero MovieRuntime.openFlags means streaming. */
+enum class MovieOpenFlags : uint32_t {
+    MOVIE_OPEN_NONE=0,
+    MOVIE_OPEN_STREAM=0x00000001, /* load at most MOVIE_INITIAL_VIDEO_MAX_BYTES, the worker thread streams the rest */
+    MOVIE_OPEN_PACKAGE_ONLY=0x80000000u /* skip the g_LooseMoviePathPrefix directory */
+};
+THANDOR_FLAG_ENUM(MovieOpenFlags);
+
+using MovieSharedStreamHandleFlag = uint32_t;
+
+using MovieFrameCount = uint32_t;
+
+using MovieStreamOffset = uint32_t;
+
+using MovieStreamFileOffset = uint32_t;
+
+using MovieFrameIntervalMilliseconds = uint32_t;
+
+using MoviePixelDimension = uint32_t;
+
+struct MovieFrameDimensions {
+    AssetDimension width;
+    AssetDimension height;
+};
+
+using MovieAudioTrackCount = uint32_t;
+
+using MovieStreamByteCount = uint32_t;
+
+/* MovieRuntime.streamState, shared with the stream worker thread (accessed through std::atomic_ref). */
+enum class MovieStreamState : int {
+    MOVIE_STREAM_IDLE=0,
+    MOVIE_STREAM_FILL_REQUESTED=1,
+    MOVIE_STREAM_READ_FAILED=2,
+    MOVIE_STREAM_SHUTDOWN=3
+};
+
+struct MovieFileHeader {
+    struct GeneratedAssetCommonPrefix common; 
+    MoviePixelDimension widthPixels; 
+    MoviePixelDimension heightPixels; 
+    MovieFrameCount frameCount; 
+    MovieAudioTrackCount audioTrackCount; 
+    MovieStreamByteCount videoStreamBytes; 
+    uint32_t audioTrackBytes[14]; 
+    MovieFrameIntervalMilliseconds frameIntervalMilliseconds;
+    char unusedText[256]; // The asset header's text at +0x100: empty in every stock .flm, never read.
+};
+
+struct MovieRuntime {
+    struct GeneratedAssetCommonPrefix textureCommon; 
+    MovieSubresourceCount subresourceCount; 
+    MoviePaletteBankCount paletteBankCount; 
+    MovieSubresourceTableOffset subresourceTableOffset; 
+    uint32_t reservedBC; 
+    Ptr32<struct MovieFileHeader> fileHeader; 
+    MovieFrameIndex currentFrameIndex; 
+    MovieStreamOffset videoStreamOffset; 
+    Ptr32<struct SoundVoiceSet> audioVoiceSet; 
+    Ptr32<struct SoundVoice> activeAudioBuffer; 
+    Ptr32<void> streamHandle; 
+    MovieSharedStreamHandleFlag streamHandleIsSharedPackage; 
+    Ptr32<uint8_t> loadedVideoEnd; 
+    MovieStreamByteCount remainingVideoBytes; 
+    MovieStreamFileOffset streamFileOffset; 
+    MovieOpenFlags openFlags; 
+    MovieAudioGainQ15 audioGainQ15; 
+    MovieWorkerActiveFlag workerActive; 
+    MovieStreamState streamState; 
+    Ptr32<void> refillSemaphore; 
+    uint32_t reservedFC;
+    char unusedText[256]; // The gfx asset header's text at +0x100 (see GraphicsTextureSourceAsset); Movie_Open clears its first byte.
+    struct GraphicsTextureSourceEntry sourceEntry;
+    uint32_t argbPixels[1]; 
+};
+
+struct FrameProviderResult {
+    Ptr32<void> frameOrError; // frame pointer when noFrame is false; error-coded value when it is true
+    Bool8 noFrame; // true when no frame is returned
+};
+using MovieFrameProviderProc = FrameProviderResult (void * frameToReleaseOrNull);
+
+#endif /* THANDOR_MOVIE_RUNTIME_TYPES_H */

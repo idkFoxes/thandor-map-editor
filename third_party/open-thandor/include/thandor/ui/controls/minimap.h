@@ -1,0 +1,24 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/ui/controls/minimap.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_UI_CONTROLS_MINIMAP_H
+#define THANDOR_UI_CONTROLS_MINIMAP_H
+
+#include <thandor/ui/controls/types.h>
+#include <thandor/core/contracts.h>
+
+void UiSelectionGeometryControl_DrawClipped
+          (int clipBottom,int clipRight,int clipTop,int clipLeft,UiSelectionGeometryControl *control
+          );
+
+void UiSelectionGeometryControl_ConvertPointerAndEnqueueAction
+          (UiPointerWheelDelta wheelDelta,UiPixelCoordinate pointerY,UiPixelCoordinate pointerX,
+          UiSelectionGeometryControl *control);
+
+extern UiNodeVtable g_UiSelectionGeometryControlVtable;
+
+#endif /* THANDOR_UI_CONTROLS_MINIMAP_H */

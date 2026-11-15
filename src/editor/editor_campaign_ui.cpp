@@ -1,3 +1,4 @@
+#include "editor_strings.hpp"
 #include "editor_app.hpp"
 #include "editor_paths.hpp"
 #include "thandor/frontend_player_texture.hpp"
@@ -40,7 +41,7 @@ void EditorApp::refresh_campaign_labels() {
 }
 void EditorApp::open_campaign_mission(std::size_t index) {
     if(!campaign_document_||index>=campaign_document_->campaign().records().size())return;
-    if(document_&&document_->dirty())throw std::runtime_error("Save the current map before opening another campaign mission.");
+    if(document_&&document_->dirty())throw std::runtime_error(tr("Save the current map before opening another campaign mission."));
     const auto& record=campaign_document_->campaign().records()[index];
     const auto& source=campaign_document_->source(record.level_id());
     if(!source.map_project.empty()) {
@@ -51,7 +52,7 @@ void EditorApp::open_campaign_mission(std::size_t index) {
             const auto* previous=document_.get();load_map(i);found=document_.get()!=previous;
             break;
         }
-        if(!found)throw std::runtime_error("Campaign mission map is not installed: "+wanted);
+        if(!found)throw std::runtime_error(tr("Campaign mission map is not installed: ")+wanted);
     }
     current_stock_group_.reset(); // Campaign editing saves a project rather than modifying stock archives.
     campaign_editing_mission_=record.level_id();campaign_selected_mission_=static_cast<int>(index);
@@ -63,17 +64,17 @@ void EditorApp::open_campaign_mission(std::size_t index) {
     campaign_message_="Mission opened. Edit conditions in the Map inspector, then save its mission project here.";
 }
 void EditorApp::save_campaign_mission(const std::filesystem::path& path) {
-    if(!document_||!campaign_document_)throw std::runtime_error("Open a campaign and a map first.");
-    if(path.empty())throw std::runtime_error("Enter a mission project path.");
+    if(!document_||!campaign_document_)throw std::runtime_error(tr("Open a campaign and a map first."));
+    if(path.empty())throw std::runtime_error(tr("Enter a mission project path."));
     const auto absolute=std::filesystem::absolute(path).lexically_normal();
-    if(thandor::lower_ascii(absolute.extension().string())!=".thmap")throw std::runtime_error("Mission projects use the .thmap extension.");
+    if(thandor::lower_ascii(absolute.extension().string())!=".thmap")throw std::runtime_error(tr("Mission projects use the .thmap extension."));
     const auto id=campaign_document_->campaign().records()[static_cast<std::size_t>(campaign_selected_mission_)].level_id();
-    if(campaign_editing_mission_!=id)throw std::runtime_error("Open this mission before saving its edits.");
+    if(campaign_editing_mission_!=id)throw std::runtime_error(tr("Open this mission before saving its edits."));
     if(std::filesystem::exists(absolute)&&absolute!=std::filesystem::absolute(current_project_path_).lexically_normal())
-        throw std::runtime_error("That file already exists. Open it or choose a new mission project path.");
+        throw std::runtime_error(tr("That file already exists. Open it or choose a new mission project path."));
     auto updated_record=campaign_document_->campaign().record(static_cast<std::size_t>(campaign_selected_mission_));
     updated_record.set_level_path(document_->map_name());
-    document_->save_project(absolute,true); // No skirmish resource/faction repair.
+    document_->save_project(absolute,true,&catalog_); // No skirmish resource/faction repair.
     auto& source=campaign_document_->source(id);source.map_project=absolute;
     campaign_document_->campaign().record(static_cast<std::size_t>(campaign_selected_mission_))=updated_record;
     current_project_path_=absolute;last_opened_map_type_="file";last_opened_map_value_=absolute.string();document_->mark_clean();campaign_dirty_=true;
@@ -101,7 +102,7 @@ void EditorApp::draw_campaign_exit_zones() {
                 draw->AddLine({x1,y1},{x2,y2},color,ui_px(faction==static_cast<unsigned>(campaign_zone_faction_)?2.5F:1.5F));
         }
         float x{},y{};if(projected(zone[0],zone[1],x,y)) {
-            char label[48];std::snprintf(label,sizeof(label),"Faction %u exit",faction);
+            char label[48];std::snprintf(label,sizeof(label),tr("Faction %u exit"),faction);
             draw->AddText({x+ui_px(5),y},color,label);
         }
     }
@@ -121,42 +122,42 @@ void EditorApp::draw_campaign_window() {
         try{campaign_package_slot_=static_cast<int>(thandor::CampaignDocument::first_free_package_slot(catalog_.game_root()));}catch(const std::exception& e){campaign_message_=e.what();}
     }
     ImGui::SetNextWindowSize({ui_px(900),ui_px(700)},ImGuiCond_FirstUseEver);
-    if(!ImGui::Begin(campaign_dirty_?"Campaign *###CampaignWorkspace":"Campaign###CampaignWorkspace",&show_campaign_window_)){ImGui::End();return;}
+    if(!ImGui::Begin(campaign_dirty_?tr_label("Campaign *###CampaignWorkspace"):tr_label("Campaign###CampaignWorkspace"),&show_campaign_window_)){ImGui::End();return;}
     auto attempt=[&](auto action){try{action();}catch(const std::exception& e){campaign_message_=e.what();}};
-    if(ImGui::BeginTabBar("CampaignTabs")) {
-        if(ImGui::BeginTabItem("Project")) {
-            ImGui::SeparatorText("Open or create");
-            ImGui::InputText("Campaign project",campaign_file_path_,sizeof(campaign_file_path_));
-            if(ImGui::Button("Open project"))attempt([&]{
-                if(campaign_dirty_)throw std::runtime_error("Save the current campaign project before opening another.");
+    if(ImGui::BeginTabBar(tr_label("CampaignTabs"))) {
+        if(ImGui::BeginTabItem(tr_label("Project"))) {
+            ImGui::SeparatorText(tr("Open or create"));
+            ImGui::InputText(tr_label("Campaign project"),campaign_file_path_,sizeof(campaign_file_path_));
+            if(ImGui::Button(tr_label("Open project")))attempt([&]{
+                if(campaign_dirty_)throw std::runtime_error(tr("Save the current campaign project before opening another."));
                 auto loaded=thandor::CampaignDocument::open_project(campaign_file_path_);
                 campaign_document_=std::move(loaded);campaign_project_path_=std::filesystem::absolute(campaign_file_path_);
                 campaign_selected_mission_=-1;campaign_editing_mission_.reset();refresh_campaign_labels();campaign_message_="Campaign project opened.";
             });
-            ImGui::SameLine();if(ImGui::Button("Save project"))attempt([&]{
-                if(!campaign_document_)throw std::runtime_error("Create or import a campaign first.");
-                if(campaign_file_path_[0]=='\0')throw std::runtime_error("Enter a campaign project path ending in .thcampaign.");
+            ImGui::SameLine();if(ImGui::Button(tr_label("Save project")))attempt([&]{
+                if(!campaign_document_)throw std::runtime_error(tr("Create or import a campaign first."));
+                if(campaign_file_path_[0]=='\0')throw std::runtime_error(tr("Enter a campaign project path ending in .thcampaign."));
                 const auto path=std::filesystem::absolute(campaign_file_path_);
-                if(thandor::lower_ascii(path.extension().string())!=".thcampaign")throw std::runtime_error("Campaign projects use the .thcampaign extension.");
+                if(thandor::lower_ascii(path.extension().string())!=".thcampaign")throw std::runtime_error(tr("Campaign projects use the .thcampaign extension."));
                 campaign_document_->save_project(path);campaign_project_path_=path;campaign_dirty_=false;campaign_message_="Campaign project saved. Mission projects remain separate referenced files.";
             });
             if(!campaign_native_paths_.empty()) {
-                if(ImGui::BeginCombo("Game campaign",campaign_native_paths_[static_cast<std::size_t>(campaign_import_index_)].c_str())) {
+                if(ImGui::BeginCombo(tr_label("Game campaign"),campaign_native_paths_[static_cast<std::size_t>(campaign_import_index_)].c_str())) {
                     for(std::size_t i=0;i<campaign_native_paths_.size();++i)if(ImGui::Selectable(campaign_native_paths_[i].c_str(),campaign_import_index_==static_cast<int>(i)))campaign_import_index_=static_cast<int>(i);
                     ImGui::EndCombo();
                 }
-                if(ImGui::Button("Import game campaign"))attempt([&]{
-                    if(campaign_dirty_)throw std::runtime_error("Save the current campaign project before importing another.");
+                if(ImGui::Button(tr_label("Import game campaign")))attempt([&]{
+                    if(campaign_dirty_)throw std::runtime_error(tr("Save the current campaign project before importing another."));
                     auto imported=thandor::CampaignDocument::import_native(catalog_.game_root(),campaign_native_paths_[static_cast<std::size_t>(campaign_import_index_)]);
                     campaign_document_=std::move(imported);campaign_project_path_.clear();campaign_editing_mission_.reset();campaign_selected_mission_=-1;campaign_dirty_=true;
                     const auto path=project_maps_directory()/"campaigns"/campaign_document_->identifier()/(campaign_document_->identifier()+".thcampaign");
                     std::snprintf(campaign_file_path_,sizeof(campaign_file_path_),"%s",path.string().c_str());
                     refresh_campaign_labels();campaign_message_="Imported. Use a new identifier when exporting a separate campaign.";
                 });
-                ImGui::InputText("New identifier",campaign_new_identifier_,sizeof(campaign_new_identifier_));
-                if(ImGui::Button("New campaign with current map"))attempt([&]{
-                    if(campaign_dirty_)throw std::runtime_error("Save the current campaign project before creating another.");
-                    if(!document_)throw std::runtime_error("Open or create the first mission map.");
+                ImGui::InputText(tr_label("New identifier"),campaign_new_identifier_,sizeof(campaign_new_identifier_));
+                if(ImGui::Button(tr_label("New campaign with current map")))attempt([&]{
+                    if(campaign_dirty_)throw std::runtime_error(tr("Save the current campaign project before creating another."));
+                    if(!document_)throw std::runtime_error(tr("Open or create the first mission map."));
                     const auto base=thandor::CampaignDocument::import_native(catalog_.game_root(),campaign_native_paths_[static_cast<std::size_t>(campaign_import_index_)]);
                     auto created=thandor::CampaignDocument::create(base,campaign_new_identifier_);
                     const auto root=project_maps_directory()/"campaigns"/created.identifier();
@@ -165,10 +166,10 @@ void EditorApp::draw_campaign_window() {
                     auto first_map=*document_;
                     first_map.set_map_name(created.identifier().substr(0,24)+"_01");
                     const auto path=root/"maps"/(first_map.map_name()+".thmap");
-                    if(std::filesystem::exists(path))throw std::runtime_error("This campaign folder already contains the mission project. Choose a new identifier or open the campaign project.");
+                    if(std::filesystem::exists(path))throw std::runtime_error(tr("This campaign folder already contains the mission project. Choose a new identifier or open the campaign project."));
                     const auto first=thandor::CampaignLevelRecord::minimal(1,first_map.map_name());
                     created.campaign()=thandor::CampaignAsset::from_template(created.campaign(),1,std::span(&first,1));
-                    std::filesystem::create_directories(path.parent_path());first_map.save_project(path,true);
+                    std::filesystem::create_directories(path.parent_path());first_map.save_project(path,true,&catalog_);
                     reset_simulation(false);simulation_mode_=false;
                     document_=std::make_unique<thandor::MapDocument>(std::move(first_map));
                     selected_placement_.reset();selected_edit_index_.reset();
@@ -181,23 +182,23 @@ void EditorApp::draw_campaign_window() {
                 });
             }
             if(campaign_document_) {
-                ImGui::SeparatorText("Campaign details");
+                ImGui::SeparatorText(tr("Campaign details"));
                 auto identifier=campaign_document_->identifier();
-                if(edit_string("Identifier",identifier,64))attempt([&]{campaign_document_->set_identifier(identifier);campaign_dirty_=true;});
-                campaign_dirty_|=edit_string("Title",campaign_document_->title);
+                if(edit_string(tr_label("Identifier"),identifier,64))attempt([&]{campaign_document_->set_identifier(identifier);campaign_dirty_=true;});
+                campaign_dirty_|=edit_string(tr_label("Title"),campaign_document_->title);
                 std::vector<char> description(std::max<std::size_t>(16384,campaign_document_->description.size()+1));
                 std::copy(campaign_document_->description.begin(),campaign_document_->description.end(),description.begin());
-                if(ImGui::InputTextMultiline("Description",description.data(),description.size(),{0,ui_px(120)})){campaign_document_->description=description.data();campaign_dirty_=true;}
-                ImGui::TextWrapped("The title and description are written to all existing game languages. The campaign project references its mission .thmap files; keep them together when moving the project.");
+                if(ImGui::InputTextMultiline(tr_label("Description"),description.data(),description.size(),{0,ui_px(120)})){campaign_document_->description=description.data();campaign_dirty_=true;}
+                ImGui::TextWrapped(tr("The title and description are written to all existing game languages. The campaign project references its mission .thmap files; keep them together when moving the project."));
             }
             ImGui::EndTabItem();
         }
-        if(ImGui::BeginTabItem("Missions")) {
-            if(!campaign_document_)ImGui::TextWrapped("Open, import or create a campaign in the Project tab.");
+        if(ImGui::BeginTabItem(tr_label("Missions"))) {
+            if(!campaign_document_)ImGui::TextWrapped(tr("Open, import or create a campaign in the Project tab."));
             else {
                 auto& campaign=campaign_document_->campaign();
                 const auto index=static_cast<std::size_t>(campaign_selected_mission_);
-                if(ImGui::BeginCombo("Mission",campaign_mission_labels_[index].c_str())) {
+                if(ImGui::BeginCombo(tr_label("Mission"),campaign_mission_labels_[index].c_str())) {
                     for(std::size_t i=0;i<campaign_mission_labels_.size();++i)if(ImGui::Selectable(campaign_mission_labels_[i].c_str(),i==index)) {
                         campaign_selected_mission_=static_cast<int>(i);refresh_campaign_labels();
                     }
@@ -206,7 +207,7 @@ void EditorApp::draw_campaign_window() {
                 // Selection may have changed above; resolve after the combo.
                 const auto selected=static_cast<std::size_t>(campaign_selected_mission_);
                 auto& record=campaign.record(selected);const auto id=record.level_id();
-                if(ImGui::BeginCombo("Starting mission",campaign_mission_labels_[static_cast<std::size_t>(std::find_if(campaign.records().begin(),campaign.records().end(),[&](const auto& r){return r.level_id()==campaign.first_level_id();})-campaign.records().begin())].c_str())) {
+                if(ImGui::BeginCombo(tr_label("Starting mission"),campaign_mission_labels_[static_cast<std::size_t>(std::find_if(campaign.records().begin(),campaign.records().end(),[&](const auto& r){return r.level_id()==campaign.first_level_id();})-campaign.records().begin())].c_str())) {
                     for(std::size_t i=0;i<campaign.records().size();++i)if(ImGui::Selectable(campaign_mission_labels_[i].c_str(),campaign.records()[i].level_id()==campaign.first_level_id())){campaign.set_first_level_id(campaign.records()[i].level_id());campaign_dirty_=true;}
                     ImGui::EndCombo();
                 }
@@ -217,83 +218,83 @@ void EditorApp::draw_campaign_window() {
                         return thandor::normalize_asset_path(group.level_path)==wanted;
                     });
                 if(mission_available){
-                    if(ImGui::Button("Open mission in editor"))attempt([&]{open_campaign_mission(selected);});
-                }else ImGui::TextWrapped("Mission map is not installed: %s",wanted.c_str());
-                ImGui::SameLine();if(ImGui::Button("Remove mission"))attempt([&]{campaign_document_->remove_mission(id);if(campaign_editing_mission_==id)campaign_editing_mission_.reset();campaign_dirty_=true;refresh_campaign_labels();});
+                    if(ImGui::Button(tr_label("Open mission in editor")))attempt([&]{open_campaign_mission(selected);});
+                }else ImGui::TextWrapped(tr("Mission map is not installed: %s"),wanted.c_str());
+                ImGui::SameLine();if(ImGui::Button(tr_label("Remove mission")))attempt([&]{campaign_document_->remove_mission(id);if(campaign_editing_mission_==id)campaign_editing_mission_.reset();campaign_dirty_=true;refresh_campaign_labels();});
                 // Removing invalidates native records; skip the remainder of this frame if it succeeded.
                 if(selected<campaign.records().size()&&campaign.records()[selected].level_id()==id) {
-                    ImGui::InputText("Mission project",campaign_map_path_,sizeof(campaign_map_path_));
-                    if(ImGui::Button("Save open mission project"))attempt([&]{save_campaign_mission(campaign_map_path_);});
-                    ImGui::SameLine();if(ImGui::Button("Add project as new mission"))attempt([&]{
+                    ImGui::InputText(tr_label("Mission project"),campaign_map_path_,sizeof(campaign_map_path_));
+                    if(ImGui::Button(tr_label("Save open mission project")))attempt([&]{save_campaign_mission(campaign_map_path_);});
+                    ImGui::SameLine();if(ImGui::Button(tr_label("Add project as new mission")))attempt([&]{
                         campaign_document_->add_map_project(catalog_,campaign_map_path_);campaign_selected_mission_=static_cast<int>(campaign.records().size())-1;
                         campaign_dirty_=true;refresh_campaign_labels();campaign_message_="Mission added. Choose its incoming outcome links below.";
                     });
-                    ImGui::TextWrapped("Add a saved .thmap project above, or open this mission and save its edited copy. Mission conditions are edited in the Map inspector.");
+                    ImGui::TextWrapped(tr("Add a saved .thmap project above, or open this mission and save its edited copy. Mission conditions are edited in the Map inspector."));
                     // Adding can replace the record vector. Resolve again rather than retaining references.
                     auto& chosen=campaign.record(static_cast<std::size_t>(campaign_selected_mission_));const auto chosen_id=chosen.level_id();
                     int edited_id=chosen_id;
-                    if(ImGui::InputInt("Map ID",&edited_id,1,1,ImGuiInputTextFlags_EnterReturnsTrue))attempt([&]{campaign_document_->set_mission_id(chosen_id,edited_id);if(campaign_editing_mission_==chosen_id)campaign_editing_mission_=edited_id;campaign_dirty_=true;refresh_campaign_labels();});
-                    ImGui::SeparatorText("Outcomes");
+                    if(ImGui::InputInt(tr_label("Map ID"),&edited_id,1,1,ImGuiInputTextFlags_EnterReturnsTrue))attempt([&]{campaign_document_->set_mission_id(chosen_id,edited_id);if(campaign_editing_mission_==chosen_id)campaign_editing_mission_=edited_id;campaign_dirty_=true;refresh_campaign_labels();});
+                    ImGui::SeparatorText(tr("Outcomes"));
                     for(unsigned outcome=0;outcome<8;++outcome) {
                         ImGui::PushID(static_cast<int>(outcome));
                         auto& live=campaign.record(static_cast<std::size_t>(campaign_selected_mission_));
                         const auto live_id=live.level_id();
                         const auto heading=campaign_document_->outcome_label(live_id,outcome)+"  >  "+campaign_document_->continuation_label(live_id,outcome)+"###Outcome";
                         if(ImGui::TreeNode(heading.c_str())) {
-                            campaign_dirty_|=edit_string("Name",campaign_document_->source(live_id).outcome_names[outcome],128);
-                            if(ImGui::BeginCombo("Next",campaign_document_->continuation_label(live_id,outcome).c_str())) {
+                            campaign_dirty_|=edit_string(tr_label("Name"),campaign_document_->source(live_id).outcome_names[outcome],128);
+                            if(ImGui::BeginCombo(tr_label("Next"),campaign_document_->continuation_label(live_id,outcome).c_str())) {
                                 int32_t terminal=0;while(campaign.find_level(terminal)&&terminal<std::numeric_limits<int32_t>::max())++terminal;
-                                if(ImGui::Selectable("Finish campaign")){live.set_successor(outcome,terminal);campaign_dirty_=true;}
-                                if(ImGui::Selectable("Replay this map")){live.set_successor(outcome,live_id);campaign_dirty_=true;}
-                                if(ImGui::Selectable("Keep current campaign")){live.set_successor(outcome,-1);campaign_dirty_=true;}
+                                if(ImGui::Selectable(tr_label("Finish campaign"))){live.set_successor(outcome,terminal);campaign_dirty_=true;}
+                                if(ImGui::Selectable(tr_label("Replay this map"))){live.set_successor(outcome,live_id);campaign_dirty_=true;}
+                                if(ImGui::Selectable(tr_label("Keep current campaign"))){live.set_successor(outcome,-1);campaign_dirty_=true;}
                                 for(std::size_t i=0;i<campaign.records().size();++i)if(ImGui::Selectable(campaign_mission_labels_[i].c_str())){live.set_successor(outcome,campaign.records()[i].level_id());campaign_dirty_=true;}
                                 ImGui::EndCombo();
                             }
                             bool carry=live.carry_over(outcome),retain=live.retain_previous_carry_over(outcome);
-                            if(ImGui::Checkbox("Carry armies and technology through exit zones",&carry)){live.set_carry_over(outcome,carry);campaign_dirty_=true;}
-                            if(ImGui::Checkbox("Retain previous carry-over records",&retain)){live.set_retain_previous_carry_over(outcome,retain);campaign_dirty_=true;}
+                            if(ImGui::Checkbox(tr_label("Carry armies and technology through exit zones"),&carry)){live.set_carry_over(outcome,carry);campaign_dirty_=true;}
+                            if(ImGui::Checkbox(tr_label("Retain previous carry-over records"),&retain)){live.set_retain_previous_carry_over(outcome,retain);campaign_dirty_=true;}
                             int movie=live.end_movie(outcome,false),alternate=live.end_movie(outcome,true);
-                            if(ImGui::InputInt("Ending movie",&movie)){live.set_end_movie(outcome,false,movie);campaign_dirty_=true;}
-                            if(ImGui::InputInt("Alternate ending movie",&alternate)){live.set_end_movie(outcome,true,alternate);campaign_dirty_=true;}
+                            if(ImGui::InputInt(tr_label("Ending movie"),&movie)){live.set_end_movie(outcome,false,movie);campaign_dirty_=true;}
+                            if(ImGui::InputInt(tr_label("Alternate ending movie"),&alternate)){live.set_end_movie(outcome,true,alternate);campaign_dirty_=true;}
                             ImGui::TreePop();
                         }
                         ImGui::PopID();
                     }
-                    if(ImGui::CollapsingHeader("Carry-over exit zones")) {
-                        ImGui::Checkbox("Show exit zones on the map",&campaign_show_exit_zones_);
-                        ImGui::SliderInt("Faction",&campaign_zone_faction_,0,7);
+                    if(ImGui::CollapsingHeader(tr_label("Carry-over exit zones"))) {
+                        ImGui::Checkbox(tr_label("Show exit zones on the map"),&campaign_show_exit_zones_);
+                        ImGui::SliderInt(tr_label("Faction"),&campaign_zone_faction_,0,7);
                         auto& live=campaign.record(static_cast<std::size_t>(campaign_selected_mission_));
                         auto zone=thandor::campaign_exit_zone_render(live.exit_zone(static_cast<std::size_t>(campaign_zone_faction_)));bool changed=false;
-                        changed|=ImGui::InputFloat("Exit center X",&zone[0]);changed|=ImGui::InputFloat("Exit center Y",&zone[1]);
-                        changed|=ImGui::InputFloat("Exit radius",&zone[2]);changed|=ImGui::InputFloat("Destination X",&zone[3]);changed|=ImGui::InputFloat("Destination Y",&zone[4]);
+                        changed|=ImGui::InputFloat(tr_label("Exit center X"),&zone[0]);changed|=ImGui::InputFloat(tr_label("Exit center Y"),&zone[1]);
+                        changed|=ImGui::InputFloat(tr_label("Exit radius"),&zone[2]);changed|=ImGui::InputFloat(tr_label("Destination X"),&zone[3]);changed|=ImGui::InputFloat(tr_label("Destination Y"),&zone[4]);
                         if(changed)attempt([&]{live.set_exit_zone(static_cast<std::size_t>(campaign_zone_faction_),thandor::campaign_exit_zone_from_render(zone));campaign_dirty_=true;});
                         if(document_&&campaign_editing_mission_==live.level_id()&&selected_placement_&&*selected_placement_<document_->level().placements().size()) {
-                            if(ImGui::Button("Use selected object's position as exit center"))attempt([&]{const auto& p=document_->level().placements()[*selected_placement_];zone[0]=p.render_x();zone[1]=p.render_y();live.set_exit_zone(static_cast<std::size_t>(campaign_zone_faction_),thandor::campaign_exit_zone_from_render(zone));campaign_dirty_=true;});
+                            if(ImGui::Button(tr_label("Use selected object's position as exit center")))attempt([&]{const auto& p=document_->level().placements()[*selected_placement_];zone[0]=p.render_x();zone[1]=p.render_y();live.set_exit_zone(static_cast<std::size_t>(campaign_zone_faction_),thandor::campaign_exit_zone_from_render(zone));campaign_dirty_=true;});
                         }
                         if(document_&&selected_placement_&&*selected_placement_<document_->level().placements().size()) {
-                            if(ImGui::Button("Use selected object's position as destination"))attempt([&]{const auto& p=document_->level().placements()[*selected_placement_];zone[3]=p.render_x();zone[4]=p.render_y();live.set_exit_zone(static_cast<std::size_t>(campaign_zone_faction_),thandor::campaign_exit_zone_from_render(zone));campaign_dirty_=true;});
+                            if(ImGui::Button(tr_label("Use selected object's position as destination")))attempt([&]{const auto& p=document_->level().placements()[*selected_placement_];zone[3]=p.render_x();zone[4]=p.render_y();live.set_exit_zone(static_cast<std::size_t>(campaign_zone_faction_),thandor::campaign_exit_zone_from_render(zone));campaign_dirty_=true;});
                         }
-                        ImGui::TextWrapped("Coordinates match the map viewport. Radius 0 disables collection for that faction. Destination coordinates are on the next map; position = old position + destination - exit center.");
+                        ImGui::TextWrapped(tr("Coordinates match the map viewport. Radius 0 disables collection for that faction. Destination coordinates are on the next map; position = old position + destination - exit center."));
                     }
                 }
             }
             ImGui::EndTabItem();
         }
-        if(ImGui::BeginTabItem("Export")) {
-            if(!campaign_document_)ImGui::TextWrapped("Create or open a campaign first.");
+        if(ImGui::BeginTabItem(tr_label("Export"))) {
+            if(!campaign_document_)ImGui::TextWrapped(tr("Create or open a campaign first."));
             else {
-                ImGui::TextWrapped("Export creates a new folder with the mission package, a merged text patch, and installation notes. Choose a free package slot for this game installation.");
-                ImGui::InputInt("Package slot (00-99)",&campaign_package_slot_);campaign_package_slot_=std::clamp(campaign_package_slot_,0,99);
-                ImGui::InputText("New export folder",campaign_export_path_,sizeof(campaign_export_path_));
-                if(ImGui::Button("Validate campaign"))attempt([&]{campaign_validation_=campaign_document_->validate(catalog_);campaign_message_=campaign_validation_.ok()?"Campaign validation passed. Review any warnings below.":"Campaign needs corrections before export.";});
-                ImGui::SameLine();if(ImGui::Button("Export campaign package"))attempt([&]{
-                    if(campaign_editing_mission_&&document_&&document_->dirty())throw std::runtime_error("Save the open mission project before exporting.");
-                    if(campaign_export_path_[0]=='\0')throw std::runtime_error("Enter a new export folder outside the game installation.");
+                ImGui::TextWrapped(tr("Export creates a new folder with the mission package, a merged text patch, and installation notes. Choose a free package slot for this game installation."));
+                ImGui::InputInt(tr_label("Package slot (00-99)"),&campaign_package_slot_);campaign_package_slot_=std::clamp(campaign_package_slot_,0,99);
+                ImGui::InputText(tr_label("New export folder"),campaign_export_path_,sizeof(campaign_export_path_));
+                if(ImGui::Button(tr_label("Validate campaign")))attempt([&]{campaign_validation_=campaign_document_->validate(catalog_);campaign_message_=campaign_validation_.ok()?"Campaign validation passed. Review any warnings below.":"Campaign needs corrections before export.";});
+                ImGui::SameLine();if(ImGui::Button(tr_label("Export campaign package")))attempt([&]{
+                    if(campaign_editing_mission_&&document_&&document_->dirty())throw std::runtime_error(tr("Save the open mission project before exporting."));
+                    if(campaign_export_path_[0]=='\0')throw std::runtime_error(tr("Enter a new export folder outside the game installation."));
                     const auto result=campaign_document_->export_package(catalog_,campaign_export_path_,static_cast<unsigned>(campaign_package_slot_));
                     campaign_validation_={};campaign_validation_.warnings=result.warnings;campaign_message_="Exported "+std::to_string(result.mission_count)+" missions to "+result.level_package.parent_path().string()+". Read INSTALL.txt before copying the packages.";
                 });
-                for(const auto& error:campaign_validation_.errors)ImGui::TextWrapped("Error: %s",error.c_str());
-                for(const auto& warning:campaign_validation_.warnings)ImGui::TextWrapped("Warning: %s",warning.c_str());
+                for(const auto& error:campaign_validation_.errors)ImGui::TextWrapped(tr("Error: %s"),error.c_str());
+                for(const auto& warning:campaign_validation_.warnings)ImGui::TextWrapped(tr("Warning: %s"),warning.c_str());
             }
             ImGui::EndTabItem();
         }

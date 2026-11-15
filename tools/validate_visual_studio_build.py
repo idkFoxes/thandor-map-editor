@@ -301,7 +301,8 @@ def check_hygiene(root: Path) -> dict[str, object]:
     bad: list[str] = []
     for path in root.rglob("*"):
         rel = path.relative_to(root)
-        parts = set(rel.parts)
+        if rel.parts[0] == "exclude":
+            continue
         # windows/deps is intentionally an ignored bootstrap output and must not be sealed.
         if path.is_dir() and path.name in forbidden_dir_names:
             bad.append(str(rel))

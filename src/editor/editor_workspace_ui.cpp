@@ -1,3 +1,4 @@
+#include "editor_strings.hpp"
 #include "editor_app.hpp"
 #include <imgui.h>
 #include <array>
@@ -96,17 +97,17 @@ void EditorApp::draw_workspace_ribbon(){
     ImGui::SetNextWindowPos({r.x,r.y});ImGui::SetNextWindowSize({r.width,r.height});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2{ui_px(8),ui_px(6)});
     ImGui::Begin("##workspace-ribbon",nullptr,kWorkspaceWindow|ImGuiWindowFlags_NoScrollbar);
-    if(!show_left_panel_){if(ImGui::SmallButton("Assets >"))show_left_panel_=true;ImGui::SameLine();}
-    if(!show_right_panel_){if(ImGui::SmallButton("< Inspector"))show_right_panel_=true;ImGui::SameLine();}
-    if(ImGui::SmallButton(compact_ribbon_?"Expand tools":"Compact tools"))compact_ribbon_=!compact_ribbon_;
+    if(!show_left_panel_){if(ImGui::SmallButton(tr_label("Assets >")))show_left_panel_=true;ImGui::SameLine();}
+    if(!show_right_panel_){if(ImGui::SmallButton(tr_label("< Inspector")))show_right_panel_=true;ImGui::SameLine();}
+    if(ImGui::SmallButton(compact_ribbon_?tr_label("Expand tools"):tr_label("Compact tools")))compact_ribbon_=!compact_ribbon_;
     if(!compact)ImGui::SameLine();
-    if(!compact)ImGui::TextDisabled("%s   |   W Move  /  E Rotate","Editing tools");
+    if(!compact)ImGui::TextDisabled(tr("%s   |   W Move  /  E Rotate"),tr("Editing tools"));
     // A horizontal child preserves every tool on narrow windows.
     if(compact)ImGui::SameLine();
     ImGui::BeginChild("##workspace-tools",{0,compact?ui_px(42.0F):ui_px(56.0F)},false,
         ImGuiWindowFlags_HorizontalScrollbar);
-    constexpr std::array<const char*,14> labels{{"Select","Move","Rotate","Raise","Lower",
-        "Smooth","Flatten","Water","Fields","Texture","AI Start","Player","Center","Generate"}};
+    const std::array<const char*,14> labels{{tr("Select"),tr("Move"),tr("Rotate"),tr("Raise"),tr("Lower"),
+        tr("Smooth"),tr("Flatten"),tr("Water"),tr("Fields"),tr("Texture"),tr("AI Start"),tr("Player"),tr("Center"),tr("Generate")}};
     constexpr std::array<Tool,14> tools{{Tool::Select,Tool::Select,Tool::Select,Tool::Raise,
         Tool::Lower,Tool::Smooth,Tool::Flatten,Tool::Water,Tool::ResourceField,Tool::Texture,
         Tool::PlayerStart,Tool::PlayerStart,Tool::Select,Tool::GenerateTerrain}};
@@ -123,7 +124,7 @@ void EditorApp::draw_workspace_ribbon(){
             const auto factions=document_->player_ai_configuration();
             if((i==10&&factions.active_factions<=factions.human_assignable_factions)||
                (i==11&&factions.human_assignable_factions==0U)){
-                status_="Configure the matching human or computer faction in Players before placing a start.";
+                status_=tr("Configure the matching human or computer faction in Players before placing a start.");
                 show_right_panel_=true;requested_inspector_tab_=2;continue;
             }
             selected_faction_=i==10?factions.human_assignable_factions+1U:1U;
@@ -132,7 +133,7 @@ void EditorApp::draw_workspace_ribbon(){
                 if(preset.visual_kind==thandor::PlacementVisualKind::PlayerStart&&preset.browser_visible){
                     selected_asset_id_=preset.registry_id;found_start=true;break;
                 }
-            if(!found_start){status_="No placeable start asset is available.";continue;}
+            if(!found_start){status_=tr("No placeable start asset is available.");continue;}
             choose_workspace_tool(Tool::PlayerStart,2);
         }else choose_workspace_tool(tools[i],i<=2?0:1);
     }
@@ -144,13 +145,13 @@ void EditorApp::draw_asset_categories(std::span<const uint32_t> ids){
     const auto category=[&](const char* label,int index){
         if(ImGui::Selectable(label,asset_category_==index))asset_category_=index;
     };
-    if(ImGui::TreeNodeEx("Terrain",ImGuiTreeNodeFlags_DefaultOpen)){
-        category("Ground textures",0);category("World / scenery",1);ImGui::TreePop();
+    if(ImGui::TreeNodeEx(tr_label("Terrain"),ImGuiTreeNodeFlags_DefaultOpen)){
+        category(tr_label("Ground textures"),0);category(tr_label("World / scenery"),1);ImGui::TreePop();
     }
-    category("Resources",2);category("Buildings",3);category("Units",4);category("Map items / effects",5);
+    category(tr_label("Resources"),2);category(tr_label("Buildings"),3);category(tr_label("Units"),4);category(tr_label("Map items / effects"),5);
     ImGui::EndChild();
-    constexpr std::array<const char*,6> names{{"Ground textures","World / scenery","Resources",
-        "Buildings","Units","Map items / effects"}};
+    const std::array<const char*,6> names{{tr("Ground textures"),tr("World / scenery"),tr("Resources"),
+        tr("Buildings"),tr("Units"),tr("Map items / effects")}};
     asset_category_=std::clamp(asset_category_,0,5);
     ImGui::SeparatorText(names[static_cast<std::size_t>(asset_category_)]);
     if(asset_category_==0){
@@ -192,10 +193,10 @@ void EditorApp::draw_selected_object_preview(const thandor::ArmyAssetPreset& pre
                 d->AddRectFilled({p.x+ui_px(4)+ui_px(72.0F)*x/samples,p.y+ui_px(4)+ui_px(72.0F)*y/samples},
                     {p.x+ui_px(4)+ui_px(72.0F)*(x+1U)/samples,p.y+ui_px(4)+ui_px(72.0F)*(y+1U)/samples},color);
             }
-    }catch(const std::exception&){d->AddText({p.x+ui_px(6),p.y+ui_px(30)},IM_COL32(134,155,180,255),"Preview");}
+    }catch(const std::exception&){d->AddText({p.x+ui_px(6),p.y+ui_px(30)},IM_COL32(134,155,180,255),tr("Preview"));}
     ImGui::SameLine();ImGui::BeginChild("##selected-summary",{0,ui_px(80)},false);
     ImGui::TextWrapped("%s",preset.display_name.c_str());
-    ImGui::TextDisabled("Faction %u",faction);
+    ImGui::TextDisabled(tr("Faction %u"),faction);
     ImGui::EndChild();
 }
 
@@ -204,7 +205,7 @@ void EditorApp::draw_map_overview(){
     ImGui::SetNextWindowPos({r.x,r.y});ImGui::SetNextWindowSize({r.width,r.height});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2{ui_px(10),ui_px(5)});
     ImGui::Begin("##workspace-overview",nullptr,kWorkspaceWindow);
-    if(ImGui::SmallButton(overview_expanded_?"v  Map Overview":">  Map Overview"))overview_expanded_=!overview_expanded_;
+    if(ImGui::SmallButton(overview_expanded_?tr_label("v  Map Overview"):tr_label(">  Map Overview")))overview_expanded_=!overview_expanded_;
     if(!overview_expanded_){ImGui::End();ImGui::PopStyleVar();return;}
     const auto& f=document_->field();
     const auto placements=document_->level().placements();
@@ -225,7 +226,7 @@ void EditorApp::draw_map_overview(){
         camera_.target.y=ymax-std::clamp((mouse.y-p.y)/mini_height,0.0F,1.0F)*spany;
         camera_.target.z=terrain_height_near(camera_.target.x,camera_.target.y);
     }
-    if(ImGui::IsItemHovered())ImGui::SetTooltip("Click to center the camera here");
+    if(ImGui::IsItemHovered())ImGui::SetTooltip(tr("Click to center the camera here"));
     auto* d=ImGui::GetWindowDrawList();
     d->AddRectFilled(p,{p.x+mini_width,p.y+mini_height},IM_COL32(0,0,0,255));
     constexpr int samples=40;
@@ -262,19 +263,19 @@ void EditorApp::draw_map_overview(){
     d->AddCircle(map_point(camera_.target.x,camera_.target.y),5,IM_COL32(255,255,255,255),16,1.5F);
     d->AddRect(p,{p.x+mini_width,p.y+mini_height},IM_COL32(75,108,141,255));
     ImGui::SameLine();ImGui::BeginChild("##overview-layers",{ui_px(125),mini_height},false);
-    ImGui::TextDisabled("LAYERS");
-    ImGui::Checkbox("Players",&overview_players_);ImGui::Checkbox("Resources",&overview_resources_);
-    ImGui::Checkbox("Grid",&overview_grid_);ImGui::Checkbox("Heightmap",&overview_heightmap_);
+    ImGui::TextDisabled(tr("LAYERS"));
+    ImGui::Checkbox(tr_label("Players"),&overview_players_);ImGui::Checkbox(tr_label("Resources"),&overview_resources_);
+    ImGui::Checkbox(tr_label("Grid"),&overview_grid_);ImGui::Checkbox(tr_label("Heightmap"),&overview_heightmap_);
     ImGui::EndChild();
     if(r.width>ui_px(620.0F)){
         ImGui::SameLine();ImGui::BeginChild("##overview-starts",{std::max(ui_px(170.0F),r.width-ui_px(560.0F)),mini_height},false);
-        ImGui::TextDisabled("PLAYER / AI STARTS");
+        ImGui::TextDisabled(tr("PLAYER / AI STARTS"));
         bool any=false;
         for(std::size_t i=0;i<placements.size();++i){const auto& placement=placements[i];
             const auto* preset=catalog_.army_preset(placement.army_asset_id);
             if(!preset||preset->visual_kind!=thandor::PlacementVisualKind::PlayerStart)continue;
             any=true;ImGui::PushID(static_cast<int>(i));char label[96]{};
-            std::snprintf(label,sizeof(label),"Faction %u    %.1f, %.1f",placement.faction_index,placement.render_x(),placement.render_y());
+            std::snprintf(label,sizeof(label),tr("Faction %u    %.1f, %.1f"),placement.faction_index,placement.render_x(),placement.render_y());
             if(ImGui::Selectable(label,selected_placement_==i)){
                 selected_placement_=i;camera_.target={placement.render_x(),placement.render_y(),
                     terrain_height_near(placement.render_x(),placement.render_y())};
@@ -282,18 +283,18 @@ void EditorApp::draw_map_overview(){
             }
             ImGui::PopID();
         }
-        if(!any)ImGui::TextDisabled("No starts placed.");
+        if(!any)ImGui::TextDisabled(tr("No starts placed."));
         ImGui::EndChild();
     }
     if(r.width>ui_px(850.0F)){
         ImGui::SameLine();ImGui::BeginChild("##overview-map-info",{0,mini_height},false);
-        ImGui::TextDisabled("MAP INFO");ImGui::Text("%u x %u cells",f.width(),f.height());
-        ImGui::Text("%zu objects",placements.size());
+        ImGui::TextDisabled(tr("MAP INFO"));ImGui::Text(tr("%u x %u cells"),f.width(),f.height());
+        ImGui::Text(tr("%zu objects"),placements.size());
         uint32_t xenite=0,tritium=0;for(const auto& cell:f.cells()){
             if(cell.flags_and_material&0x0800U)++xenite;
             if(cell.flags_and_material&0x1000U)++tritium;}
-        ImGui::Text("Xenite: %u cells",xenite);ImGui::Text("Tritium: %u cells",tritium);
-        if(ImGui::SmallButton("Map settings")){show_right_panel_=true;requested_inspector_tab_=4;}
+        ImGui::Text(tr("Xenite: %u cells"),xenite);ImGui::Text(tr("Tritium: %u cells"),tritium);
+        if(ImGui::SmallButton(tr_label("Map settings"))){show_right_panel_=true;requested_inspector_tab_=4;}
         ImGui::EndChild();
     }
     ImGui::End();ImGui::PopStyleVar();

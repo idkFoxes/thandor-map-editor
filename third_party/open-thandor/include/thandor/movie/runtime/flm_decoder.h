@@ -1,0 +1,46 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/movie/runtime/flm_decoder.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_MOVIE_RUNTIME_FLM_DECODER_H
+#define THANDOR_MOVIE_RUNTIME_FLM_DECODER_H
+
+#include <thandor/movie/runtime/types.h>
+#include <thandor/core/contracts.h>
+
+/* FLM frame tokens (low 5 bits of the next stream dword, Movie_DecodeFrame4x4Delta / Movie_EncodeFrame4x4*):
+   0..24 start an 8-byte colour block with that base luma; the skip tokens keep blocks of the previous frame,
+   the count (minus its bias) sits in the bits above the token */
+inline constexpr int MOVIE_TOKEN_SKIP_SHORT = 0x19; /* 1 byte: skip 1..8 blocks */
+inline constexpr int MOVIE_TOKEN_SKIP_MEDIUM = 0x1A; /* 2 bytes: skip 9..0x808 blocks */
+inline constexpr int MOVIE_TOKEN_SKIP_LONG = 0x1B; /* 4 bytes: skip 0x809 or more blocks */
+/* The decoder treats every token >= MOVIE_TOKEN_SKIP_LONG as a long skip, so the unused tokens 0x1C..0x1F
+   (never written by the encoder) decode like 0x1B. */
+/* Largest run of kept blocks the short and the medium skip token encode */
+inline constexpr int MOVIE_SKIP_SHORT_MAX_BLOCKS = 8;
+inline constexpr int MOVIE_SKIP_MEDIUM_MAX_BLOCKS = 0x808;
+/* Low 5 bits of a stream dword: the frame token (MOVIE_TOKEN_SKIP_*, or the base luma of a colour block) */
+inline constexpr int MOVIE_TOKEN_MASK = 0x1f;
+/* Highest base luma of a colour block (tokens 0..24) */
+inline constexpr int MOVIE_TOKEN_BASE_LUMA_MAX = 24;
+/* FLM colour: 5-bit luma in bits 0-4 below the 10-bit chroma code (hue in bits 5-9, saturation in 10-14);
+   a colour block stores the chroma code in bits 21-30 of its second dword */
+inline constexpr int MOVIE_COLOR_LUMA_MASK = 0x1f;
+inline constexpr int MOVIE_COLOR_HUE_MASK = 0x3e0;
+inline constexpr int MOVIE_COLOR_SATURATION_MASK = 0x7c00;
+inline constexpr int MOVIE_COLOR_CHROMA_MASK = 0x7fe0;
+/* Bit 31 of a colour block's second dword: every luma step counts twice (4-bit levels 0..15 halved) */
+inline constexpr uint32_t MOVIE_BLOCK_DOUBLE_STEPS = 0x80000000;
+
+/* Decodes one frame from encodedFrame, reading nothing at or after encodedEnd (see flm_decoder.cpp). */
+uint32_t Movie_DecodeFrame4x4Delta
+          (MoviePixelDimension heightPixels,MoviePixelDimension widthPixels,uint32_t *destinationArgb,
+          const uint8_t *encodedFrame,const uint8_t *encodedEnd);
+
+/* Not in the original: fills g_MovieChromaLumaToArgb (the original shipped it precomputed). */
+void Movie_BuildChromaLumaTable();
+
+#endif /* THANDOR_MOVIE_RUNTIME_FLM_DECODER_H */

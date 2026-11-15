@@ -1,0 +1,40 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/ui/ingame/build_catalog.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_UI_INGAME_BUILD_CATALOG_H
+#define THANDOR_UI_INGAME_BUILD_CATALOG_H
+
+#include <thandor/ui/controls/types.h>
+#include <thandor/ui/ingame/types.h>
+#include <thandor/core/contracts.h>
+
+void InGameBuildCatalog_QueueOrCancelEntry(UiCatalogEntryControl *source);
+
+void InGameSpecialBuildCatalog_QueueOrCancelEntry(UiCatalogEntryControl *source);
+
+/* Build catalog (InGameBuildCatalog_RebuildGrid) and special build catalog (InGameSpecialBuildCatalog_RebuildGrid) */
+inline constexpr int32_t BUILD_CATALOG_ENTRY_COUNT = 48;
+inline constexpr int32_t BUILD_CATALOG_MAX_COLUMNS = 8;
+
+inline constexpr int32_t SPECIAL_BUILD_CATALOG_ENTRY_COUNT = 42;
+inline constexpr int32_t SPECIAL_BUILD_CATALOG_MAX_COLUMNS = 6;
+
+/* assetFlags14 bits of a catalog record */
+inline constexpr int32_t BUILD_CATALOG_ASSET_FLAG_BUILDABLE = 0x1;
+inline constexpr int32_t BUILD_CATALOG_ASSET_FLAG_CAPABILITY_8 = 0x8; /* capability every model of runtime class 22 provides */
+
+inline constexpr int32_t BUILD_CATALOG_ASSET_FLAG_SPECIAL = 0x10; /* offered in the special build catalog */
+inline constexpr int32_t BUILD_CATALOG_ASSET_CAPABILITY_MASK = 0xEE; /* all capability bits of the normal build catalog */
+
+void InGameBuildCatalog_RebuildGrid(UiNodeBase *node);
+
+void InGameSpecialBuildCatalog_RebuildGrid(UiNodeBase *node);
+
+extern UiCommandRuntimeRecordPrefix *g_UiCatalogGroup48Records[48];
+extern UiCommandRuntimeRecordPrefix *g_UiCatalogGroup42Records[42];
+
+#endif /* THANDOR_UI_INGAME_BUILD_CATALOG_H */

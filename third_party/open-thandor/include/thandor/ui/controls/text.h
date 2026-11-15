@@ -1,0 +1,35 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/ui/controls/text.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_UI_CONTROLS_TEXT_H
+#define THANDOR_UI_CONTROLS_TEXT_H
+
+#include <thandor/ui/controls/types.h>
+#include <thandor/core/contracts.h>
+
+/* labelFlags of UiSingleLineTextControl and UiWrappedTextControl. */
+inline constexpr int32_t UI_LABEL_CENTER_X = 0x01;
+inline constexpr int32_t UI_LABEL_ALIGN_RIGHT = 0x02;
+inline constexpr int32_t UI_LABEL_CENTER_Y = 0x04;
+inline constexpr int32_t UI_LABEL_ALIGN_BOTTOM = 0x08;
+inline constexpr int32_t UI_LABEL_TEXT_IS_STREAM = 0x10; /* text is a rich-text command stream, else a TextResourceId */
+inline constexpr int32_t UI_LABEL_HIDE_WHILE_SUPPRESSED = 0x40; /* single-line label */
+inline constexpr int32_t UI_LABEL_KEEP_WRAP_WIDTH = 0x40; /* wrapped label: wrapWidth does not follow layoutWidth */
+inline constexpr int32_t UI_LABEL_OWN_STYLE_FONT = 0x100; /* the font byte of styleOverride replaces g_UiTextStyleNormal's */
+inline constexpr int32_t UI_LABEL_OWN_STYLE_PALETTE = 0x200; /* the palette byte of styleOverride replaces g_UiTextStyleNormal's */
+
+void UiSingleLineTextControl_DrawClipped
+          (UiPixelCoordinate clipBottom,UiPixelCoordinate clipRight,UiPixelCoordinate clipTop,
+          UiPixelCoordinate clipLeft,UiSingleLineTextControl *control);
+
+void UiWrappedTextControl_DrawClipped(UiPixelCoordinate clipBottom,UiPixelCoordinate clipRight,UiPixelCoordinate clipTop,
+          UiPixelCoordinate clipLeft,UiWrappedTextControl *control);
+
+void UiWrappedTextControl_RelocateAndApplyDeferredOffset
+          (UiSerializedRelocationDelta relocationDelta,UiWrappedTextControl *control);
+
+#endif /* THANDOR_UI_CONTROLS_TEXT_H */

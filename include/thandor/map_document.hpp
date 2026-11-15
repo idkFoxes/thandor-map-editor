@@ -125,7 +125,9 @@ public:
     StockMapSaveResult save_stock_map_in_place(const AssetCatalog& catalog,
                                                 const MapAssetGroup& group,
                                                 bool create_backup = true) const;
-    void save_project(const std::filesystem::path& project_path, bool preserve_mission_state = false) const;
+    // Supplying the catalog includes editable images for stock ground materials in ZIP projects.
+    void save_project(const std::filesystem::path& project_path, bool preserve_mission_state = false,
+                      const AssetCatalog* texture_catalog = nullptr) const;
     // Campaign missions retain authored faction counts, zero resources, scripts and shared terrain identity.
     std::vector<PckWriteEntry> campaign_package_entries() const;
 

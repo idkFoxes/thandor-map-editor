@@ -1,0 +1,1232 @@
+# Editor interface strings. UTF-8. English fallback key followed by German, separated by a tab.
+# German game terminology follows the stock PCK help, technology and menu text.
+# Use \s for leading or trailing spaces, \n for line breaks and \\ for backslashes.
+\nClick to select, then paint with the Texture tool.	\nZum Auswählen anklicken und anschließend mit dem Texturwerkzeug auftragen.
+\nUnpacked:\s	\nunverpackt:\s
+\s(ARM\s	\s(ARM\s
+\s(LEV, FLD, names, and\s	\s(LEV, FLD, Namen und\s
+\s(faction\s	\s(Fraktion\s
+\s(native list\s	\s(native Liste\s
+\s256-bit research preview mask.	\s256-Bit-Maske für die Forschungsvorschau.
+\sLEV camera record.	\sLEV-Kameraeintrag.
+\sat the building centre. Place/paint the matching deposit field first.	\sin der Gebäudemitte. Lege zuerst das passende Vorkommen an.
+\sbytes	\sBytes
+\schanged cells. Apply to keep it.	\sgeänderte Felder. Mit „Anwenden“ übernehmen.
+\schanged).	\sgeändert.
+\scustom assets).	\seigene Ressourcen).
+\scustom assets.	\seigene Ressourcen.
+\seditable cells ·\s	\seditierbare Zellen ·\s
+\sfor faction\s	\sfür die Fraktion\s
+\sfor placement.	\sfür die Platzierung.
+\sfrom\s	\svon\s
+\shas no unique LEV sound-template-matched SAM	\shat keine eindeutige SAM-Zuordnung in der LEV-Datei
+\sin the recovered faction secondary production queue for class-22 storage.	\sin der zweiten Produktionswarteschlange der Fraktion (Lager, Klasse 22).
+\sin the recovered faction secondary production queue.	\sin der zweiten Produktionswarteschlange der Fraktion.
+\sinto a new map with cleared placements.	\sin eine neue Karte mit gelöschten Platzierungen.
+\sinto the current map.	\sIn die aktuelle Karte.
+\sis not available in the asset catalog.	\sist im Asset-Katalog nicht verfügbar.
+\slinked-child sortie without consuming its persistent stored ARM id.	\sstartet das zugeordnete Objekt, ohne dessen gespeicherte ARM-ID zu verbrauchen.
+\spreview.	\sVorschau.
+\sselected cells (	\sausgewählte Felder (
+\ssimulation runs.	\sSimulationsläufe.
+\swith\s	\smit\s
+\swith safe custom resources and global text aliases only. Restart the game to remount patches.	\smit kompatiblen eigenen Ressourcen und globalen Textaliasen. Starte das Spiel neu, um die Patches erneut zu laden.
+\s· Faction\s	\s· Fraktion\s
+%.1f FPS	%.1f FPS
+%s   |   W Move  /  E Rotate	%s   |   W Verschieben  /  E Drehen
+%s tick: %u	%s-Tick: %u
+%s · %zu safe / %zu caution / %zu blocked	%s · %zu sicher / %zu mit Einschränkungen / %zu blockiert
+%s · ARM %u · class %u	%s · ARM %u · Klasse %u
+%s · Faction %u	%s · Fraktion %u
+%s · Faction %u — %s starting camera	%s · Fraktion %u — %s Startkamera
+%s · Faction %zu	%s · Fraktion %zu
+%u / %u ticks	%u / %u Ticks
+%u x %u cells	%u × %u Felder
+%zu deposits · %zu / %zu faction connections	%zu Vorkommen · %zu / %zu Fraktionsverbindungen
+%zu objects	%zu Objekte
+%zu projectiles · %zu effects	%zu Projektile · %zu Effekte
+(cycle duration is zero)	(Zyklusdauer ist Null)
+) camera start from the LEV header.	) Kamerastart aus dem LEV-Header.
+) from the 3D asset browser.	) vom 3D-Asset-Browser.
+) has no stock player-start vehicle (ARM 50).	) hat kein Pionierfahrzeug (ARM 50).
+) start vehicle. Adjust the view, then save it as the faction camera.	) Startfahrzeug. Passe die Ansicht an und speichere sie dann als Fraktionskamera.
++%zu more shot definition(s)	+%zu mehr Schussdefinition(en)
++%zu more technology entries	+%zu mehr Technologieeinträge
+-1 uses the difficulty's grace period. 0 disables it. Defense stays active, and hostile action can end grace early.	-1 übernimmt die Schonfrist des Schwierigkeitsgrads. 0 deaktiviert sie. Die Verteidigung bleibt aktiv. Feindselige Aktionen können die Schonfrist vorzeitig beenden.
+. Map data was parsed, but its preview could not be completed.	Die Kartendaten wurden analysiert, aber ihre Vorschau konnte nicht vervollständigt werden.
+. The editor retained the previously open map.	Der Editor behielt die zuvor geöffnete Karte bei.
+. Use a game-ready card for this base map; raw/internal records remain in Files.	Verwenden Sie eine spielbereite Karte für diese Basiskarte; rohe / interne Aufzeichnungen bleiben in Dateien.
+0  Original difficulty	0  Original-Schwierigkeitsgrad
+1  Original with 20-minute grace, air units, coils and more research	1  Original mit 20 Minuten Schonfrist, Lufteinheiten, Spulen und zusätzlicher Forschung
+1. Choose an area	1. Wählen Sie einen Bereich
+1. Select rough area	1. Bereich grob auswählen
+2  Easy (60-minute grace, 5 peace-time turrets)	2  Leicht (60 Minuten Schonfrist, 5 Geschütztürme während der Friedenszeit)
+2. Choose terrain	2. Gelände wählen
+2. Pick reference terrain	2. Referenzgelände auswählen
+3  Normal (60-minute grace, 7 turrets, radar scouts and reserve mine)	3  Normal (60 Minuten Schonfrist, 7 Geschütztürme, Radaraufklärer und Reservemine)
+3. Adjust flat surface	3. Ebene Fläche anpassen
+3. Preview and apply	3. Vorschau und Anwendung
+30 simulated minutes with a 1 ms wall interval. Actual speed depends on worker load.	30 simulierte Minuten bei einem Takt von 1 ms Echtzeit. Die tatsächliche Geschwindigkeit hängt von der Auslastung der Threads ab.
+4  Hard (60-minute grace, 9 turrets, reserve HQ and power)	4  Schwer (60 Minuten Schonfrist, 9 Geschütztürme, Reserve-Hauptquartier und Stromversorgung)
+5  Very hard (30-minute grace, 11 turrets, heavy factory)	5  Sehr schwer (30 Minuten Schonfrist, 11 Geschütztürme und schwere Fabrik)
+6  Extreme (30-minute grace, 13 turrets, 180% extraction and stronger armor)	6  Extrem (30 Minuten Schonfrist, 13 Geschütztürme, 180% Förderung und stärkere Panzerung)
+7  Hell (10-minute grace, 15 turrets, double extraction and armor)	7  Hölle (10 Minuten Schonfrist, 15 Geschütztürme, doppelte Förderung und Panzerung)
+: runtime class 14 requires\s	: Laufzeitklasse 14 erfordert\s
+; PATCH00 page-0x22/0x23 aliases were synchronized and stale map shadows were removed. Restart the game.	; PATCH00 Seite-0x22/0x23 Aliase wurden synchronisiert und veraltete Kartenschatten wurden entfernt.
+; new placements use this row.	; neue Platzierungen verwenden diese Zeile.
+; previously opened map unavailable, using first stock map	; zuletzt geöffnete Karte fehlt. Die erste Originalkarte wird geladen.
+; terrain DAT fallback	; Gelände DAT Fallback
+; terrain DAT loaded	; Gelände DAT geladen
+; terrain layers\s	; Geländeschichten\s
+< Editor tools	< Editor-Tools
+< Inspector	< Inspektor
+>  Map Overview	> Kartenübersicht
+A .thmap is a ZIP with map.ini, level data, and editable TGA images for the ground textures used here.	Eine .thmap ist ein ZIP mit map.ini, Leveldaten und editierbaren TGA-Bildern für die hier verwendeten Bodentexturen.
+A central land area with sloping shores and water around it.	Ein zentrales Landgebiet mit abfallenden Ufern und Wasser um es herum.
+A flat shallow bed with a visible surface. Raise terrain to create dry ground.	Eine flache, flache Liege mit sichtbarer Oberfläche, die das Gelände erhöht, um trockenen Boden zu schaffen.
+A second AI row (faction %d) already uses army8.	Eine zweite KI-Reihe (Fraktion %d) nutzt bereits army8.
+A submerged flat bed. Raise terrain to create shores and islands.	Ein untergetauchtes Flachbett. Erhöhen Sie das Gelände, um Ufer und Inseln zu schaffen.
+A surface appears where its level is above the terrain bed. Height zero is valid.	Es erscheint eine Fläche, deren Höhe oberhalb des Geländebettes liegt.
+AI	A.
+AI / gameplay	AI / Gameplay
+AI Start	KI-Start
+AI parameter	AI-Parameter
+AI planning lists	KI-Planungslisten
+AIMING	ZIELT
+ARM	ARM
+ARM registry ID\s	ARM-Register-ID\s
+ARM: %s	ARM: %s
+Absolute water surface Z	Absolute Wasseroberfläche Z
+Active animated surface: %s	Aktive animierte Oberfläche: %s
+Active count is below the highest faction used by placements.	Die aktive Zählung liegt unter der höchsten Fraktion, die von Platzierungen verwendet wird.
+Active end triggers: %u / 16	Aktive Endauslöser: %u / 16
+Active looping sounds: %zu	Aktive Looping-Sounds: %zu
+Active scheduled conditions: %u / 64	Aktive Fahrplanbedingungen: %u / 64
+Active trigger	Aktiver Auslöser
+Actual field dimensions: %u x %u	Tatsächliche Feldabmessungen: %u x %u
+Add a saved .thmap project above, or open this mission and save its edited copy. Mission conditions are edited in the Map inspector.	Fügen Sie oben ein gespeichertes .thmap-Projekt hinzu oder öffnen Sie diese Mission und speichern Sie die bearbeitete Kopie. Die Missionsbedingungen werden im Karteninspektor bearbeitet.
+Add area	Bereich hinzufügen
+Add project as new mission	Projekt als neue Mission hinzufügen
+Advanced expression bytes	Erweiterte Expressionsbytes
+After assignment, pick Golrathen in the Units / Buildings / Objects faction selector.	Wählen Sie nach der Zuweisung Golrathen in der Units / Buildings / Objects Fraktionsauswahl.
+Aim at start	Ziel beim Start
+Aim current view at faction start vehicle	Ziel ist die aktuelle Ansicht des Fraktionsstartfahrzeugs
+Aimed the editor view at\s	Ziel der Editor-Ansicht auf\s
+Airport linked-child storage · runtime class 22	Airport linked-child storage · Laufzeitklasse 22
+All active factions	Alle aktiven Fraktionen
+All factions	Alle Fraktionen
+All placeable assets	Alle verwertbaren Vermögenswerte
+All placements	Alle Platzierungen
+All terrain bands	Alle Geländeklassen
+Alternate azimuth	Alternativer Azimut
+Alternate base sites	Alternative Basisstandorte
+Alternate base sites %zu	Alternative Basisstandorte %zu
+Alternate elevation	Abwechselnde Höhe
+Alternate ending movie	Alternate Ending Film
+Alternate field height	Wechselfeldhöhe
+Alternate field width	Wechselfeldbreite
+Alternate lighting endpoint	Abwechselnder Beleuchtungsendpunkt
+Alternate routes	Ausweichrouten
+Animate Xenite / Tritium resource fields	Animate Xenit / Tritium Ressourcenfelder
+Animate visible buildings	Belebte sichtbare Gebäude
+Animate visible timed map effects	Animierte sichtbare zeitgesteuerte Karteneffekte
+Animate visible units	Sichtbare Einheiten animieren
+Animate water/lava/ice	Belebtes Wasser/Lava/Eis
+Animation / simulation preview speed	Geschwindigkeit der Animations-/Simulationsvorschau
+Applied one flat water surface to\s	Aufbringen einer flachen Wasseroberfläche auf\s
+Applied stock skirmish starting resources to all active factions.	Alle aktiven Fraktionen haben die Startrohstoffe des Originalgefechts erhalten.
+Apply 6500 / 3000 to all active factions	6500 / 3000 auf alle aktiven Fraktionen anwenden
+Apply expression	Ausdruck anwenden
+Apply flat water to selection	Flachwasser auf die Auswahl anwenden
+Apply scenario text	Szenariotext übernehmen
+Apply selected object values	Werte für das ausgewählte Objekt übernehmen
+Apply terrain	Gelände übernehmen
+Archive:\s	Archiv:\s
+Area selected. Choose terrain, then Preview.	Ausgewähltes Gebiet. Wählen Sie Gelände, dann Vorschau.
+Asset	Objekt
+Asset ID	Kennung des Vermögenswerts
+Assets	Objekte
+Assets >	Vermögenswerte >
+Assets##workspace-assets	Objekte##workspace-assets
+Assign Golrathen (army8) to this AI faction	Weisen Sie Golrathen (Armee8) dieser AI-Fraktion zu
+Assign an attack point or different-faction entity target first.	Weisen Sie zuerst einen Angriffspunkt oder ein Objekt mit unterschiedlicher Fraktion zu.
+Assigned Golrathen gray army8 to computer-only faction\s	Wies Golrathen graue Armee8 zu Computer-only Fraktion\s
+At least two placed faction bases or ground starts are needed.	Mindestens zwei platzierte Fraktionsbasen oder Bodenstarts sind erforderlich.
+Attack entity: %s · F%u	Einheit angreifen: %s · F%u
+Attack point: %.2f / %.2f / %.2f	Angriffspunkt: %.2f / %.2f / %.2f
+Attack target assigned to\s	Angriffsziel zugewiesen\s
+Audio backend unavailable for\s	Audioausgabe nicht verfügbar für\s
+Audio backend unavailable for looping\s	Audioausgabe für Schleifenton nicht verfügbar:\s
+Author	Autor
+Automatic	Automatisch
+BLOCKED	BLOCKIERT
+Back to area selection	Zurück zur Bereichsauswahl
+Back up modified PATCH archive	Sichern des modifizierten PATCH-Archivs
+Back up replaced level and PATCH archives	Backup ersetzter Level- und PATCH-Archive
+Bake whole placement facing toward target	Backen Sie ganze Platzierung mit Blick auf Ziel
+Baked whole-placement facing toward the target. LEV has no independent persistent turret-angle field.	Gebackene Gesamtplatzierung zum Ziel hin. LEV hat kein unabhängiges persistentes Revolverwinkelfeld.
+Base and Factory Access Routes	Basis- und Fabrikzufahrten
+Base height	Grundhöhe
+Base pairs planned %zu / %zu   Networks %zu	Verbundene Basenpaare %zu / %zu · Netze %zu
+Base pairs with alternates %zu / %zu	Basenpaare mit Ausweichroute %zu / %zu
+Base seed	Basis-Startwert
+Bends	Biegungen
+Blend at border	Blend an der Grenze
+Boolean postfix expression	Boolesche Postfix-Ausdruck
+Build on existing terrain	Bauen Sie auf bestehendem Gelände
+Buildable sites with useful new sight. At a shared radar and turret marker, either structure can use the spot.	Bauplätze mit zusätzlicher Sicht. Gemeinsam markierte Standorte eignen sich für Radar oder Geschützturm.
+Building Placement	Gebäudeplatzierung
+Building Resource Fields	Rohstofffelder für Gebäude
+Building areas or protected starts/buildings lack verified ground access. Adjust the terrain and preview again.	Gebäudebereiche oder geschützte Starts/Gebäude haben keinen verifizierten Bodenzugang.
+Building destruction preview	Vorschau auf Gebäudezerstörung
+Building placement captured; hold left and move horizontally to rotate, then release to place.	Gebäudeplatzierung erfasst; halten Sie links und bewegen Sie sich horizontal, um sich zu drehen, und lassen Sie dann zum Platzieren frei.
+Building placement requires a valid build target before rotation capture begins.	Die Platzierung des Gebäudes erfordert ein gültiges Build-Ziel, bevor die Rotationserfassung beginnt.
+Building release position is not a valid build target; nothing was placed.	Die Gebäudefreigabeposition ist kein gültiges Build-Ziel; nichts wurde platziert.
+Buildings	Gebäude
+Built	Gebaut
+Camera faction	Kamerafraktion
+Camera record unavailable: %s	Kameraaufzeichnung nicht verfügbar: %s
+Campaign	Kampagne
+Campaign *###CampaignWorkspace	Kampagne *###CampaignWorkspace
+Campaign / mission script (LEV conditions)	Kampagnen-/Missionsskript (LEV-Bedingungen)
+Campaign details	Angaben zur Kampagne
+Campaign mission map is not installed:\s	Die Missionskarte der Kampagne ist nicht installiert:\s
+Campaign outcome (0-7)	Kampagnenergebnis (0-7)
+Campaign project	Kampagnenprojekt
+Campaign projects use the .thcampaign extension.	Kampagnenprojekte nutzen die .thcampaign-Erweiterung.
+Campaign workspace...	Kampagneneditor …
+Campaign###CampaignWorkspace	Kampagne###CampaignWorkspace
+CampaignTabs	CampaignTabs
+Cancel	Abbrechen
+Cannot place\s	Kann nicht Platz finden\s
+Canonical ARM %u · stock placements %u	Canonical ARM %u · Lagerplatzierungen %u
+Carry armies and technology through exit zones	Tragen Sie Armeen und Technologie durch Ausstiegszonen
+Carry-over exit zones	Überführungszonen
+Cell	Zelle
+Cell strips follow the order above.	Zellstreifen folgen der obigen Reihenfolge.
+Cellular / rocky	Zellstoff/Fels
+Center	Zentrieren
+Center camera	Kamera zentrieren
+Center camera on selected	Mittelkamera auf selected
+Channel width	Kanalbreite
+Checks resource-field objects for a missing Xenite (0x0800) or Tritium (0x1000) flag on their terrain cell.	Überprüft Ressourcenfeldobjekte auf ein fehlendes Xenit (0x0800)- oder Tritium (0x1000)-Flag in ihrer Geländezelle.
+Choose a target point first.	Wählen Sie zuerst einen Zielpunkt.
+Choose an area or Whole map first.	Wählen Sie zuerst einen Bereich oder eine ganze Karte.
+Choose attack point on terrain	Wähle Angriffspunkt auf dem Gelände
+Choose game-compatible dimensions (59..139 in 8-cell steps, area at most 131 x 131).	Wählen Sie spielkompatible Dimensionen (59..139 in 8-Zellen-Schritten, Fläche maximal 131 x 131).
+Choose legal game-compatible map dimensions	Wählen Sie legale spielkompatible Kartenabmessungen
+Choose the active factions and the default player faction for Custom maps. All other active factions are computer-controlled.	Wähle die aktiven Fraktionen und die standardmäßige Spielerfraktion für eigene Karten.
+Classic / rolling	Klassisch/rollend
+Clear	Leeren
+Clear all targets	Alle Ziele klar festlegen
+Clear path	Klarer Weg
+Clear research	Forschung zurücksetzen
+Clear selected movement / attack order	Klar ausgewählte Bewegung / Angriffsreihenfolge
+Clear selection  Ctrl+D	Deutliche Auswahl Ctrl+D
+Cleared faction\s	Cleared Fraktion\s
+Cleared the selected placement's transient movement/attack order.	Löschte die vorübergehende Bewegungs-/Angriffsreihenfolge der ausgewählten Platzierung.
+Click a cyan cell on the rim or surrounding terrain. Its terrain Z becomes the initial perfectly flat water surface.	Klicken Sie auf eine Cyan-Zelle am Rand oder auf das umliegende Gelände. Ihr Gelände Z wird zur ursprünglichen, perfekt ebenen Wasseroberfläche.
+Click a placed object to select it. Use the transform gizmo in the Inspector tab. Ctrl+D clears the temporary water selection and object selection.	Klicken Sie auf ein platziertes Objekt, um es auszuwählen. Verwenden Sie das Transformations-Gizmo auf der Registerkarte Inspektor. Strg + D löscht die temporäre Wasserauswahl und Objektauswahl.
+Click terrain to assign a point target to the selected armed placement.	Klicken Sie auf Terrain, um der ausgewählten bewaffneten Platzierung ein Punktziel zuzuweisen.
+Click terrain to issue a movement destination to the selected unit.	Klicken Sie auf Terrain, um ein Bewegungsziel an die ausgewählte Einheit auszugeben.
+Click terrain to place the simulation target spot.	Klicken Sie auf Terrain, um den Simulationszielpunkt zu platzieren.
+Click to center the camera here	Klicken Sie hier, um die Kamera zu zentrieren
+Collapse assets	Objektleiste einklappen
+Collapse inspector	Kollapseinspektor
+Compact ribbon	Kompakte Werkzeugleiste
+Compact tools	Kompakte Werkzeuge
+Compatible ARM IDs: %s	Kompatible ARM IDs: %s
+Computer factions in Custom maps: %d	Computerfraktionen in benutzerdefinierten Karten: %d
+Concurrent games	Gleichzeitige Spiele
+Condition kind	Zustandsart
+Condition slot	Zustandsschlitz
+Condition slot used	Verwendeter Zustandsschlitz
+Configure the matching human or computer faction in Players before placing a start.	Konfigurieren Sie die passende menschliche oder Computerfraktion in den Spielern, bevor Sie einen Start machen.
+Connected building areas	Verbundene Gebäudebereiche
+Constant	konstant
+Continue: pick level from selected terrain	Continue: Level aus ausgewähltem Gelände auswählen
+Coordinates match the map viewport. Radius 0 disables collection for that faction. Destination coordinates are on the next map; position = old position + destination - exit center.	Die Koordinaten stimmen mit dem Kartenansichtsport überein. Radius 0 deaktiviert die Sammlung für diese Fraktion. Zielkoordinaten sind auf der nächsten Karte; Position = alte Position + Ziel - Ausgangszentrum.
+Copy layer from another map	Kopieren von Layers aus einer anderen Map
+Correct the red ground-traversal cells before applying this drivable river.	Korrigieren Sie die roten Bodentraversalzellen, bevor Sie diesen antreibbaren Fluss anwenden.
+Could not assign Golrathen:\s	Konnte Golrathen nicht zuweisen:\s
+Countdown elapsed	Countdown abgelaufen
+Create	Schaffen
+Create diagnostic logs	Diagnoseprotokolle schreiben
+Create failed: %s	Erstellen fehlgeschlagen: %s
+Create new map	Neue Karte erstellen
+Create or import a campaign first.	Erstellen oder importieren Sie zuerst eine Kampagne.
+Create or open a campaign first.	Erstellen oder öffnen Sie zuerst eine Kampagne.
+Created a new map. Fog is off and the whole map is visible.	Erstellte eine neue Karte. Nebel ist ausgeschaltet und die ganze Karte ist sichtbar.
+Ctrl+E	Strg+E
+Ctrl+N	Ctrl+N
+Ctrl+O	Strg+O
+Ctrl+S	STRG+S
+Ctrl+Y	Strg + Y
+Ctrl+Z	STRG+Z
+Current map	Aktuelle Karte
+Cursor / selection coordinates	Cursor/Auswahlkoordinaten
+Custom (ki.dat_custom.ini)	Benutzerdefiniert (ki.dat_custom.ini)
+Custom game resources	Benutzerdefinierte Spielressourcen
+Custom maps	Eigene Karten
+Custom maps preselect this faction; the player can choose another. The others use AI.	Eigene Karten wählen diese Fraktion aus; der Spieler kann eine andere auswählen. Die anderen verwenden KI.
+Custom mission/campaign script shape	Benutzerdefinierte Mission/Kampagnen-Skriptform
+Cyan routes link bases. Amber routes follow factory production lanes to the network.	Türkise Routen verbinden Basen. Orange Routen führen von den Fabrikausfahrten zum Wegenetz.
+Damage MDL %u · EFF %u < %d%% · cd %u..%ut	Schaden MDL %u · EFF %u < %d%% · Abklingzeit %u..%u Ticks
+Darken cells currently in sight to discovered-terrain brightness and colour them by faction.	Verdunkeln Sie die Zellen, die derzeit in Sicht sind, um die Helligkeit des Terrains zu entdecken und sie nach Fraktionen zu färben.
+Decoded	Dekodiert
+Decremented on each 20-tick condition pass by the simulation step batch (normally 1). This is not a raw simulation-tick counter.	Dekrementiert bei jedem 20-Tick-Zustand durch die Simulationsschritt-Charge (normalerweise 1). Dies ist kein roher Simulations-Tick-Zähler.
+Deep water	Tiefes Wasser
+Default (ki.dat.ini)	Standard (ki.dat.ini)
+Default player faction updated.	Default Player Fraktion aktualisiert.
+Default values are kept in ki.dat.ini; saved edits go to ki.dat_custom.ini. Files are beside the editor or external AppImage. Experiment sweeps below override one parameter for that experiment only.	Standardwerte werden in ki.dat.ini beibehalten; gespeicherte Edits gehen zu ki.dat_custom.ini. Dateien befinden sich neben dem Editor oder externen AppImage. Experiment-Sweeps darunter überschreiben nur einen Parameter für dieses Experiment.
+Delete selected	Ausgewählt löschen
+Deposits reachable %zu / %zu	Erreichbare Vorkommen %zu / %zu
+Depth	Tiefe
+Description	Beschreibung
+Desert (flm\\wüste)	Wüste (flm\\wüste)
+Destination X	Bestimmungsort X
+Destination Y	Bestimmungsort Y
+Destination layer	Zielschicht
+Destruction	Zerstörung
+Destruction complete.	Zerstörung abgeschlossen.
+Destruction preview started.	Die Zerstörungsvorschau hat begonnen.
+Detail row %d	Detailzeile %d
+Detailed terrain transitions	Detaillierte Geländeübergänge
+Diagnostic distance	Diagnoseabstand
+Diagnostics	Diagnose
+Direction	Richtung
+Discard preview	Discard-Vorschau
+Discovered terrain and remembered models remain dimly visible. Models marked not remembered require current sight.	Entdecktes Gelände und erinnerte Modelle bleiben schwach sichtbar. Modelle, die nicht erinnert werden, erfordern aktuelle Sicht.
+Display name	Anzeigename
+Distance: %.3f world units	Entfernung: %.3f-Welteinheiten
+Domain	Wertebereich
+Drag a 3D asset card from the left panel directly onto the map. Click a placed object to select it.	Ziehen Sie eine 3D-Assetkarte aus dem linken Bereich direkt auf die Karte. Klicken Sie auf ein platziertes Objekt, um es auszuwählen.
+Drag an open line on the map for the river route. Escape cancels.	Ziehen Sie eine offene Linie auf der Karte für die Flussroute. Die Flucht bricht ab.
+Drag another area to replace, add or remove it.	Ziehe einen anderen Bereich, um ihn zu ersetzen, hinzuzufügen oder zu entfernen.
+Drag the yellow ring to change the stock LEV yaw. Hold Shift for 15 degree snapping.	Ziehe den gelben Ring, um den in der LEV gespeicherten Drehwinkel zu ändern. Halte Umschalt gedrückt, um in 15°-Schritten zu drehen.
+Draw a longer river path.	Zeichne einen längeren Flussweg.
+Draw an area or choose Whole map first.	Zeichnen Sie einen Bereich oder wählen Sie zuerst die gesamte Karte aus.
+Draw an area or choose Whole map.	Bereich zeichnen oder „Gesamte Karte“ wählen.
+Draw river path	Flussbahn (Straßenbahn)
+Draw stock host seed	Wirtssaat
+Drawn path	Gezeichneter Verlauf
+Drivable river	Befahrbarer Fluss
+Drive selected unit	Ausgewählte Einheit fahren
+Drive selected unit to terrain point	Ausgewählte Einheit zum Geländepunkt fahren
+Drive target: %.2f / %.2f / %.2f · %s	Fahrziel: %.2f / %.2f / %.2f · %s
+Drop on the 3D map to place	Drop auf der 3D-Karte zum Platzieren
+Dry / water contact effects: EFF %u / EFF %u	Trocken-/Wasserkontaktwirkungen: EFF %u / EFF %u
+Dry crossings	Trockene Kreuzungen
+Dry ground a Pioneer can reach beside a suggested turret position.	Trockener Boden, den ein Pionier neben einer vorgeschlagenen Turmposition erreichen kann.
+Dry land starts above surface level, leaving room to carve lakes and rivers.	Trockenes Land beginnt über der Oberfläche und lässt Raum, um Seen und Flüsse zu schnitzen.
+Duration (simulated minutes)	Dauer (simulierte Minuten)
+EFF frame selects missing GFX subresource	EFF-Rahmen wählt fehlende GFX-Subressource aus
+EFF preview index exceeds vertex stream	EFF-Vorschauindex übertrifft Vertex-Stream
+EFF preview mesh is not triangle aligned	EFF Preview Mesh ist nicht Dreieck ausgerichtet
+EFF triangle mixes material state	EFF-Dreieck mischt Materialzustand
+Earth (flm\\erde)	Erde (flm\\erde)
+Edit	Bearbeiten
+Edit KI profile	KI-Profil bearbeiten
+Editable texture exchange	Editierbarer Texturaustausch
+Editing tools	Bearbeitungswerkzeuge
+Editor dynamic-scene CPU payload: %llu bytes	Editor Dynamic-Scene CPU-Nutzlast: %llu Bytes
+Editor measured present rate: %.1f FPS (%.2f ms)	Editor gemessen Gegenwartsrate: %.1f FPS (%.2f ms)
+Editor measured present rate: sampling	Editor gemessene aktuelle Rate: Probenahme
+Editor project	Editorprojekt
+Editor resource state · object texture layers: %u	Ressourcenzustand des Editors · Objekttexturebenen: %u
+Editor resource state · terrain/surface layers: %zu / %zu	Editor-Ressourcenzustand · Gelände/Oberflächenschichten: %zu / %zu
+Effect / scenery	Effekt / Landschaftsobjekt
+Effect pipeline: %s · W%u S%u E%u P%u · depth %u	Effektkette: %s · W%u S%u E%u P%u · Tiefe %u
+Effects	Effekte
+Enable or stop editor performance and Simulation Lab log files. Saved for the next session.	Aktivieren oder Stoppen der Editor-Performance und Simulation Lab-Logdateien, für die nächste Sitzung gespeichert.
+Enabled all 256 faction research bits for runtime model preview.	Ermöglicht alle 256 Forschungsbits für die Laufzeitmodellvorschau.
+End immediately without disabling armies	Sofort enden, ohne Armeen zu deaktivieren
+End-condition triggers	Endzustandsauslöser
+Ending movie	Endfilm
+Energy generation +%llu MWh	Energieerzeugung +%llu MWh
+Enter a campaign project path ending in .thcampaign.	Geben Sie einen Kampagnen-Projektpfad ein, der in .thcampaign endet.
+Enter a mission project path.	Betreten Sie einen Missionsprojektpfad.
+Enter a new export folder outside the game installation.	Geben Sie einen neuen Exportordner außerhalb der Spielinstallation ein.
+Environment	Umwelt
+Environment movie / biome shell	Umweltfilm / Biome Shell
+Environment movie base updated; export will verify the matching FLM exists.	Umgebung Filmbasis aktualisiert; Export wird die passende FLM vorhanden zu überprüfen.
+Erase	Radieren
+Erase water in selection	Löschen Sie Wasser in der Auswahl
+Erased water from\s	Löschwasser aus\s
+Error: %s	Fehler: %s
+Example: C0 C1 AND C2 NOT OR. END is added automatically.	Beispiel: C0 C1 UND C2 NICHT ODER. END wird automatisch hinzugefügt.
+Exit center X	Ausgangsstelle X
+Exit center Y	Ausgangsstelle Y
+Exit radius	Ausfahrtsradius
+Expand tools	Werkzeuge erweitern
+Expanded map overview	Erweiterte Kartenübersicht
+Expected a .thmap, .pck editor project or loose .lev file	Erwartet eine .thmap, .pck editor project oder lose .lev-Datei
+Experiment	Versuch
+Experiment override (original integer units)	Versuchsübersteuerung (ursprüngliche ganze Zahleneinheiten)
+Experiment settings	Versuchsanordnungen
+Export	Ausfuhren
+Export blocked: %s	Export blockiert: %s
+Export campaign package	Exportkampagnenpaket
+Export creates a new folder with the mission package, a merged text patch, and installation notes. Choose a free package slot for this game installation.	Export erstellt einen neuen Ordner mit dem Missionspaket, einem zusammengeführten Text-Patch und Installationshinweisen.
+Export loose complete map	Export lose vollständige Karte
+Export selected layer as TGA	Ausgewählte Schicht als TGA exportieren
+Exported LEV, FLD, and custom terrain assets.	Exportierte LEV-, FLD- und benutzerdefinierte Gelände-Assets.
+Exported editable terrain layer to\s	Exportierte editierbare Geländeschicht in\s
+Exported factions: %u human slot(s), %u active total, %u computer	Exportierte Fraktionen: %u human slot(s), %u active total, %u computer
+Expression tokens	Ausdrucksmarken
+Expression: %s	Ausdruck: %s
+Extractor · %s · weight %u	Extraktor · %s · Gewicht %u
+FAILED	GEFÄHRT
+FLD converter version: 0x%08X	FLD-Konverterversion: 0x%08X
+FLD flags	FLD-Flaggen
+FLD stores water as a relative terrain delta. Ordinary height brushes preserve or adjust that delta according to this option.	FLD speichert Wasser als relatives Terraindelta; gewöhnliche Höhenbürsten bewahren oder justieren dieses Delta entsprechend dieser Option.
+Faction	Fraktion
+Faction %u	Fraktion %u
+Faction %u    %.1f, %.1f	Fraktion %u %.1f, %.1f
+Faction %u   Buildings %u   Units %u   Xenite %.1f   Tritium %.1f	%u Buildings %u Units %u Xenit %.1f Tritium %.1f
+Faction %u exit	Fraktion %u Exit
+Faction 1	Fraktion 1
+Faction 2	Fraktion 2
+Faction 3	Fraktion 3
+Faction 4	Fraktion 4
+Faction 5	Fraktion 5
+Faction 6	Fraktion 6
+Faction 7	Fraktion 7
+Faction Resource Routes	Rohstoffrouten je Fraktion
+Faction Tritium current >= threshold	Fraktion Tritium-Strom >= Schwellenwert
+Faction Tritium extraction rate Q4/tick >= threshold	Fraktion Tritium-Extraktionsrate Q4/Tick >= Schwellenwert
+Faction Xenite current >= threshold	Fraktion Xenit Strom >= Schwelle
+Faction Xenite storage limit <= 0xFA0	Xenit-Lagergrenzwert <= 0xFA0
+Faction army asset count >= threshold	Anzahl der Vermögenswerte der Fraktionsarmee >= Schwellenwert
+Faction camera starts	Kamerastartpunkte der Fraktionen
+Faction colours show resource routes. White shows shared routes.	Rohstoffrouten erscheinen in der Fraktionsfarbe. Gemeinsame Routen sind weiß.
+Faction ended by trigger	Fraktion beendet durch Trigger
+Faction filter	Fraktionsfilter
+Faction has no army of asset	Fraktion hat keine Armee von Vermögenswerten
+Faction has no command-group-A army	Fraktion hat keine Kommandogruppe-A-Armee
+Faction has no linked army	Fraktion hat keine verbundene Armee
+Faction inactive OR relation >= 8	Fraktionsinaktive ODER-Relation >= 8
+Faction metadata unavailable: %s	Fraktionsmetadaten nicht verfügbar: %s
+Faction player-slot metadata updated.	Faction Player-Slot Metadaten aktualisiert.
+Faction relations	Fraktionsverhältnisse
+Faction results	Fraktionsergebnisse
+Faction terrain occupancy percent >= threshold	Fraktion Geländebelegung prozentual >= Schwelle
+Faction-owned placements: %u · start vehicles: %u	Fraktionseigene Platzierungen: %u · Startfahrzeuge: %u
+Factions routed from factory exits %zu	Fraktionen mit Start an einer Fabrikausfahrt %zu
+Factory drive target reset to model lookup class 5 / index 1; custom EGATH0 marker cleared and selection reset.	Das Fahrziel der Fabrik verwendet wieder das Modellziel (Klasse 5, Index 1). Die eigene EGATH0-Markierung und die Auswahl wurden zurückgesetzt.
+Factory exit point updated.	Fabrikausfahrt aktualisiert.
+Factory production	Fabrikproduktion
+Falloff	Abfall zum Rand
+Feature size	Merkmalsgröße
+Field extraction weight: %u	Ackerextraktionsgewicht: %u
+Field type	Feldtyp
+Field-region height	Feldbereichshöhe
+Field-region width	Feldbereichsbreite
+Fields	Felder
+File	Datei
+File path	Dateipfad
+Finish a run after this many simulated minutes without gameplay progress. Set 0 to disable the idle limit.	Beende einen Lauf nach so vielen simulierten Minuten ohne Gameplay-Fortschritt.
+Finish campaign	Abschluss der Kampagne
+Finish driving at current map position	Beenden Sie das Fahren an der aktuellen Kartenposition
+Finished	Abgeschlossen
+Finished driving. The current X/Y and whole-placement yaw are already stored in the LEV record.	Fahrt beendet. X, Y und der Drehwinkel des Objekts sind im LEV-Eintrag gespeichert.
+Fixed	Festgelegt
+Flat / plains	Ebene
+Flatten	Ebnen
+Fog %.3f · scan %u	Nebel %.3f · scan %u
+Fog of war preview	Vorschau für den Kriegsnebel
+Folder: %s	Ordner: %s
+Footstep world sound index: %u	Footstep World Sound Index: %u
+For Golrathen (army8), use Players > Mission-only faction setup.	Für Golrathen (Armee8) verwenden Sie Players > Mission-only Fraktion Setup.
+From terrain style	Vom Terrain Style
+Game campaign	Spielkampagne
+Game cursor	Spielcursor
+Game export	Spielexport
+Game export blocked: FLD must use converter 0x00060006, each axis must follow the 8*n+3 stock sequence from 59 through 139, and total area must not exceed 131 x 131.	Spielexport blockiert: FLD muss den Konverter 0x00060006 verwenden, jede Achse muss der 8*n+3-Stammsequenz von 59 bis 139 folgen und die Gesamtfläche darf 131 x 131 nicht überschreiten.
+Game export blocked: game.exe opens and advances this FLM before loading terrain or placements.	Spielexport blockiert: game.exe öffnet und erweitert dieses FLM, bevor Gelände oder Platzierungen geladen werden.
+Game level slot	Slot auf Spielebene
+Game speed (256 = 1x)	Spielgeschwindigkeit (256 = 1x)
+Game-compatible shape: each axis must be 59, 67, 75, 83, 91, 99, 107, 115, 123, 131, or 139, and total area must not exceed 131 x 131. A 139-cell axis requires a smaller opposite axis.	Spielkompatible Form: Jede Achse muss 59, 67, 75, 83, 91, 99, 107, 115, 123, 131 oder 139 sein, und die Gesamtfläche darf 131 x 131 nicht überschreiten.
+Gameplay	Spielverlauf
+General PCK assets	Allgemeine PCK-Ressourcen
+Generate	Erzeugen
+Generate in	Generierung von
+Generate terrain	Gelände erzeugen
+Generate terrain...	Gelände erzeugen …
+Global simulation target placed for eligible armed actors.	Globales Simulationsziel für geeignete bewaffnete Akteure.
+Golrathen (army8) is mission-only: its slot must stay computer-controlled.	Golrathen (Armee8) ist nur eine Mission: sein Slot muss computergesteuert bleiben.
+Golrathen (gray army8) is a graphics family, not gameplay faction 8. Assign it to a computer-controlled faction row (2..7). That row's units and buildings then use Golrathen graphics in mission maps; the slot cannot be human-playable.	Golrathen (graue Armee8) ist eine Grafikfamilie, keine Gameplay-Fraktion 8. Weisen Sie sie einer computergesteuerten Fraktionsreihe zu (2..7). Die Einheiten und Gebäude dieser Reihe verwenden dann Golrathen-Grafiken in Missionskarten; der Slot kann nicht von Menschen spielbar sein.
+Golrathen AI faction row	Golrathen AI Fraktionsreihe
+Golrathen gray (army8) is mission-only and must use a computer-controlled row.	Golrathen Grau (Armee8) ist nur Mission und muss eine computergesteuerte Zeile verwenden.
+Golrathen is assigned to AI faction %d.	Golrathen wird der AI-Fraktion %d zugewiesen.
+Golrathen must stay computer-controlled.	Golrathen muss computergesteuert bleiben.
+Grace period (minutes)	Nachfrist (Minuten)
+Graphics family offset (raw LEV)	Grafikfamilien-Offset (rohes LEV)
+Grey when unreachable	Grau bei fehlendem Zugang
+Grid	Netz
+Ground factory exits connected %zu / %zu	Verbundene Fabrikausfahrten %zu / %zu
+Ground layer	Bodenschicht
+Ground textures	Bodentexturen
+HP %lld · Demand %llu MWh · Xenite %u T · Time %u T	HP %lld · Nachfrage %llu MWh · Xenit %u T · Time %u T
+Heading %.1f deg · pitch %.1f deg · magnitude %.2f	Richtung %.1f° · Neigung %.1f° · Betrag %.2f
+Heading gate: near 0x%04X · far 0x%04X · blend %.3f	Richtungsschwelle: nah 0x%04X · fern 0x%04X · Übergang %.3f
+Headquarters sites at least 10 world units from existing bases. Ground factions get equal numbers of sites at comparable Pioneer travel distances.	Hauptsitze von mindestens 10 Welteinheiten von bestehenden Basen. Bodenfraktionen erhalten die gleiche Anzahl von Standorten bei vergleichbaren Pioneer-Reisedistanzen.
+Height	Höhe
+Height steps	Höhenstufen
+Heightmap	Höhenkarte
+Hide both panels	Beide Seitenleisten ausblenden
+Highest faction used by placements: %u	Höchste Fraktion, die von Platzierungen verwendet wird: %u
+Hold Shift for IDs, raw fields, and provenance	Hold Shift für IDs, Rohfelder und Provenienz
+Hole / depression	Senke
+Human faction bit mask	Menschliche Fraktion Bit Maske
+Human player slot	Slot für menschliche Spieler
+Human player slots	Slots für menschliche Spieler
+IDLE	ID
+Ice	Eis
+Ice (flm\\eis)	Eis (flm\\eis)
+Identifier	Identifikator
+Identity / source	Identität/Quelle
+Idle limit (minutes)	Leerlaufgrenzwert (Minuten)
+Ignore water-covered cells	Wasserbedeckte Zellen ignorieren
+Import TGA into selected layer	Importieren von TGA in die ausgewählte Schicht
+Import game campaign	Spiele importieren Kampagne
+Import layer from project	Importschicht aus dem Projekt
+Import layer from stock map	Importschicht aus der Originalkarte
+Imported\s	Eingeführt\s
+Imported TGA into terrain layer\s	Eingeführte TGA in die Geländeschicht\s
+Imported custom terrain layer from project.	Importierte benutzerdefinierte Geländeschicht aus dem Projekt.
+Imported map uses army8 in a human slot; lower human slots or change its family.	Importierte Karte verwendet Army8 in einem menschlichen Slot; menschliche Slots senken oder seine Familie ändern.
+Imported terrain from\s	Importiertes Gelände aus\s
+Imported textures are included when you save the project or export game assets.	Importierte Texturen sind enthalten, wenn Sie das Projekt speichern oder Spiel-Assets exportieren.
+Imported/custom terrain and assets	Importiertes/besonderes Gelände und Vermögenswerte
+In-game selection / simulation	Ingame-Auswahl/Simulation
+Include unresolved raw entries	Ungelöste Roheinträge einschließen
+Index	Index
+Initial authored faction relation masks updated.	Ursprünglich verfasste Fraktionsbeziehungsmasken wurden aktualisiert.
+Initial flat water level sampled from selected terrain. Use the wheel or Up/Down buttons to adjust it.	Anfänglicher flacher Wasserstand, der von ausgewähltem Gelände beprobt wird, mit dem Rad oder den Auf-/Ab-Tasten, um ihn einzustellen.
+Initial material	Ausgangsmaterial
+Inside area	Innerhalb des Bereichs
+Inspector	Inspektor
+Install playable map	Installieren Sie spielbare Karte
+Install/repair game level package	Installieren/Reparieren von Game Level Package
+Installed and runtime-validated\s	Installiert und Runtime-validiert\s
+Installing writes levelNN.pck and updates PATCH00.PCK in the game folder, including map text aliases and conflicting overrides. With backups enabled, existing level and PATCH archives are backed up before changes.	Die Installation schreibt levelNN.pck und aktualisiert PATCH00.PCK im Spielordner, einschließlich Kartentextaliase und widersprüchliche Überschreibungen. Wenn Backups aktiviert sind, werden vorhandene Level- und PATCH-Archive vor Änderungen gesichert.
+Integrity / damage preview %	Integrität / Schadensvorschau %
+Internal map name	Interne Kartenbezeichnung
+Island	Insel
+Island seed	Inselsaat
+Item count	Stückzahl
+Jandrenator AI (Test15)	Jandrenator AI (Test15)
+Jandrenator difficulty	Schwierigkeiten mit dem Jandrenator
+Jandrenator settings	Jandrenator-Einstellungen
+KI value	KI-Wert
+KI.DAT reference	Kennung des KI.DAT
+KI.DAT unavailable: %s	KI.DAT nicht verfügbar: %s
+KI[0x%02X] %.*s	KI[0x%02X] %.*s
+KI[0x%02X] = %d Q12 = %.3f world units	KI[0x%02X] = %d Q12 = %.3f Welteinheiten
+Keep absolute water level	Absoluter Wasserstand halten
+Keep buildings and player starts	Behalten Sie Gebäude und Spielerstarts
+Keep current campaign	Halten Sie die aktuelle Kampagne
+Keep existing water	Bewahren Sie vorhandenes Wasser
+LAYERS	LAYER
+LEV army texture path is empty	LEV Armee Textur Pfad ist leer
+LEV ground texture path is empty	LEV Ground Textur Pfad ist leer
+LEV mission condition updated.	LEV-Missionsbedingung aktualisiert.
+LEV mission end trigger updated.	LEV Missionsende Trigger aktualisiert.
+LEV resolves this faction to army%u; stock editor resources normally use families 1..8.	Die LEV ordnet dieser Fraktion army%u zu. Originalressourcen verwenden üblicherweise die Gruppen 1 bis 8.
+LOCKED	ERFASST
+Label	Etikettierung
+Lake	See
+Land / room for lakes	Land / Raum für Seen
+Land height	Landhöhe
+Lane 0 · ARM 240 · Crow	Spur 0 · ARM 240 · Krähe
+Lane 1 · ARM 242 · Hawk	Lane 1 · ARM 242 · Hawk
+Lane 2 · ARM 244 · Eagle	Lane 2 · ARM 244 · Eagle
+Language	Sprache
+Lasso	Lasso
+Launch requires a free matching 240/242/244 stored slot and a Simulation target point.	Der Start erfordert einen freien passenden 240/242/244 gespeicherten Slot und einen Simulationszielpunkt.
+Launch sortie	Startsorte
+Lava	Lava
+Lava (flm\\lava)	Lava (flm\\lava)
+Layer %d	Ebene %d
+Left-drag an open river route on the map. Release to finish; Escape cancels.	Eine offene Flussroute auf der Karte nach links schleppen. Loslassen bis zum Ende; Flucht abbricht.
+Left-drag edits terrain. In Select mode, left-drag turns the camera. Right-drag moves it.	Linksdrag bearbeitet Terrain. Im Select-Modus dreht Linksdrag die Kamera. Rechtsdrag bewegt sie.
+Left-drag marks the rough water area. Hold Shift to remove cells. The cyan overlay is temporary and is not exported.	Der linke Schlepper markiert die raue Wasserfläche, die Schicht halten, um die Zellen zu entfernen, die Cyan-Überlagerung ist temporär und wird nicht exportiert.
+Left-drag on the map and release to close the area. Right-drag moves the camera. Escape cancels a stroke.	Auf der Karte nach links ziehen und loslassen, um den Bereich zu schließen. Nach rechts ziehen bewegt die Kamera. Flucht hebt einen Strich auf.
+Legacy editor FLD 0x00070001 detected. Game export will rewrite it to the required 0x00060006 header.	Legacy-Editor FLD 0x00070001 erkannt. Der Spielexport wird in den erforderlichen 0x00060006-Header umgeschrieben.
+Level step	Ebene Stufe
+Lighting and color	Beleuchtung und Farbe
+Lighting cycle duration ticks	Ticks für den Beleuchtungszyklus
+Linear	linear
+Linear min -> max	Linear von Minimum bis Maximum
+Linked TEC %u · %s	Verknüpfte TEC %u · %s
+Linked class-21 sortie	Verbundener Klasse-21-Einsatz
+Live viewport	Live Viewport
+Load a map before starting Simulation Lab.	Laden Sie eine Karte, bevor Sie Simulation Lab starten.
+Load a map to run experiments.	Laden Sie eine Karte, um Experimente durchzuführen.
+Load failed:\s	Ausgefallene Last:\s
+Load failed: %s	Laden fehlgeschlagen: %s
+Load map or project	Karte oder Projekt laden
+Load map or project...	Load Map oder Projekt...
+Load selected file	Ausgewählte Datei laden
+Loaded\s	Beladen\s
+Loaded terrain texture family from\s	Beladenes Gelände Textur Familie von\s
+Loadout: %s	Bewaffnung: %s
+Local player PCX faction	Lokaler Spieler PCX Fraktion
+Local-player PCX ignored:\s	Lokal-Player-PCX ignoriert:\s
+Localized PCK name: %s	Lokalisierter PCK-Name: %s
+Locked\s	Verriegelt\s
+Log size limit reached	Log-Größengrenze erreicht
+Long progression preset	Voreingestellte lange Progression
+Loop sound decode/play failed:\s	Schleifenton konnte nicht dekodiert oder abgespielt werden:\s
+Loop sound table index\s	Index des Schleifentons\s
+Looping positioned\s	Räumlicher Schleifenton wird abgespielt:\s
+Lower	Absenken
+MAP INFO	MAP-INFO
+MDL %u: %s	MDL %u: %s
+MDL +0xC0 resource selector · +0xC8 extraction weight; production resolves over the connected field region	MDL +0xC0-Ressourcenauswahl · +0xC8-Extraktionsgewicht; Produktion löst sich über den angeschlossenen Feldbereich auf
+MDL child slot has no matching SPR attachment transform	MDL-Kindersteckplatz hat keine passende SPR-Anhangtransformation
+MDL damage-state effect is missing from the EFF registry	MDL damage-state effect fehlt im EFF-Register
+MDL timed land effect is missing from the EFF registry	MDL-zeitgesteuerter Landeffekt fehlt im EFF-Register
+MDL timed water effect is missing from the EFF registry	MDL-zeitgesteuerter Wassereffekt fehlt im EFF-Register
+MOVING	BEWEGUNG
+Map	Karte
+Map Editor	Karteneditor
+Map ID	Karten-ID
+Map author updated.	Map Author aktualisiert.
+Map display name updated.	Name der Kartenanzeige aktualisiert.
+Map items	Kartenobjekte
+Map items / effects	Kartenobjekte und Effekte
+Map name	Kartenname
+Map renamed.	Map umbenannt.
+Map settings	Karteneinstellungen
+Map type	Kartentyp
+Map validation	Kartenprüfung
+Mark route cells	Routenfelder markieren
+Maximum	Höchstzahl
+Memory / resource state	Speicher/Ressourcenzustand
+Min / middle / max groups	Min / mittlere / max Gruppen
+Minimum	Mindestwert
+Missing resource field: %s	Fehlendes Ressourcenfeld: %s
+Mission	Mission
+Mission map is not installed: %s	Missionskarte ist nicht installiert: %s
+Mission pass heading (deg)	Überschrift „Mission pass (deg)
+Mission point: %.2f, %.2f	Einsatzort: %.2f, %.2f
+Mission project	Missionsprojekt
+Mission projects use the .thmap extension.	Missionsprojekte verwenden die .thmap-Erweiterung.
+Mission script image unavailable: %s	Missionsskriptbild nicht verfügbar: %s
+Mission-only faction: Golrathen	Mission-only-Fraktion: Golrathen
+Missions	Dienstreisen
+Models %zu · linked ARM %u · deferred %u	Modelle %zu · verknüpft ARM %u · verschoben %u
+Mountains	Gebirge
+Mouse wheel over the map raises/lowers this single absolute surface. Every selected wet cell stays at the same Z; no radial hill or falloff is applied.	Das Mausrad über der Karte hebt/senkt diese einzelne absolute Fläche an. Jede ausgewählte feuchte Zelle bleibt auf dem gleichen Z; es wird kein radialer Hügel oder Falloff angelegt.
+Move	Schieben
+Move  W	Bewegen W
+Move water with terrain	Bewegt Wasser mit Gelände
+Moved selected object on terrain Z; the four supporting FLD vertices were translated.	Ausgewähltes Objekt auf Terrain Z bewegt; die vier unterstützenden FLD-Vertices wurden übersetzt.
+Moved selected placement on a world axis.	Ausgewählte Platzierung auf einer Weltachse verschoben.
+Movement	Bewegung
+Movement / environment	Bewegung/Umwelt
+Movement is a preview. Use Finish driving to store this unit's current position in the map.	Bewegung ist eine Vorschau. Verwenden Sie Finish-Fahren, um die aktuelle Position dieser Einheit in der Karte zu speichern.
+Movie variant selector	Filmvariantenauswahl
+Name	Name
+Name source: %s · resource 0x%08X · p%u #%u · MDL name %u	Namensquelle: %s · Ressource 0x%08X · S%u Nr. %u · MDL-Name %u
+Need	Bedarf
+Neutral / map-owned	Neutral / der Karte zugeordnet
+Neutral / map-owned source colour	Neutral / Map Owned Source Farbe
+New campaign with current map	Neue Kampagne mit aktueller Karte
+New export folder	Neue Exportmappe
+New identifier	Neue Kennung
+New map	Neue Karte
+New map creation failed:\s	Die Erstellung einer neuen Karte ist fehlgeschlagen:\s
+New orientation	Neue Ausrichtung
+Next	Weiter
+No .thmap or .lev files in maps/	Keine .thmap oder .lev Dateien in Maps/
+No GZF-verified KI parameters are available.	Es sind keine GZF-verifizierten KI-Parameter verfügbar.
+No KI parameters available.	Keine KI-Parameter verfügbar.
+No Xenite or Tritium deposits on this map.	Keine Xenit- oder Tritium-Ablagerungen auf dieser Karte.
+No active entity of class outside command group A	Keine aktive Entität der Klasse außerhalb der Befehlsgruppe A
+No comparable expansion set found for all %u ground factions.	Keine vergleichbaren Erweiterungsstandorte für alle %u Fraktionen mit Landzugang gefunden.
+No compatible production unit is available for this factory mask.	Für diese Werksmaske steht keine kompatible Produktionseinheit zur Verfügung.
+No compatible storable secondary asset is available, or this Airport has zero slots.	Es ist kein kompatibles speicherbares sekundäres Asset verfügbar, oder dieser Flughafen hat null Slots.
+No computer-only row is available. Reduce Human player slots first.	Keine rein computerbasierte Reihe ist verfügbar. Reduzieren Sie zuerst menschliche Spieler-Slots.
+No default exit point available.	Kein Standard-Ausgangspunkt verfügbar.
+No destruction preview available.	Keine Zerstörungsvorschau verfügbar.
+No game.exe/thandor.exe and PCK archives found. Put them beside the AppImage or use --root <game directory>.	Keine game.exe/thandor.exe und PCK-Archive gefunden. Legen Sie sie neben das AppImage oder verwenden Sie --root <game directory>.
+No loose .lev or .thmap files found.	Keine losen .lev oder .thmap Dateien gefunden.
+No operands.	Keine Operanden.
+No placeable assets match the filter.	Keine platzierbaren Assets passen zum Filter.
+No placeable start asset is available.	Es ist kein placeables Start-Asset verfügbar.
+No placed object selected.	Kein platziertes Objekt ausgewählt.
+No resolved weapon profile	Kein gelöstes Waffenprofil
+No starts placed.	Keine Starts platziert.
+No stock compatibility shell is available	Keine Stock Compatibility Shell verfügbar
+No stock maps were found. Load a game folder containing map FLD/LEV assets first.	Es wurden keine Originalkarten gefunden, sondern zuerst ein Spielordner geladen, der Karten-FLD/LEV-Assets enthält.
+No target spot placed.	Kein Zielpunkt platziert.
+No terrain hit: retail-equivalent world cursor coordinates are unavailable.	Kein Gelände getroffen: Retail-äquivalente Welt-Cursor-Koordinaten sind nicht verfügbar.
+No terrain material images loaded.	Keine Geländematerialbilder geladen.
+No valid contextual order under the pointer.	Keine gültige kontextuelle Reihenfolge unter dem Zeiger.
+None / unused	Keine/nicht verwendet
+Not placeable here · %s	Nicht hier platziert · %s
+Not placeable: %s	Nicht platzierbar: %s
+Notification MDL %u · first movie %u · repeat movie %u	Benachrichtigung MDL %u · erster Film %u · Wiederholungsfilm %u
+OUT OF RANGE	AUSSER REICHWEITE
+Object shadows	Objektschatten
+Object textures: %zu · sprites cached: %zu · SAM cached: %zu	Objekttexturen: %zu · Sprites zwischengespeichert: %zu · SAM zwischengespeichert: %zu
+Objective / description	Ziel/Beschreibung
+Off	Aus
+Open Simulation Lab settings and start controls.	Einstellungen und Startsteuerung des Simulationslabors öffnen.
+Open a campaign and a map first.	Öffnen Sie zuerst eine Kampagne und eine Karte.
+Open custom map...	Eigene Karte öffnen …
+Open map	Karte öffnen
+Open mission in editor	Offene Mission im Editor
+Open or create	Öffnen oder erstellen
+Open or create the first mission map.	Öffnen oder erstellen Sie die erste Missionskarte.
+Open project	Offenes Projekt
+Open this mission before saving its edits.	Öffnen Sie diese Mission, bevor Sie ihre Edits speichern.
+Open, import or create a campaign in the Project tab.	Öffnen, importieren oder erstellen Sie eine Kampagne im Projekt-Tab.
+Opponent strength	Stärke des Gegners
+Optional source .thmap project path	Optionaler .thmap-Projektpfad
+Original KI parameters	Ursprüngliche KI-Parameter
+Original KI values	Ursprüngliche KI-Werte
+Original integer value	Ursprünglicher ganzzahliger Wert
+Original mission briefing slider. It sets the AI extraction scale. The raw Q8 input below is available for exact replays.	Original Mission Briefing Slider. Er stellt die KI-Extraktionsskala ein. Der unten stehende rohe Q8-Eingang steht für exakte Wiederholungen zur Verfügung.
+Original mission briefing slider. It sets the base AI extraction scale. Difficulty levels 2–7 also apply the Test15 tier multiplier.	Original Mission Briefing Slider: Er legt die Basis-AI-Extraktionsskala fest. Die Schwierigkeitsstufen 2–7 wenden auch den Test15-Tier-Multiplikator an.
+Original-game computer-only rows: %d..%d.	Original-Spiel Computer-only Reihen: %d..%d.
+Original-game slot compatibility	Original-Spielautomaten-Kompatibilität
+Original-game slots allow a human in every row.	Original-spiel-slots ermöglichen einen menschen in jeder reihe.
+Out of memory while\s	Außerhalb des Gedächtnisses während\s
+Outcomes	Ergebnisse
+Output: %s	Ausgabe: %s
+Outside area	Außerhalb des Bereichs
+Override storage capacity	Speicherkapazität außer Kraft setzen
+PCK gameplay values	PCK Gameplay-Werte
+PLAYER / AI STARTS	PLAYER/AI STARTS
+Package slot (00-99)	Paketplatz (00-99)
+Paint	Malen
+Paint resource fields. Crystal objects are placed separately.	Trage Rohstofffelder auf. Kristallobjekte werden separat platziert.
+Paint selected ground layer	Ausgewählte Bodenschicht auftragen
+Panel: %s	Seitenleiste: %s
+Panels	Seitenleisten
+Path to a 256x256 .tga	Pfad zu einem 256x256 .tga
+Pattern	Muster
+Pattern settings	Mustereinstellungen
+Pause	Pause
+Paused	Angehalten
+Persistent slots: %s	Persistente Slots: %s
+Pick another reference point	Wählen Sie einen anderen Bezugspunkt
+Pick the initial level from inside the temporary cyan water selection.	Wählen Sie das anfängliche Niveau aus dem Inneren der temporären Cyanwasserauswahl.
+Pioneer staging sites	Bereitstellungsplätze für Pionierfahrzeuge
+Pioneer staging sites %zu	Bereitstellungsplätze für Pionierfahrzeuge %zu
+Place / move target	Ort/Bewegziel
+Place a global test target here, or select an actor and use the normal viewport command: right-click terrain to move/aim, or right-click a different-faction placement to attack it. Right-drag remains camera pan.	Setzen Sie hier ein globales Testziel, oder wählen Sie einen Akteur aus und verwenden Sie den normalen Viewport-Befehl: Gelände mit Rechtsklick, um sich zu bewegen / zu zielen, oder mit Rechtsklick auf eine Platzierung mit anderen Fraktionen, um es anzugreifen.
+Placeable map records	Platzierbare Kartenobjekte
+Placed\s	Platzieren\s
+Placed records	Platzierte Objekte
+Placement	Platzierung
+Placement / gameplay	Platzierung und Spielregeln
+Placement faction	Fraktion des platzierten Objekts
+Placement readiness	Platzierbarkeit
+Placement release is not a valid build target; nothing was placed.	An dieser Stelle kann kein Gebäude platziert werden.
+Plateau	Hochebene
+Playable numbered level package	Spielbares nummeriertes Level-Paket
+Player	Spieler
+Player / AI starting cameras	Player / AI Startkameras
+Player and computer faction setup updated.	Spieler- und Computerfraktions-Setup aktualisiert.
+Player roles and starting resources are in Players.	Spielerrollen und Startressourcen befinden sich in Spielern.
+Player start	Spielerstartpunkt
+Player/AI metadata unavailable: %s	Player/AI-Metadaten nicht verfügbar: %s
+Players	Spieler
+Playing mapped terrain\s	Geländeton wird abgespielt:\s
+Position XYZ	Position XYZ
+Position: %.2f, %.2f, %.2f	Funktion: %.2f, %.2f, %.2f
+Presentation	Aufmachung
+Preview	Vorschau
+Preview cycle tick	Vorschau-Zyklus Tick
+Preview destruction	Preview-Zerstörung
+Preview discarded.	Vorschau verworfen.
+Preview discarded. The map is unchanged.	Vorschau verworfen. Die Karte ist unverändert.
+Preview lighting cycle	Vorschau-Beleuchtungszyklus
+Preview multiplier: %ux	Vorschau: %u-fach
+Preview production, movement, and combat for this object.	Vorschau Produktion, Bewegung und Kampf für dieses Objekt.
+Preview sweep values	Preview Sweep-Werte
+Preview the terrain first.	Schau dir zuerst das Gelände an.
+Preview ·\s	Vorschau ·\s
+Preview · river passes the game's terrain checks for ground bands 1-6.	River passiert die Geländeüberprüfungen des Spiels für die Bodenbänder 1-6.
+Preview: %s	Vorschau: %s
+Preview: %zu tris · %zu px · %u×%u	Vorschau: %zu tris · %zu px · %u×%u
+Primary azimuth	Primärer Azimut
+Primary elevation	Haupthöhe
+Primary extended colors	Primäre erweiterte Farben
+PrimaryArmList	PrimaryArmList
+Production unit	Produktionseinheit
+Profile for the next experiment	Profil für das nächste Experiment
+Project	Projekt
+Project path	Projektpfad
+Queue selected secondary asset for Airport storage	Warteschlange ausgewähltes sekundäres Asset für Flughafenspeicherung
+Queue selected unit for faction	Warteschlange ausgewählte Einheit für Fraktion
+Queued\s	Schlange\s
+Queued class-22 lane\s	Warteschlange Klasse-22\s
+Queued positioned\s	Räumlichen Ton eingereiht:\s
+Quit	Quittung
+R%zu  KI=%d	D%zu  KI=%d
+Radar sites	Radarstandorte
+Radar sites %zu	Radarstandorte %zu
+Radius	Radius
+Raise	Anheben
+Rally points	Sammelpunkte
+Rally points %zu	Sammelpunkte %zu
+Random seed + preview	Neuer Startwert und Vorschau
+Range %.2f · Reload %.2f s	Reichweite %.2f · Nachladen %.2f s
+Raw	Rohöl
+Raw files	Rohdateien
+Raw: %u ARM nodes · root HP %d · demand %lluQ4 · gen %lluQ4 · X %uQ4 · T %uQ5	Rohdaten: %u ARM-Knoten · TP %d · Bedarf %llu Q4 · Erzeugung %llu Q4 · X %u Q4 · T %u Q5
+Ready to place · Shift = technical details	Bereit zum Platzieren · Shift = technische Details
+Recovery target assigned to\s	Wiedereinziehungsziel zugewiesen an\s
+Rectangle	Rechteck
+Red X and green Y move the LEV record. Blue Z raises or lowers its FLD terrain anchor.	Rotes X und grünes Y verschieben den LEV-Rekord. Blaues Z hebt oder senkt seinen FLD-Geländeanker.
+Red cells block standard ground traversal. Widen the area, adjust the level, or disable Drivable river.	Rote Zellen blockieren Standard-Bodentraversen, erweitern den Bereich, passen den Pegel an oder deaktivieren treibende Flüsse.
+Redo	Wiederholen
+Redraw river path	Redraw-Flusspfad
+Refresh custom maps	Eigene Karten neu einlesen
+Refresh file list	Dateiliste auffrischen
+Relation UI flags	UI-Kennzeichen
+Release Shift for compact view	Release Shift für Compact View
+Relief	Entlastung
+Reload Jandrenator settings	Einstellungen für Jandrenator
+Reload KI profile files	KI-Profildateien laden
+Remove area	Bereich entfernen
+Remove mission	Mission entfernen
+Render counters	Renderzähler
+Replace area	Bereich ersetzen
+Replay this map	Wiederholen Sie diese Karte
+Required startup asset: %s.flm	Erforderliches Start-up-Asset: %s.flm
+Reroll	Wiederholung
+Reroll island	Reroll-Insel
+Research / model	Forschung / Modell
+Research / model variants	Forschung / Modellvarianten
+Research and damage	Forschung und Schäden
+Research state (all technologies)	Forschungsstand (alle Technologien)
+Reset counter sample	Reset-Zählerprobe
+Reset drive target to factory default	Standardfahrziel der Fabrik wiederherstellen
+Reset resource animation seed	Reset Resource Animation Seed
+Reset selected transient simulation	Zurücksetzen ausgewählter transienter Simulation
+Reset soil RNG seed to game default	Zurücksetzen des Boden-RNG-Saatguts auf Spiel-Standard
+Resize centered	Größe zentriert
+Resized field and translated retained placements.	Die Kartengröße wurde geändert und die beibehaltenen Objekte wurden verschoben.
+Resource	Ressourcen
+Resource animation RNG seed	Ressourcenanimation RNG-Saat
+Resource field	Rohstofffeld
+Resource field: %s	Ressourcenfeld: %s
+Resource fields	Rohstofffelder
+Resource support	Ressourcenunterstützung
+Resource support flags: %zu checked · %zu issue%s	Rohstoffmarkierungen: %zu geprüft · %zu Problem%s
+Resource support flags: %zu checked · no mismatches	Ressourcen-Support-Flags: %zu überprüft · keine Fehlanpassungen
+Resources	Ressourcen
+Resources: %.3f	Ressourcen: %.3f
+Restart experiment	Startversuch
+Restore destroyed building	Zerstörtes Gebäude wiederherstellen
+Restored building preview and cleared transient destruction state.	Restaurierte Gebäudevorschau und geräumter vorübergehender Zerstörungszustand.
+Restored last map:\s	Letzte Karte wiederhergestellt:\s
+Resume	Fortsetzen
+Retail build card	Aufbaukarte für Privatkunden
+Retail debug overlay##thandor-debug	Retail-Debug-Overlay##thandor-debug
+Retail local-player PCX not found:\s	Lokale PCX im Einzelhandel nicht gefunden:\s
+Retail local-player PCX:\s	Lokale PCX für den Einzelhandel:\s
+Retail resets frame/draw/texture-state/reload counters every twenty calls.	Retail setzt Frame/Draw/Texture-State/Reload-Zähler alle zwanzig Aufrufe zurück.
+Retain previous carry-over records	Vorherige Übertragungsaufzeichnungen aufbewahren
+Rings mark route starts moved away from enclosed headquarters.	Ringe markieren die verlegten Routenstarts bei eingeschlossenen Hauptquartieren.
+River	Fluss
+River depth	Flusstiefe
+River path ready. Preview to see the channel.	Flusspfad bereit. Vorschau, um den Kanal zu sehen.
+River route	Flussverlauf
+River shape and crossings	Flussform und Kreuzungen
+Rolling hills	Sanfte Hügel
+Rotate	Drehen
+Rotate  E	Rotation E
+Rotated selected placement yaw.	Das ausgewählte Objekt wurde gedreht.
+Route and defence overlays	Routen und Verteidigungsstellungen
+Run	Durchlauf
+Run %d	Laufen %d
+Running	Läuft
+Running experiments keep their starting values. Restart the experiment to use a changed profile.	Laufende Experimente behalten ihre Startwerte. Starten Sie das Experiment erneut, um ein geändertes Profil zu verwenden.
+Runs	Durchläufe
+Runtime counters and coordinates	Laufzeitzähler und Koordinaten
+Runtime rules: timed %u · damage %u · notifications %u	Laufzeitregeln: zeitgesteuert %u · Schaden %u · Benachrichtigungen %u
+Runtime: %zu MDL · %u ARM · %u deferred	Laufzeit: %zu MDL · %u ARM · %u verschoben
+SHT %u · dmg %.3f..%.3f · range %.3f · reload %ut	SHT %u · Schaden %.3f..%.3f · Reichweite %.3f · Nachladen %u Ticks
+SPR generated-shadow index exceeds vertex stream	SPR-generierter Schattenindex übertrifft Vertex-Strom
+SPR generated-shadow mesh is not triangle aligned	SPR-generiertes Schatten-Mesh ist nicht Dreieck ausgerichtet
+SPR generated-shadow triangle mixes record flags	SPR-generiertes Schattendreieck mischt Rekordflaggen
+SPR light %.3f · scaled tris %zu/%zu	SPR light %.3f · skaliert tris %zu/%zu
+SPR preview index exceeds vertex stream	SPR-Vorschauindex übertrifft Vertex-Stream
+SPR preview mesh is not triangle aligned	SPR Preview Mesh ist nicht Dreieck ausgerichtet
+SPR texture subresource exceeds faction GFX set	SPR Textur Subresource übersteigt Fraktion GFX Set
+SPR triangle mixes render flags	SPR-Dreieckmischungen Renderflaggen
+SPR triangle mixes texture subresources	SPR-Dreieck vermischt Textur-Subressourcen
+SPR: %s	SPR: %s
+STR string 1 is the map summary/setup text. Strings 2..8 and 9..15 are the seven paired scenario/faction label and objective slots used by the detail panel. Editing text changes presentation; player counts remain derived from faction placements.	Die Strings 2..8 und 9..15 sind die sieben gepaarten Szenario-/Fraktions-Label- und Ziel-Slots, die vom Detail-Panel verwendet werden.
+Save	Speichern
+Save Jandrenator settings	Jandrenator-Einstellungen speichern
+Save an editable .thmap project in the maps folder beside the editor executable, with terrain, objects, names and imported textures.	Speichern Sie ein editierbares .thmap-Projekt im Maps-Ordner neben der ausführbaren Editordate mit Gelände, Objekten, Namen und importierten Texturen.
+Save an edited value to create a custom profile.	Speichern Sie einen bearbeiteten Wert zum Erstellen eines benutzerdefinierten Profils.
+Save as THMAP...	Sparen Sie als THMAP...
+Save current map failed:\s	Save current map fehlgeschlagen:\s
+Save current stock map in place	Speichern Sie die aktuelle Originalkarte an Ort und Stelle
+Save current view as faction camera	Speichern Sie die aktuelle Ansicht als Fraktionskamera
+Save failed:\s	Speichern fehlgeschlagen:\s
+Save failed: %s	Speichern fehlgeschlagen: %s
+Save full map project	Kartenprojekt speichern
+Save full map project as...	Speichern Sie das vollständige Kartenprojekt als...
+Save open mission project	Save Open Mission Projekt
+Save project	Projekt „Save
+Save the current campaign project before creating another.	Speichern Sie das aktuelle Kampagnenprojekt, bevor Sie ein anderes erstellen.
+Save the current campaign project before importing another.	Speichern Sie das aktuelle Kampagnenprojekt, bevor Sie ein anderes importieren.
+Save the current campaign project before opening another.	Speichern Sie das aktuelle Kampagnenprojekt, bevor Sie ein anderes öffnen.
+Save the current map before opening another campaign mission.	Speichern Sie die aktuelle Karte, bevor Sie eine weitere Kampagnenmission eröffnen.
+Save the open mission project before exporting.	Speichern Sie das offene Missionsprojekt vor dem Export.
+Save value to custom KI profile	Speichern Sie Wert für benutzerdefiniertes KI-Profil
+Saved advanced_ai_jandrenator.ini.	Gespeichert advanced_ai_jandrenator.ini.
+Saved full map project\s	Gespeichertes Full Map Projekt\s
+Saved the current view into faction\s	Speicherte die aktuelle Ansicht in die Fraktion\s
+Scanned: maps beside the editor, game/maps and game/ThandorMapEditor/maps (including subfolders)	Gescannt: Karten neben dem Editor, Game/Maps und Game/ThandorMapEditor/Maps (inklusive Unterordner)
+Scenario summary and detail text updated.	Szenariozusammenfassung und Detailtext aktualisiert.
+Scenario summary, labels, and objectives	Szenariozusammenfassung, Labels und Ziele
+Scenario text has unapplied edits.	Szenariotext hat nicht angewendete Edits.
+Search assets and camera starts	Objekte und Kamerastarts suchen
+Seed	Zufallsstartwert
+Select	Auswahl
+Select a .thmap or .lev file below, or enter its complete path	Wählen Sie unten eine .thmap- oder .lev-Datei aus oder geben Sie den vollständigen Pfad ein
+Select a map below, or enter the full path of a .thmap, .pck or .lev file.	Wählen Sie unten eine Karte aus oder geben Sie den vollständigen Pfad einer .thmap-, .pck- oder .lev-Datei ein.
+Select a movable unit before issuing a drive order.	Wählen Sie eine bewegliche Einheit aus, bevor Sie einen Antriebsauftrag erteilen.
+Select a valid stock map as the new map's compatibility shell or terrain source	Wählen Sie eine gültige Originalkarte als Kompatibilitätsschale oder Geländequelle der neuen Karte aus
+Select an armed tower/building first.	Wählen Sie zuerst einen bewaffneten Turm / ein Gebäude.
+Select at least one cell first.	Wählen Sie zuerst mindestens eine Zelle aus.
+Select the single blue energy-resource or gold building-resource card before placing a buildable deposit.	Wählen Sie die einzelne blaue Energie-Ressource oder Gold-Gebäude-Ressource-Karte, bevor Sie eine bebaubare Einzahlung platzieren.
+Selected\s	Ausgewählt\s
+Selected Lab run	Ausgewählter Lab-Lauf
+Selected armed placement received a point-target order.	Ausgewählte bewaffnete Platzierung erhielt einen Punkt-Ziel-Befehl.
+Selected armed placement targets exclusively	Ausgewählte bewaffnete Platzierungsziele ausschließlich
+Selected asset source:\s	Ausgewählte Vermögensquelle:\s
+Selected cells: %zu	Ausgewählte Zellen: %zu
+Selected faction	Ausgewählte Fraktion
+Selected object	Ausgewähltes Objekt
+Selected placement index: %zu	Ausgewählter Platzierungsindex: %zu
+Selected placement: none	Ausgewählte Platzierung: keine
+Selected run	Ausgewählter Lauf
+Selected run\s	Ausgewählter Lauf\s
+Selected texture:\s	Ausgewählte Textur:\s
+Selected unit has no simulated position.	Die ausgewählte Einheit hat keine simulierte Position.
+Selected unit is driving; its LEV position now follows every 20 Hz movement step.	Die ausgewählte Einheit fährt; ihre LEV-Position folgt nun jedem 20 Hz Bewegungsschritt.
+Selected unit received a game-style drive destination.	Ausgewählte Einheit erhielt ein Spiel-Style-Laufwerk Ziel.
+Selection action	Auswahl bearbeiten
+Selection frame assets unavailable:\s	Auswahlrahmen-Assets nicht verfügbar:\s
+Selection tool	Auswahlwerkzeug
+Semantic	Semantisch
+Set from current view	Aktuelle Ansicht übernehmen
+Settings	Einstellungen
+Settings changed. Preview to see the result.	Einstellungen geändert. Öffne die Vorschau, um das Ergebnis zu sehen.
+Shallow depth	Flache Tiefe
+Shallow depth and gentle banks are checked for ground traversal. Correct red cells before applying as drivable.	Flache Tiefen und sanfte Ufer werden auf Bodentraversal überprüft, rote Zellen werden vor dem Auftragen als fahrbar korrigiert.
+Shallow water	Flaches Wasser
+Shared EFF IDs: %s	Gemeinsame EFF-IDs: %s
+Shift temporarily reverses Paint/Erase.	Umschalt wechselt vorübergehend zwischen Auftragen und Löschen.
+Show 62 sourced KI parameters	Anzeige 62 Quellen-KI-Parameter
+Show FPS	Bildrate anzeigen
+Show both panels	Beide Seitenleisten einblenden
+Show dashed detours for the selected route layers. With both primary route layers off, show both kinds of detour.	Zeigt Ausweichrouten für die ausgewählten Ebenen gestrichelt an. Sind beide Hauptebenen ausgeblendet, erscheinen beide Arten von Ausweichrouten.
+Show diagnostic distance ring	Diagnoseabstandsring anzeigen
+Show exit zones on the map	Ausfahrtszonen auf der Karte anzeigen
+Show moving-unit ground marks	Bodenmarkierungen von beweglichen Einheiten anzeigen
+Show nominal observer-radius circle	Nominelle Sichtweite als Kreis anzeigen
+Show other runs	Weitere Runs anzeigen
+Show ranges and orders	Show-Bereiche und Bestellungen
+Show resource support	Ressourcen-Unterstützung anzeigen
+Show route / 4x pathing cells	Route und feinere Wegfindungsfelder anzeigen
+Show selected area	Ausgewähltes Gebiet anzeigen
+Show simulation ranges	Simulationsbereiche anzeigen
+Show water/lava/ice surface	Wasser/Lava/Eisoberfläche anzeigen
+Simulate	Simulieren
+Simulate every active faction as AI	Simulieren Sie jede aktive Fraktion als AI
+Simulation	Simulation
+Simulation Lab construction SPR index exceeds vertex stream	Simulation Lab Construction SPR-Index übertrifft Vertex-Strom
+Simulation Lab construction SPR selects missing army GFX subresource	Simulation Lab Bau SPR wählt fehlende Armee GFX Subressource
+Simulation Lab construction geometry limit exceeded	Baugeometriegrenze des Simulationslabors überschritten
+Simulation Lab construction selects missing GFX subresource	Simulation Lab Construction wählt fehlende GFX-Subressource aus
+Simulation Lab construction triangle mixes texture subresources	Simulation Lab Baudreieck mischt Textur-Subressourcen
+Simulation Lab experiment finished.	Experiment im Simulationslabor abgeschlossen.
+Simulation Lab ghost geometry limit exceeded	Simulation Lab Ghost-Geometriegrenze überschritten
+Simulation Lab retail startup requires at least one faction runtime; an empty-base faction needs its class-18 Player / AI start vehicle placed in the LEV.	Das Simulationslabor benötigt mindestens eine aktive Fraktion. Platziere für jede Fraktion ohne Basis ein Pionierfahrzeug (Klasse 18) in der LEV-Datei.
+Simulation Lab worker stopped:\s	Simulations-Thread angehalten:\s
+Simulation clock	Simulationsuhr
+Simulation mode (20 Hz)	Simulationsmodus (20 Hz)
+Simulation mode · exact 20 Hz	Simulationsmodus · exakt 20 Hz
+Simulation order missed the terrain.	Die Simulationsreihenfolge verfehlte das Gelände.
+Simulation runs##SimLabViewportRuns	Simulationsläufe##SimLabViewportRuns
+Simulation sound follows map focus	Simulation Sound folgt Map Focus
+Simulation target	Simulationsziel
+Single-player catalog parameters updated.	Einzelspieler-Katalogparameter aktualisiert.
+Single-player list parameters	Parameter für Einzelspielerlisten
+Size: original source FLD width and height	Größe: Originalquelle FLD Breite und Höhe
+Slot 00 · frames in 20-call sample: %u	Slot 00 · Frames in 20-Call-Sample: %u
+Slot 01 · editor draw-packet estimate / call: %.2f	Slot 01 · Editor Draw-Paket Schätzung / Anruf: %.2f
+Slot 02 · retail texture-bind state changes: unavailable in Vulkan rewrite	Slot 02 · Textur-Bind-Zustandsänderungen im Einzelhandel: Nicht verfügbar in Vulkan neu schreiben
+Slot 03 · retail texture-device reloads: unavailable in Vulkan rewrite	Slot 03 · Textur-Geräte-Reloads im Einzelhandel: Nicht verfügbar in Vulkan Rewrite
+Slot 12 · retail free-arena bytes: unavailable in Vulkan rewrite	Slot 12 · Free-Arena-Bytes im Einzelhandel: Nicht verfügbar in Vulkan umschreiben
+Slot 13 · retail-style elapsed clock: %02llu:%02llu:%02llu	Slot 13 · verstrichene Uhr im Einzelhandel: %02llu:%02llu:%02llu
+Slots 04–06 · editor equivalent / camera target Q12: %d, %d, %d	Slots 04-06 · Editor Äquivalent / Kameraziel Q12: %d, %d, %d
+Slots 07–09 · editor equivalent / camera eye Q12:    %d, %d, %d	Slots 07-09 · Editor Äquivalent / Kameraauge Q12: %d, %d, %d
+Slots 10–11 · pointer pixels: %.0f, %.0f	Slots 10-11 · Zeigerpixel: %.0f, %.0f
+Slots 10–11 · terrain cursor Q12: %d, %d	Slots 10-11 · Geländecursor Q12: %d, %d
+Smooth	Glätten
+Soil transition RNG seed	RNG-Startwert für den Bodenübergang
+Some bases have no ground connection.	Einige Basen haben keine Masseverbindung.
+Some objects could not be displayed: %s	Einige Objekte konnten nicht angezeigt werden: %s
+Sound decode/play failed:\s	Ton konnte nicht dekodiert oder abgespielt werden:\s
+Sound playback	Sound-Wiedergabe
+Sound table index\s	Tonindex\s
+Sound volume	Schallpegel
+Sound: mask %d · gain %.3fx · max %.3f	Ton: Maske %d · Verstärkung %.3f-fach · max. %.3f
+Source layer	Ausgangsschicht
+Source map	Quellkarte
+Start experiment	Startversuch
+Started\s	Angefangen\s
+Starting heights and material	Starthöhen und Material
+Starting inventory	Beginn der Bestandsaufnahme
+Starting mission	Startmission
+Starting resources by active faction	Starten von Ressourcen durch aktive Fraktion
+Starts with no Xenite or Tritium.	Beginnt ohne Xenit oder Tritium.
+State-4 faction group masks	Masken der Gruppe der State-4-Fraktionen
+State-8 faction group masks	Masken der State-8-Fraktion
+Step %.3f/tick · travel %.3f	Schritt %.3f/Tick · Reise %.3f
+Stock maps (PCK)	Originalkarten (PCK)
+Stock skirmish elimination script shape	Original-Skriptstruktur für das Ausscheiden im Gefecht
+Stop selected unit	Ausgewählte Einheit anhalten
+Stop the simulation before applying terrain.	Stoppen Sie die Simulation, bevor Sie Gelände anwenden.
+Stop the simulation before generating terrain.	Stoppen Sie die Simulation, bevor Sie Gelände erzeugen.
+Stop the simulation to edit terrain. This tool works on new and loaded maps.	Stoppen Sie die Simulation zum Bearbeiten von Gelände. Dieses Tool funktioniert mit neuen und geladenen Karten.
+Storage capacity +%.3f %s	Speicherkapazität +%.3f %s
+Stored launch lane	Gespeicherte Startspur
+Stored linked assets: %u / %u · available: %u	Gespeicherte verknüpfte Vermögenswerte: %u / %u · verfügbar: %u
+Stored secondary asset	Gespeicherter sekundärer Vermögenswert
+Strength	Stärke
+Stroke cancelled.	Schlaganfall abgesagt.
+Summary / setup##scenario1	Zusammenfassung/Aufstellung##scenario1
+Surface	Oberfläche
+Surface level	Oberflächenebene
+Sweep	Parameterreihe
+TEC\s	TEC\s
+TEC %u %s · B%u/R%u · X%u Demand%u Time%u · %s	TEC %u %s · B%u/R%u · X%u Bedarf %u Zeit %u · %s
+TEC entries %zu · variant groups %zu	TEC-Einträge %zu · Variantengruppen %zu
+Target height	Zielhöhe
+Target spot (editor-only)	Target Spot (nur Editor)
+Template mode imports the entire selected stock FLD at its original dimensions and clears the LEV placements.	Der Template-Modus importiert die gesamte ausgewählte Aktien-FLD in ihren ursprünglichen Dimensionen und löscht die LEV-Platzierungen.
+Template mode keeps the selected terrain centered, center-cropping smaller maps or extending nearest-edge heights, materials, water and flags into added terrain. Placements are cleared.	Die Vorlage hält das Gelände zentriert. Kleinere Karten werden mittig zugeschnitten. Bei größeren Karten werden Höhen, Materialien, Wasser und Merkmale vom nächsten Rand übernommen. Platzierte Objekte werden entfernt.
+Temporary water selection cleared.	Vorübergehende Wasserauswahl geklärt.
+Terraced heights	Höhenlagen
+Terrain	Gelände
+Terrain applied. Ctrl+Z undoes this generation.	Gelände übernommen. Mit Strg+Z kannst du die Änderung rückgängig machen.
+Terrain bands	Geländeklassen
+Terrain overlays	Geländeanzeigen
+Terrain refs: %u ok · %u sentinel	Geländeverweise: %u gültig · %u Platzhalter
+Terrain refs: %u ok · %u sentinel · %u INVALID	Geländeverweise: %u gültig · %u Platzhalter · %u UNGÜLTIG
+Terrain style	Geländestil
+Terrain template	Geländevorlage
+Texture	Textur
+That area is too small. Draw a larger outline.	Diese Fläche ist zu klein. Zeichnen Sie einen größeren Umriss.
+That file already exists. Open it or choose a new mission project path.	Diese Datei existiert bereits. Öffne sie oder wähle einen neuen Missionsprojektpfad.
+That path is a folder, not a map. Select a file from the list below.	Dieser Pfad ist ein Ordner, keine Karte. Wählen Sie eine Datei aus der Liste unten.
+The display name is stored in the full editor project; the internal map name remains the LEV/FLD filename.	Der Anzeigename wird im vollständigen Editorprojekt gespeichert; der interne Kartenname bleibt der LEV/FLD-Dateiname.
+The map changed. Make a new preview before applying.	Die Karte wurde geändert. Erstelle vor dem Anwenden eine neue Vorschau.
+The retail routine binds fourteen live UTF-16 slots. This window exposes the same proven diagnostic categories using editor runtime values; retail-only allocator state is labeled rather than guessed.	Die Einzelhandelsroutine bindet vierzehn UTF-16-Slots. Dieses Fenster zeigt die gleichen bewährten Diagnosekategorien mit Editor-Runtime-Werten; der Einzelhandels-Zuweisungszustand wird beschriftet und nicht erraten.
+The ring visualizes one proven KI.DAT distance term only. It is not a universal LEV validity rule. Retail AI placement combines class-specific rules, candidate/runtime clearance, model radius, terrain and occupancy tests. Manual placement and export are never blocked by this diagnostic overlay.	Der Ring visualisiert nur einen bewährten KI.DAT-Abstandsbegriff. Es handelt sich nicht um eine universelle LEV-Gültigkeitsregel. Einzelhandels-KI-Platzierung kombiniert klassenspezifische Regeln, Kandidaten-/Runtime-Freigabe, Modellradius, Gelände und Belegungstests. Manuelle Platzierung und Export werden niemals durch diese diagnostische Überlagerung blockiert.
+The river has no water. Widen the selection or adjust the surface level.	Der Fluss hat kein Wasser, die Auswahl wird erweitert oder die Oberfläche angepasst.
+The river misses this region. Adjust direction, width or the selection.	Der Fluss verfehlt diese Region. Passen Sie Richtung, Breite oder Auswahl an.
+The selected placement has no recovered movement-speed profile.	Die ausgewählte Platzierung weist kein wiederhergestelltes Bewegungsgeschwindigkeitsprofil auf.
+The selected placement has no recovered projectile weapon.	Die ausgewählte Platzierung hat keine wiederhergestellte Projektilwaffe.
+The selected surface is not available in this game folder. Choose another surface or From terrain style.	Die ausgewählte Oberfläche ist in diesem Spielordner nicht verfügbar. Wählen Sie eine andere Oberfläche oder vom Geländestil aus.
+The title and description are written to all existing game languages. The campaign project references its mission .thmap files; keep them together when moving the project.	Der Titel und die Beschreibung sind in alle vorhandenen Spielsprachen geschrieben. Das Kampagnenprojekt verweist auf seine Mission .thmap-Dateien; halten Sie sie zusammen, wenn Sie das Projekt verschieben.
+The water stays below the basin rim. Small areas limit depth to leave gentle banks.	Das Wasser bleibt unterhalb des Beckenrandes. Kleine Bereiche begrenzen die Tiefe, um sanfte Ufer zu hinterlassen.
+This also activates AI faction %d, leaving existing faction colours intact.	Dies aktiviert auch die AI-Fraktion %d und lässt bestehende Fraktionenfarben intakt.
+This campaign folder already contains the mission project. Choose a new identifier or open the campaign project.	Dieser Kampagnenordner enthält bereits das Missionsprojekt. Wählen Sie einen neuen Bezeichner oder öffnen Sie das Kampagnenprojekt.
+This original special-site calculation reads the value from its site entry rather than KI.DAT. Editing this preserved KI slot does not change that calculation.	Diese ursprüngliche Spezial-Site-Berechnung liest den Wert aus dem Site-Eintrag anstelle von KI.DAT. Das Bearbeiten dieses erhaltenen KI-Slots ändert diese Berechnung nicht.
+This preview has no changes to apply.	Diese Vorschau hat keine Änderungen anzuwenden.
+This river has blocked ground cells. Adjust the red areas before applying as drivable.	Dieser Fluss hat Bodenzellen blockiert. Stellen Sie die roten Bereiche ein, bevor Sie als fahrbar gelten.
+This run did not publish visibility data.	Dieser Lauf hat keine Sichtbarkeitsdaten veröffentlicht.
+Threads (0 = automatic)	Gewinde (0 = automatisch)
+Tick	Tick
+Tick interval (ms)	Tick-Intervall (ms)
+Timing: life %ut · ramp %ut · fixed %ut · shade %dt	Zeitwerte: Dauer %u Ticks · Anstieg %u Ticks · konstant %u Ticks · Schatten %d Ticks
+Tint visible terrain by faction	Sichtbares Gelände in Fraktionsfarben einfärben
+Title	Titel
+Tokens: C0..C63 reference condition slots; FD=NOT, FE=AND, FF=OR, FC=END. Evaluation is postfix and can combine earlier or later condition slots.	Tokens: C0..C63 Referenzbedingungsschlitze; FD=NOT, FE=AND, FF=OR, FC=END. Auswertung ist postfix und kann frühere oder spätere Zustandsschlitze kombinieren.
+Tool	Werkzeug
+Total active factions	Aktive Fraktionen insgesamt
+Transform	Transformation
+Transform gizmo	Gizmo transformieren
+Transient faction Xenite: %u Q4 · queue: %zu	Transiente Fraktion Xenit: %u Q4 · Warteschlange: %zu
+Transient faction Xenite: %u Q4 · shared secondary queue: %zu	Transiente Fraktion Xenit: %u Q4 · geteilte sekundäre Schlange: %zu
+Trigger slot	Triggerschlitz
+Tritium	Tritium
+Tritium (blue)	Tritium (blau)
+Tritium field (FLD 0x1000)	Tritiumfeld (FLD 0x1000)
+Tritium storage capacity Q4	Tritium-Speicherkapazität Q4
+Tritium: %u cells	Tritium: %u-Zellen
+Turret sites	Geschützturmstandorte
+Turret sites %zu	Geschützturmstandorte %zu
+UI scale	Oberflächenskalierung
+Unavailable asset:\s	Nicht verfügbarer Vermögenswert:\s
+Unavailable assets skipped (%zu): %s: %s	Nicht verfügbare Vermögenswerte übersprungen (%zu): %s: %s
+Unavailable on this map	Auf dieser Karte nicht verfügbar
+Undo	Rückgängig
+Units	Einheiten
+Unknown	Unbekannt
+Unlock all	Entsperren Sie alle
+Unlocked\s	Entsperrt\s
+Update PATCH00.PCK overrides	Update PATCH00.PCK überschreibt
+Update custom resources and map text in the active PATCH archive. Use level export above to install the map itself.	Aktualisieren Sie benutzerdefinierte Ressourcen und Kartentext im aktiven PATCH-Archiv. Verwenden Sie den Level-Export oben, um die Karte selbst zu installieren.
+Update game resources	Update der Spielressourcen
+Updated\s	Aktualisiert\s
+Updated selected object name, faction, position, terrain Z anchor, and yaw.	Name, Fraktion, Position, Z-Anker und Drehwinkel des ausgewählten Objekts wurden aktualisiert.
+Usage: thandor-map-editor [--root <Thandor game directory>] [--version] [--print-game-root]	Aufruf: thandor-map-editor [--root <Thandor-Spielverzeichnis>] [--version] [--print-game-root]
+Use a .thmap project filename.	Verwenden Sie einen .thmap-Projektdateinamen.
+Use map-center terrain height	Kartenzentrum Geländehöhe verwenden
+Use selected KI profile value	Verwenden Sie den ausgewählten KI-Profilwert
+Use selected object's position as destination	Position des ausgewählten Objekts als Ziel verwenden
+Use selected object's position as exit center	Position des ausgewählten Objekts als Exit-Center verwenden
+Use source map's original terrain dimensions	Verwenden Sie die ursprünglichen Geländeabmessungen der Source Map
+Use stored camera	Verwenden Sie gespeicherte Kamera
+Use terrain from an existing map	Verwenden Sie Terrain aus einer vorhandenen Karte
+Use the Simulation Lab run controls while an experiment is loaded. Clear the experiment to use manual object simulation.	Während ein Experiment geladen wird, verwenden Sie die Ablaufsteuerung des Simulationslabors und löschen Sie das Experiment für die manuelle Objektsimulation.
+Use the base seed as the primary RNG state and draw a session seed the same way a stock host does.	Verwenden Sie den Basissamen als primären RNG-Zustand und zeichnen Sie einen Sitzungssamen auf die gleiche Weise wie ein Lagerhost.
+Uses the map's current animated surface: %s.	Verwendet die aktuelle animierte Oberfläche der Karte: %s.
+V537 class 14/15: MDL +0xC0 storage selector · +0xC4 contribution Q4	V537 Klasse 14/15: MDL +0xC0 Speicherauswahl · +0xC4 Beitrag Q4
+V537 class 23: MDL +0x0C step · +0x24 travel limit; collision hold deploys from zero, endpoint readiness permits the subsequent bidirectional link	V537 Klasse 23: MDL +0x0C Schritt · +0x24 Reiselimit; Kollisionshaltebereitschaft von Null, Endpunktbereitschaft ermöglicht die anschließende bidirektionale Verbindung
+V537 steering: MDL +0xC0/+0xC4/+0xC8	V537 Lenkung: MDL +0xC0/+0xC4/+0xC8
+V537 water: MDL +0x194 multiplier · +0x198 threshold	V537 Wasser: MDL +0x194 Multiplikator · +0x198 Schwellenwert
+Validate campaign	Validierungskampagne
+Values from %s. Choose the profile in Simulation Lab.	Werte von %s. Wählen Sie das Profil in Simulation Lab.
+Vary RNG seed per run	Zufallsstartwert je Durchlauf variieren
+Vehicle	Fahrzeug
+Vehicle traversal	Befahrbarkeit
+Vertical deployment	Vertikaler Einsatz
+View	Ansicht
+View faction	Sicht der Fraktion
+View stored	Gespeicherte Ansicht
+Viewport commands: right-click terrain to drive a movable unit; right-click terrain with an armed immobile unit/building to set an attack point; right-click a different-faction placement to attack and follow it. Right-drag still pans the camera.	Viewport-Befehle: Rechtsklick-Terrain, um eine bewegliche Einheit zu steuern; Rechtsklick-Terrain mit einer bewaffneten unbeweglichen Einheit/Gebäude, um einen Angriffspunkt zu setzen; Rechtsklick auf eine Platzierung mit unterschiedlichen Fraktionen, um anzugreifen und ihm zu folgen.
+Visibility	Sichtbarkeit
+Visual / runtime	Visuelle/Laufzeit
+Waiting for run %d to publish its first frame	Warten auf Lauf %d, um seinen ersten Frame zu veröffentlichen
+Walker contact: lift %.3f · steer 0x%04X · footstep %u	Schrittläufer: Hub %.3f · Lenkung 0x%04X · Schrittton %u
+Wall rows	Mauerlinien
+Wall rows %zu	Mauerlinien %zu
+Warning: %s	Warnung: %s
+Warning: %zu existing placements share this owner. All of them will switch to the gray army8 graphics family.	%zu platzierte Objekte gehören zu dieser Fraktion. Sie alle wechseln zur grauen Grafikgruppe army8.
+Warp amount	Kettzahl
+Warped / rugged	Verzogen/robust
+Water	Wasser
+Water damage: threshold %.3f · multiplier %d	Wasserschaden: Schwelle %.3f · Multiplikator %d
+Water depth	Wassertiefe
+Water down	Wasser nach unten
+Water response	Wasserreaktion
+Water selection is empty.	Die Wasserauswahl ist leer.
+Water up	Wasser nach oben
+Weapon	Waffe
+Weapon simulation target	Waffensimulationsziel
+Weapons	Waffen
+When the selected condition becomes satisfied, an active trigger is marked processed, transitions its faction toward ended state, optionally disables that faction's armies, and chooses the campaign/skirmish ending movie record. It is not the ordinary notification queue.	Wenn die ausgewählte Bedingung erfüllt ist, wird ein aktiver Trigger als verarbeitet markiert, wechselt seine Fraktion in Richtung Endzustand, deaktiviert optional die Armeen dieser Fraktion und wählt die Kampagne/Skirmish-Endfilmaufzeichnung.
+Whole map	Gesamte Karte
+Whole map already explored	Gesamte Karte bereits erkundet
+Whole-map generation reserves four dry building areas and connecting ground routes.\nWater and protected cells stay unchanged. Apply requires terrain checks to pass.	Beim Erzeugen der gesamten Karte bleiben vier trockene Bauflächen und ihre Verbindungswege frei.\nWasser und geschützte Felder bleiben erhalten. Die Geländeprüfung muss vor dem Anwenden erfolgreich sein.
+Whole-map mountains keep four connected building areas.	Whole-Map-Berge halten vier zusammenhängende Gebäudebereiche.
+Width	Breite
+Wireframe	Drahtgitter
+World	Welt
+World %.2f / %.2f / %.2f · body %.1f deg	Welt %.2f / %.2f / %.2f · Körper %.1f deg
+World / scenery	Umgebung und Dekoration
+World vectors	Weltvektoren
+World: %.2f, %.2f, %.2f	Welt: %.2f, %.2f, %.2f
+Writes levelNN.pck and updates PATCH00.PCK in the game folder. The Export panel controls backups for both archives.	Schreibt levelNN.pck und aktualisiert PATCH00.PCK im Spielordner. Das Export-Panel steuert Backups für beide Archive.
+Xenite	Xenit
+Xenite %.1f   Tritium %.1f   Points %d	Xenit %.1f Tritium %.1f Points %d
+Xenite (gold)	Xenit (Gold)
+Xenite and Tritium extractor fields.	Xenit- und Tritium-Extraktorfelder.
+Xenite field (FLD 0x0800)	Xenitfeld (FLD 0x0800)
+Xenite storage capacity Q4	Xenit-Speicherkapazität Q4
+Xenite: %u cells	Xenit: %u-Zellen
+Yaw degrees	Drehwinkel in Grad
+Z edits the terrain anchor. Stock LEV stores X, Y and yaw.	Z ändert den Geländeanker. Das Original-LEV-Format speichert X, Y und den Drehwinkel.
+access route overlay geometry limit exceeded	Geometriegrenze der Zugangsroutenüberlagerung überschritten
+asset ID is not present in the ARM registry	Asset-ID ist im ARM-Register nicht vorhanden
+asset-card SPR index exceeds vertex stream	Asset Card SPR-Index übertrifft Vertex-Stream
+asset-card SPR selects missing army GFX subresource	Asset-Card SPR wählt fehlende Armee GFX Subressource
+building stored asset	Gespeichertes Gebäudeobjekt
+cached simulation geometry limit exceeded	Geometrische Grenze der zwischengespeicherten Simulation wurde überschritten
+cost %u Q4 · build %u ticks (%.2f s) · active Energy %llu Q4	Kosten %u Q4 · Bauzeit %u Ticks (%.2f s) · aktiver Energiebedarf %llu Q4
+current map is not a stock map; use Save full map project instead	die aktuelle Karte ist eine eigene Karte. Verwende „Vollständiges Kartenprojekt speichern“.
+custom	Gewöhnlich
+default	Ausfall
+dynamic actor selects missing GFX subresource	Dynamischer Akteur wählt fehlende GFX-Subressource aus
+dynamic actor shadow geometry limit exceeded	Begrenzung der dynamischen Akteurschattengeometrie überschritten
+dynamic effect geometry limit exceeded	Geometrische Begrenzung der dynamischen Wirkung überschritten
+dynamic object draw run is not triangle aligned	Dynamic Object Draw Run ist nicht Dreieck ausgerichtet
+dynamic object queue index exceeds vertex stream	Dynamischer Objektwarteschlange-Index übertrifft Vertex-Stream
+dynamic shadow receiver index exceeds cached vertex stream	Dynamic Shadow Receiver Index übertrifft zwischengespeicherten Vertex-Stream
+dynamic upload frame index is out of range	Dynamic Upload Frame Index liegt außerhalb der Reichweite
+empty terrain GFX	Leergelände GFX
+engine/ki.dat is unavailable.	Engine/ki.dat ist nicht verfügbar.
+engine/ki.dat unavailable	Motor/Ki.dat nicht verfügbar
+game export blocked:\s	Spielexport blockiert:\s
+game.exe: FrontendDebugOverlay_RefreshCountersAndWorldCoordinates @ 0x00546190	game.exe: FrontendDebugOverlay_RefreshCountersAndWorldCoordinats @ 0x00546190
+generated shadow mask does not match the retail caster-tile dimension	Die erzeugte Schattenmaske stimmt nicht mit der Einzelhandelsabmessung der Gipsfliesen überein
+generated shadow receiver geometry limit exceeded	erzeugte Schattenempfänger-Geometriegrenze überschritten
+generated shadows exhausted the selected Vulkan device image-array limit of\s	erzeugte Schatten erschöpften die ausgewählte Vulkan-Gerät-Bild-Array-Grenze von\s
+glfwCreateWindow failed	glfwCreateWindow fehlgeschlagen
+glfwInit failed	glfwInit ist gescheitert
+heading %.1f deg · pitch %.1f deg	Überschrift %.1f deg · pitch %.1f deg
+heading 0x%04X%s	Richtung 0x%04X%s
+inside	innen
+invalid default generated-shadow settings	Ungültige Standardeinstellungen für generierte Schatten
+marker only	Nur Markierung
+no map is open	Keine Karte ist geöffnet
+no paired LEV/FLD maps were found in the game PCK archives	Es wurden keine gepaarten LEV/FLD-Karten im PCK-Archiv des Spiels gefunden
+none	nicht
+object preview geometry limit exceeded	Objektvorschau-Geometriegrenze überschritten
+outside	außen
+persistent %u · currently free %u · stored slot is reusable after return	persistent %u · derzeit frei %u · gespeicherter Slot ist nach der Rückkehr wiederverwendbar
+placement\s	Platzierung\s
+project path is empty	Projektpfad ist leer
+raw	Rohöl
+required resource field	erforderliches Rohstofffeld
+requires Tritium support	benötigt ein Tritiumfeld
+requires Xenite support	benötigt ein Xenitfeld
+requires matching resource support	benötigt ein passendes Rohstofffeld
+resolved	aufgelöst
+resource field	Rohstofffeld
+resource support	Rohstofffeld
+resource_flag_issues	resource_flag_issues
+same ID	gleiche ID
+selected terrain layer is unavailable	ausgewählte Geländeschicht ist nicht verfügbar
+simulation placement index is out of range	Simulationsplatzierungsindex liegt außerhalb des Bereichs
+simulation_lab_runs	simulation_lab_runs
+source project path is empty	Source Projektpfad ist leer
+special features: %s	Besonderheiten: %s
+static object vertex has out-of-range texture layer	Statisches Objekt Vertex hat eine Out-of-Range-Texturschicht
+surface DAT palette index exceeds surface PAL entries	Oberflächen-DAT-Palette-Index übersteigt Oberflächen-PAL-Einträge
+surface DAT texture index exceeds surface GFX layers	Oberflächen-DAT-Texturindex übertrifft Oberflächen-GFX-Schichten
+surface layer has invalid RGBA dimensions	Oberflächenschicht mit ungültigen RGBA-Abmessungen
+target-class damage raw (+0xB0): %s	Schaden der Zielklasse roh (+0xB0): %s
+terrain compatibility overlay geometry limit exceeded	Geometrischer Grenzwert für die Geländekompatibilität überschritten
+terrain texture import requires exactly 256x256 pixels	Der Import von Geländetexturen erfordert genau 256x256 Pixel
+thandor.dat has no persisted local player name	thandor.dat hat keinen persistenten lokalen Spielernamen
+thandor.dat not found; stock army textures are unchanged	thandor.dat fehlt. Die Originaltexturen für Einheiten bleiben erhalten.
+transient simulation entity geometry limit exceeded	Geometriegrenzwert für transiente Simulationseinheiten überschritten
+transient simulation entity selects missing GFX subresource	Transiente Simulationsinstanz wählt fehlende GFX-Subressource aus
+unavailable	nicht verfügbar
+unknown selector	unbekannte Auswahl
+unnamed	nicht namentlich genannt
+unresolved	ungelöst
+v  Map Overview	v Kartenübersicht
+validated	validiert
+visible simulation geometry limit exceeded	Grenze der sichtbaren Simulationsgeometrie überschritten
+· research %u/256 · root MDL %u	· Forschung %u/256 · Wurzel MDL %u

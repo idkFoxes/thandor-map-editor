@@ -68,13 +68,19 @@ exe="${build_dir}/thandor-map-editor.exe"
 [[ -f "${exe}" ]] || die "Build completed without ${exe}."
 [[ -d "${build_dir}/shaders" ]] || die "Compiled shader directory is missing: ${build_dir}/shaders"
 [[ -f "${build_dir}/assets/fonts/DejaVuSans.ttf" ]] || die "Runtime font is missing: ${build_dir}/assets/fonts/DejaVuSans.ttf"
+[[ -f "${build_dir}/assets/localization/editor.tsv" ]] || die "Runtime translations are missing"
 
 cp -f "${exe}" "${dist_dir}/thandor-map-editor.exe"
+rm -f "${dist_dir}/jandrenator-headless.exe"
+cp -f "${root_dir}/third_party/miniz/LICENSE" "${dist_dir}/MINIZ-LICENSE.txt"
+cp -f "${root_dir}/third_party/open-thandor/LICENSE" "${dist_dir}/OPEN-THANDOR-LICENSE.txt"
 rm -rf -- "${dist_dir}/shaders"
 cp -a "${build_dir}/shaders" "${dist_dir}/shaders"
 mkdir -p "${dist_dir}/assets"
 rm -rf -- "${dist_dir}/assets/fonts"
 cp -a "${build_dir}/assets/fonts" "${dist_dir}/assets/fonts"
+mkdir -p "${dist_dir}/assets/localization"
+cp -a "${build_dir}/assets/localization/editor.tsv" "${dist_dir}/assets/localization/editor.tsv"
 
 # Copy MinGW runtime DLLs only when the linker did not absorb them statically.
 objdump_tool="${THANDOR_WINDOWS_TRIPLET}-objdump"
@@ -105,7 +111,8 @@ EOF_README
 
 (
     cd "${dist_dir}"
-    sha256sum thandor-map-editor.exe shaders/*.spv assets/fonts/* > SHA256SUMS.txt
+    checksum_files=(thandor-map-editor.exe shaders/*.spv assets/fonts/* assets/localization/editor.tsv)
+    sha256sum "${checksum_files[@]}" > SHA256SUMS.txt
 )
 
 archive="${root_dir}/dist/ThandorMapEditor-windows-x64.zip"

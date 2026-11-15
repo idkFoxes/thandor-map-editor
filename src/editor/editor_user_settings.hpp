@@ -30,6 +30,7 @@ struct EditorUserSettings {
     bool show_other_runs{};
     bool logging_enabled{};
     std::string ai_profile{"default"};
+    std::string language{"en"};
     int ui_scale_percent{}; // 0 = monitor setting, otherwise 100..300 percent
 };
 
@@ -48,6 +49,7 @@ inline std::string editor_user_settings_encode(const EditorUserSettings& setting
         << "logging_enabled=" << settings.logging_enabled << '\n'
         << "ui_scale_percent=" << settings.ui_scale_percent << '\n'
         << "ai_profile=" << settings.ai_profile << '\n'
+        << "language=" << settings.language << '\n'
         << "\n[simulation_lab]\n"
         << "run_count=" << c.run_count << '\n'
         << "worker_thread_limit=" << c.worker_thread_limit << '\n'
@@ -122,6 +124,8 @@ inline EditorUserSettings editor_user_settings_decode(std::string_view source,Ed
                 else if(value=="0"||value=="false")initial.logging_enabled=false;
             }else if(key=="ai_profile"){
                 if(value=="default"||value=="custom")initial.ai_profile=std::string(value);
+            }else if(key=="language"){
+                if(value=="en"||value=="de")initial.language=std::string(value);
             }else if(key=="ui_scale_percent"){
                 if(auto v=editor_ini_integer<int>(value,0,300);v && (*v==0||*v>=100))initial.ui_scale_percent=*v;
             }

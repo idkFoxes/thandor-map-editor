@@ -20,8 +20,8 @@ layout(std430,set=0,binding=3) readonly buffer ResourceShadingBuffer {
 } resourceShading;
 
 layout(std430,set=0,binding=5) readonly buffer FogVisibilityBuffer {
-    uvec4 header; // x=enabled, y=cell count
-    uint cells[]; // low byte = temporally clamped FieldGrid runtime visibility byte
+    uvec4 header; // x=fog enabled, y=cell count, z=faction tint enabled
+    uint cells[]; // low byte = runtime visibility, high bytes = optional faction RGB
 } fogVisibility;
 
 layout(location=0) out vec3 normal;
@@ -119,4 +119,15 @@ void main(){
     vec3 retailLighting = directDrawFinalizeVertexLighting(
         unpackRgbBytes(inPackedLight), shadingWords) / 255.0;
     lightingBytes = retailLighting * (float(runtimeVisibility) / 255.0);
+    if (fogVisibility.header.z != 0u && inFogCellIndex < fogVisibility.header.y) {
+        uint tint = fogVisibility.cells[inFogCellIndex] >> 8u;
+        if (tint != 0u) {
+            vec3 factionRgb = unpackRgbBytes(tint) / 255.0;
+            // Use the retail explored-terrain byte as the brightness ceiling,
+            // with extra channel contrast so similar terrain colours stand out.
+            factionRgb /= max(max(factionRgb.r, factionRgb.g), factionRgb.b);
+            float tintedVisibility = float(min(runtimeVisibility, 0x87u)) / 255.0;
+            lightingBytes = retailLighting * tintedVisibility * mix(vec3(0.56), vec3(1.0), factionRgb);
+        }
+    }
 }

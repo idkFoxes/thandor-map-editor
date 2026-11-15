@@ -1,0 +1,41 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/graphics/resources/palette.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_GRAPHICS_RESOURCES_PALETTE_H
+#define THANDOR_GRAPHICS_RESOURCES_PALETTE_H
+
+#include <thandor/graphics/resources/types.h>
+#include <thandor/core/contracts.h>
+
+/* Palette texture sources (GraphicsPaletteTextureSource_*): the palette banks start after the 0x200-byte
+   header, each 256 entries of 8 bytes (colour, second dword). */
+inline constexpr int GRAPHICS_PALETTE_BANKS_OFFSET = 0x200;
+inline constexpr int GRAPHICS_PALETTE_BANK_BYTES = 0x800;
+inline constexpr int GRAPHICS_PALETTE_BANK_ENTRIES = 0x100;
+/* GraphicsPaletteTextureSource_OptimizePaletteBanksAndRemapIndices marks an entry unused by setting the low three
+   bits of its blue, green and red bytes (the colours only use the upper five bits of each channel). */
+inline constexpr int GRAPHICS_PALETTE_ENTRY_UNUSED_MARK = 0x70707;
+/* Entries of g_GraphicsPaletteBankSlots (used-colour count per bank); the optimiser handles at most this many banks */
+inline constexpr int GRAPHICS_PALETTE_BANK_SLOT_CAPACITY = 0x200;
+
+GraphicsPaletteAsset * GraphicsPaletteAsset_LoadPackage(uint16_t *pathUtf16,uint32_t *outErrorCode);
+
+void GraphicsPaletteAsset_ReleasePackage(GraphicsPaletteAsset *paletteAsset);
+
+GraphicsPaletteAsset * GraphicsPaletteAsset_Clone(GraphicsPaletteAsset *paletteAsset);
+
+void GraphicsPaletteAsset_ReleaseClone(GraphicsPaletteAsset *paletteAsset);
+
+GraphicsPaletteAsset * GraphicsPaletteAsset_Validate(GraphicsPaletteAsset *paletteAsset,uint32_t *outErrorCode);
+
+GraphicsPaletteAsset * GraphicsPaletteAsset_ResolveAllocationBase(GraphicsPaletteAsset *paletteAsset);
+
+extern GraphicsPaletteAssetLifecycleCallbackTable g_GraphicsPaletteAssetLifecycleCallbacks3;
+
+extern GraphicsPaletteAssetLoadPackageProc *g_GraphicsPaletteAssetLoadPackage;
+
+#endif /* THANDOR_GRAPHICS_RESOURCES_PALETTE_H */

@@ -17,6 +17,7 @@
 #include "editor_user_settings.hpp"
 #include "ai_knowledge_panel.hpp"
 #include "editor_ai_profiles.hpp"
+#include "editor_jandrenator.hpp"
 #include "asset_preview.hpp"
 #include "game_cursor.hpp"
 #include "model_transform.hpp"
@@ -25,6 +26,7 @@
 #include "terrain_renderer.hpp"
 #include "viewport_picking.hpp"
 #include "thandor/audio.hpp"
+#include "thandor/access_routes.hpp"
 #include "thandor/simulation_lab_audio.hpp"
 #include "thandor/map_document.hpp"
 #include "thandor/terrain_generator.hpp"
@@ -129,6 +131,34 @@ private:
     int32_t ai_profile_draft_value_{};
     void apply_ai_profile();
     void draw_ai_profile_controls();
+    void draw_jandrenator_controls();
+    void draw_simulation_lab_experiment_settings();
+    void update_jandrenator_scene(double now);
+    void refresh_jandrenator_run_views(double now);
+    void clear_jandrenator_scene();
+    bool jandrenator_selected_{};
+    JandrenatorSettings jandrenator_settings_;
+    JandrenatorBatch jandrenator_batch_;
+    int jandrenator_view_run_{};
+    int jandrenator_loaded_run_{-1};
+    bool jandrenator_show_batch_{};
+    double jandrenator_next_scene_poll_{};
+    std::filesystem::file_time_type jandrenator_scene_modified_{};
+    std::unique_ptr<thandor::SimulationLabRun> jandrenator_scene_;
+    int jandrenator_opponent_percent_{100};
+    int jandrenator_idle_minutes_{5};
+    std::string jandrenator_message_;
+    struct JandrenatorRunView {
+        unsigned tick{};
+        std::string result;
+        std::string viewport_label;
+        std::vector<std::array<unsigned, 6>> factions;
+    };
+    std::vector<JandrenatorRunView> jandrenator_run_views_;
+    std::string jandrenator_batch_result_;
+    double jandrenator_next_refresh_{};
+
+
     std::string ai_knowledge_load_error_;
     AiKnowledgeUiState ai_knowledge_ui_;
     TerrainRenderer renderer_;
@@ -412,9 +442,23 @@ private:
     std::size_t discarded_alternate_lod_triangle_count_{};
     std::size_t untextured_triangle_count_{};
     std::size_t neutral_source_color_triangle_count_{};
-    std::size_t terrain_overlay_safe_cell_count_{};
-    std::size_t terrain_overlay_caution_cell_count_{};
-    std::size_t terrain_overlay_blocked_cell_count_{};
+    std::size_t terrain_route_bases_{};
+    std::size_t terrain_route_relocated_starts_{};
+    std::size_t terrain_route_factory_starts_{};
+    std::size_t terrain_route_connected_pairs_{};
+    std::size_t terrain_route_networks_{};
+    std::size_t terrain_route_connected_factories_{};
+    std::size_t terrain_route_factories_{};
+    std::size_t terrain_route_alternate_base_pairs_{};
+    std::size_t terrain_route_resource_deposits_{};
+    std::size_t terrain_defence_wall_sites_{};
+    std::size_t terrain_defence_sites_{};
+    std::size_t terrain_rally_sites_{};
+    std::size_t terrain_radar_site_count_{};
+    std::size_t terrain_pioneer_site_count_{};
+    std::size_t terrain_alternate_base_count_{};
+    unsigned terrain_alternate_base_factions_{};
+    std::array<std::size_t, 7> terrain_route_resource_connections_{};
     std::size_t recursive_model_node_count_{};
     std::size_t animated_model_node_count_{};
     std::size_t visible_animated_building_count_{};
@@ -655,7 +699,7 @@ private:
         uint32_t visual_tick{},building_tick{};
         const void* document{};
         const void* snapshot{};
-        std::array<uint32_t,15> settings{};
+        std::array<uint32_t,16> settings{};
         DynamicSceneCpu scene;
         std::vector<DynamicModelViewQuery> views;
         std::vector<DynamicModelStep> steps;
@@ -693,9 +737,41 @@ private:
     int asset_browser_scope_{};
     int asset_file_group_{};
     int selected_camera_faction_{1};
-    // 0=off, 1=selected/default vehicle traversal, 2=selected/default building placement,
-    // 3=raw binary terrain-class bands.
-    int terrain_compatibility_overlay_{};
+    enum TerrainOverlayMode {
+        TerrainOverlayVehicle,
+        TerrainOverlayResources,
+        TerrainOverlayBuilding,
+        TerrainOverlayBands,
+        TerrainOverlayGroundCount,
+    };
+    std::array<bool, TerrainOverlayGroundCount> terrain_ground_overlays_{};
+    std::array<std::array<std::size_t, 3>, TerrainOverlayGroundCount> terrain_overlay_cell_counts_{};
+    bool terrain_base_routes_{};
+    bool terrain_resource_routes_{};
+    bool terrain_wall_sites_{};
+    bool terrain_turret_sites_{};
+    bool terrain_rally_points_{};
+    bool terrain_radar_sites_{};
+    bool terrain_pioneer_sites_{};
+    bool terrain_alternate_bases_{};
+    bool terrain_route_alternatives_{};
+    bool terrain_route_show_cells_{true};
+    int terrain_route_resource_faction_{};
+    bool terrain_overlay_has_base_routes() const noexcept {
+        return terrain_base_routes_;
+    }
+    bool terrain_overlay_has_resource_routes() const noexcept {
+        return terrain_resource_routes_;
+    }
+    bool terrain_overlay_has_defence_sites() const noexcept {
+        return terrain_wall_sites_ || terrain_turret_sites_ || terrain_rally_points_;
+    }
+    bool terrain_overlay_has_planning_sites() const noexcept {
+        return terrain_radar_sites_ || terrain_pioneer_sites_ || terrain_alternate_bases_;
+    }
+    bool terrain_overlay_only_alternate_routes() const noexcept {
+        return terrain_route_alternatives_ && !terrain_base_routes_ && !terrain_resource_routes_;
+    }
     // Read-only V519 GridScratch diagnostics. This exposes the exact 4x coordinate/mask contract
     // but deliberately does not replace simulation movement while CF returns and runtime-only
     // scratch/route-queue state remain unresolved.
@@ -709,10 +785,12 @@ private:
     // 7. Current visibility still comes exclusively from the retail projected-occlusion pass, so
     // dynamic units/effects remain hidden outside live visibility.
     bool fog_preview_all_explored_{};
+    bool fog_preview_tint_visible_terrain_{};
     bool fog_preview_show_nominal_radius_{true};
     std::vector<thandor::FogPreviewObserver> fog_preview_observers_;
     std::vector<uint64_t> fog_preview_occupancy_history_;
     std::vector<uint8_t> fog_preview_runtime_cells_;
+    std::vector<uint32_t> fog_preview_terrain_tints_;
     std::size_t fog_preview_visible_cell_count_{};
     std::size_t fog_preview_explored_cell_count_{};
     std::size_t fog_preview_observer_count_{};
@@ -933,7 +1011,8 @@ private:
     thandor::PlacementRole placement_role_for_preset(const thandor::ArmyAssetPreset& preset) const noexcept;
     bool placement_has_required_resource_support(const thandor::ArmyAssetPreset& preset,
                                                  const thandor::LevelPlacement& placement) const noexcept;
-    const thandor::ArmyAssetPreset* terrain_overlay_profile() const noexcept;
+    const thandor::ArmyAssetPreset* terrain_overlay_profile(TerrainOverlayMode mode) const noexcept;
+    thandor::AccessRoutes plan_terrain_access_routes();
     std::span<const thandor::ModelVisualNode> placement_hierarchy(
         const thandor::ArmyAssetPreset& preset, std::size_t placement_index) const noexcept;
     std::span<const thandor::SimulationWeaponProfile> placement_weapon_profiles(

@@ -1,0 +1,73 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/platform/filesystem/types.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_PLATFORM_FILESYSTEM_TYPES_H
+#define THANDOR_PLATFORM_FILESYSTEM_TYPES_H
+
+#include <stdint.h>
+#include <thandor/core/flags.h>
+#include <thandor/core/ptr32.h> /* Ptr32: the pointer fields of these 32-bit layouts */
+#include <thandor/core/types.h>
+#include <thandor/platform/system/types.h>
+
+struct _WIN32_FIND_DATAA;
+struct _FILETIME;
+
+struct _FILETIME {
+    DWORD dwLowDateTime;
+    DWORD dwHighDateTime;
+};
+
+using FILETIME = struct _FILETIME;
+
+struct _WIN32_FIND_DATAA {
+    DWORD dwFileAttributes;
+    FILETIME ftCreationTime;
+    FILETIME ftLastAccessTime;
+    FILETIME ftLastWriteTime;
+    DWORD nFileSizeHigh;
+    DWORD nFileSizeLow;
+    DWORD dwReserved0;
+    DWORD dwReserved1;
+    CHAR cFileName[260];
+    CHAR cAlternateFileName[14];
+};
+
+/* g_FileSystemOpen flags (Win32File_Open maps them to the CreateFileA disposition, share mode and access). */
+enum class FileSystemOpenFlags : uint32_t {
+    FILESYSTEM_OPEN_NONE=0, /* open an existing file for reading, shared */
+    FILESYSTEM_OPEN_CREATE_OR_TRUNCATE=1,
+    FILESYSTEM_OPEN_EXCLUSIVE_SHARE=2,
+    FILESYSTEM_OPEN_EXISTING_OR_CREATE=4,
+    FILESYSTEM_OPEN_WRITE_ACCESS=8
+};
+THANDOR_FLAG_ENUM(FileSystemOpenFlags);
+
+/* g_FileSystemCreateDirectoryRecursive flags (Win32File_CreateDirectoryRecursive). */
+enum class FileSystemCreateDirectoryFlags : uint32_t {
+    FILESYSTEM_CREATE_DIRECTORY_NONE=0,
+    FILESYSTEM_CREATE_DIRECTORY_RECURSIVE=1
+};
+THANDOR_FLAG_ENUM(FileSystemCreateDirectoryFlags);
+
+using FileSystemOutputCapacityBytes = uint32_t;
+
+using FileSystemFilePosition = uint32_t;
+
+using FileIoByteCount = uint32_t;
+using FileSystemCloseProc = void (void * handle);
+using FileSystemCreateDirectoryRecursiveProc = uint32_t (FileSystemCreateDirectoryFlags flags, uint16_t * path);
+using FileSystemDeleteProc = uint32_t (uint32_t unusedFlags, uint16_t * path);
+using FileSystemEnumerateDirectoryOrVolumeEntriesProc = uint32_t (FileSystemEnumerationMode mode, uint32_t reserved, FileSystemOutputCapacityBytes outputCapacityBytes, uint8_t * outputRecords, uint8_t * pathOrVolumeText);
+using FileSystemGetPositionProc = bool (void * handle, uint32_t * outPosition);
+using FileSystemGetSizeProc = bool (void * handle, uint32_t * outSize);
+using FileSystemOpenProc = uint32_t (FileSystemOpenFlags openFlags, uint16_t * path, void * * outHandle);
+using FileSystemReadExactProc = uint32_t (FileIoByteCount byteCount, void * destination, void * handle);
+using FileSystemSeekProc = uint32_t (FileSystemSeekOrigin moveMethod, FileSystemFilePosition distance, void * handle);
+using FileSystemWriteExactOrFlushProc = uint32_t (FileIoByteCount byteCount, void * source, void * handle);
+
+#endif /* THANDOR_PLATFORM_FILESYSTEM_TYPES_H */

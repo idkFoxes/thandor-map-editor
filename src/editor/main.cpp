@@ -1,6 +1,8 @@
+#include "editor_strings.hpp"
 #include "editor_app.hpp"
 #include "editor_paths.hpp"
 #include "editor_theme.hpp"
+#include "editor_user_settings.hpp"
 #include "vulkan_context.hpp"
 #include "thandor/editor_version.hpp"
 
@@ -11,6 +13,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -18,12 +21,16 @@
 #endif
 
 namespace {
+using editor::tr;
 
 int run(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--version") {
         std::cout << thandor::kEditorBuildLabel << '\n';
         return 0;
     }
+    const auto application_dir = editor::application_directory();
+    const auto settings = editor::editor_user_settings_read(editor::editor_user_settings_path(application_dir), {});
+    editor::set_editor_language(settings.language, editor::executable_directory());
     auto root = editor::default_game_root();
     bool print_game_root=false;
     for (int i = 1; i < argc; ++i) {
@@ -34,13 +41,13 @@ int run(int argc, char** argv) {
         }
         else if(argument=="--print-game-root")print_game_root=true;
         else if (argument == "--help") {
-            std::cout << "Usage: thandor-map-editor [--root <Thandor game directory>] [--version] [--print-game-root]\n";
+            std::cout << tr("Usage: thandor-map-editor [--root <Thandor game directory>] [--version] [--print-game-root]") << '\n';
             return 0;
         }
     }
     if(print_game_root) {
         if(!editor::contains_game_files(root))
-            throw std::runtime_error("No game.exe/thandor.exe and PCK archives found. Put them beside the AppImage or use --root <game directory>.");
+            throw std::runtime_error(tr("No game.exe/thandor.exe and PCK archives found. Put them beside the AppImage or use --root <game directory>."));
         std::cout << root.lexically_normal().string() << '\n';
         return 0;
     }
@@ -52,7 +59,7 @@ int run(int argc, char** argv) {
             set_context(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4))); // per-monitor v2
     }
 #endif
-    if (glfwInit() != GLFW_TRUE) throw std::runtime_error("glfwInit failed");
+    if (glfwInit() != GLFW_TRUE) throw std::runtime_error(tr("glfwInit failed"));
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
@@ -60,7 +67,7 @@ int run(int argc, char** argv) {
     glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
 #endif
     GLFWwindow* window = glfwCreateWindow(1600, 960, thandor::kEditorWindowTitle, nullptr, nullptr);
-    if (!window) { glfwTerminate(); throw std::runtime_error("glfwCreateWindow failed"); }
+    if (!window) { glfwTerminate(); throw std::runtime_error(tr("glfwCreateWindow failed")); }
     try {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -84,7 +91,16 @@ int run(int argc, char** argv) {
 }
 }
 
+#ifdef THANDOR_EDITOR_JANDRENATOR
+int jandrenator_worker_main(int argc, char** argv);
+#endif
+
 int main(int argc, char** argv) {
+#ifdef THANDOR_EDITOR_JANDRENATOR
+    if (argc > 1 && std::string_view(argv[1]) == "--jandrenator-worker") {
+        return jandrenator_worker_main(argc - 1, argv + 1);
+    }
+#endif
     try { return run(argc, argv); }
     catch (const std::exception& error) {
 #ifdef _WIN32

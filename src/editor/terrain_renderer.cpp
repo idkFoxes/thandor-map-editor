@@ -76,7 +76,7 @@ static_assert(sizeof(ResourceShadingGpuRecord) == 48);
 struct alignas(16) FogVisibilityBufferHeader {
     uint32_t enabled{};
     uint32_t cell_count{};
-    uint32_t reserved0{};
+    uint32_t tint_enabled{};
     uint32_t reserved1{};
 };
 static_assert(sizeof(FogVisibilityBufferHeader) == 16);
@@ -1329,7 +1329,8 @@ void TerrainRenderer::update_resource_shading(
 }
 
 void TerrainRenderer::update_fog_visibility(
-    uint32_t frame_index, std::span<const uint8_t> runtime_visibility, bool enabled) {
+    uint32_t frame_index, std::span<const uint8_t> runtime_visibility, bool enabled,
+    std::span<const uint32_t> faction_tints) {
     if (frame_index >= VulkanContext::kFramesInFlight)
         throw std::runtime_error("fog visibility frame index is out of range");
     std::vector<std::byte> payload(sizeof(FogVisibilityBufferHeader) +
@@ -1337,9 +1338,11 @@ void TerrainRenderer::update_fog_visibility(
     auto* header = reinterpret_cast<FogVisibilityBufferHeader*>(payload.data());
     header->enabled = enabled ? 1U : 0U;
     header->cell_count = static_cast<uint32_t>(runtime_visibility.size());
+    const bool tint_enabled = !faction_tints.empty() && faction_tints.size() == runtime_visibility.size();
+    header->tint_enabled = tint_enabled ? 1U : 0U;
     auto* cells = reinterpret_cast<uint32_t*>(payload.data() + sizeof(FogVisibilityBufferHeader));
     for (std::size_t index = 0; index < runtime_visibility.size(); ++index)
-        cells[index] = runtime_visibility[index];
+        cells[index] = runtime_visibility[index] | (tint_enabled ? faction_tints[index] << 8U : 0U);
 
     auto& buffer = fog_visibility_buffers_[frame_index];
     const bool reallocated = update_reusable_host_buffer(

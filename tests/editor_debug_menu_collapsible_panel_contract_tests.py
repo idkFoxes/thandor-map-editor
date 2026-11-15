@@ -33,7 +33,7 @@ def main() -> int:
     # rendering must remain off by default and guarded; logging is user-controlled.
     require(hpp, "bool show_retail_debug_overlay_{};", "diagnostics default off")
     require(cpp, "if(!show_retail_debug_overlay_)return;", "diagnostic render guard")
-    require(cpp, 'ImGui::BeginMenu("Settings")', "settings menu")
+    require(cpp, 'ImGui::BeginMenu(tr_label("Settings"))', "settings menu")
     require(cpp, '"Create diagnostic logs"', "logging toggle")
     require(cpp, "set_logging_enabled(logging)", "live logging control")
     for label in (
@@ -56,7 +56,7 @@ def main() -> int:
     require(hpp, "bool show_right_panel_{true};", "right panel default")
     require_panel_guard(cpp, "show_left_panel_", "draw_left_panel")
     require_panel_guard(cpp, "show_right_panel_", "draw_right_panel")
-    require(cpp, 'ImGui::BeginMenu("Panels")', "panel view menu")
+    require(cpp, 'ImGui::BeginMenu(tr_label("Panels"))', "panel view menu")
     require(cpp, '"Collapse assets"', "left inline collapse")
     require(cpp, '"Collapse inspector"', "right inline collapse")
     require(cpp, "float EditorApp::left_panel_width() const noexcept", "left dynamic width")

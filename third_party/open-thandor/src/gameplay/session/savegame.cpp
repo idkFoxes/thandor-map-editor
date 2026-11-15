@@ -1,0 +1,781 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/src/gameplay/session/savegame.cpp
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#include <thandor/gameplay/session/savegame.h>
+#include <algorithm>
+#include <thandor/thandor.h>
+#include <thandor/assets/record_bytes.h>
+#include <thandor/platform/bootstrap/image.h>
+
+/* Module data. */
+
+static uint16_t g_ResourceRegistrationDirectoryUtf16[256] = {};
+
+uint16_t g_CampagneHexPathUtf16[13] = {'c', 'a', 'm', 'p', 'a', 'g', 'n', 'e', '.', 'h', 'e', 'x', 0}; /* L"campagne.hex" */
+
+uint16_t g_OldunitHexPathUtf16[12] = {'o', 'l', 'd', 'u', 'n', 'i', 't', '.', 'h', 'e', 'x', 0}; /* L"oldunit.hex" */
+
+uint8_t g_InGameResourceRegistrationBusyCount = 0;
+
+/* L"army.hex" */
+THANDOR_ALIGN(4) uint16_t g_ArmyHexPathUtf16[9] = {'a', 'r', 'm', 'y', '.', 'h', 'e', 'x', 0};
+
+/* L"effect.hex" */
+uint16_t g_EffectHexPathUtf16[11] = {'e', 'f', 'f', 'e', 'c', 't', '.', 'h', 'e', 'x', 0};
+
+/* L"shot.hex" */
+uint16_t g_ShotHexPathUtf16[9] = {'s', 'h', 'o', 't', '.', 'h', 'e', 'x', 0};
+
+/* L"modul.hex" */
+uint16_t g_ModulHexPathUtf16[10] = {'m', 'o', 'd', 'u', 'l', '.', 'h', 'e', 'x', 0};
+
+/* L"light.hex" */
+uint16_t g_LightHexPathUtf16[10] = {'l', 'i', 'g', 'h', 't', '.', 'h', 'e', 'x', 0};
+
+/* L"widget.hex" */
+uint16_t g_WidgetHexPathUtf16[11] = {'w', 'i', 'd', 'g', 'e', 't', '.', 'h', 'e', 'x', 0};
+
+uint8_t *g_EffectRuntimeRebaseBaseMinusOne = nullptr;
+
+uint8_t *g_RuntimeObjectRebaseBaseMinusOne = nullptr;
+
+/* A save-image block (a runtime pool, record array or asset image written or cleared as it is) viewed as the
+   dwords Package_UpsertEntry and the dword clear loops take. */
+template <class T> static inline uint32_t *SaveImage_Dwords(T *block)
+{
+  return reinterpret_cast<uint32_t *>(block);
+}
+
+/* The image address of a (base << 32) | byteSize pair from the InGameSaveGame_Prepare* functions. */
+static inline uint32_t *SaveImage_PairImage(ResourceRegistrationImagePair pair)
+{
+  return reinterpret_cast<uint32_t *>(pair >> 32);
+}
+
+/* Creates the save package at savePath; when that fails, creates the package's directory and tries once more.
+   Returns 0 when the package is open in *packageHandle, else the error code of the failed creation: the first
+   attempt's when the directory cannot be created (it usually exists and the file is locked or read-only). */
+static uint32_t InGameSaveGame_OpenNewPackage(void *savePath,EngineFileHandle *packageHandle)
+
+{
+  uint32_t createError;
+
+  createError = InGameSaveGame_CreatePackage(savePath,packageHandle);
+  if (createError == 0) {
+    return 0;
+  }
+  WidePath_SplitParentAndLeaf(reinterpret_cast<uint16_t *>(g_PackageScratchBuffer), /* scratch for the leaf */
+                              g_ResourceRegistrationDirectoryUtf16,static_cast<uint16_t *>(savePath));
+  if (g_FileSystemCreateDirectoryRecursive
+          (FileSystemCreateDirectoryFlags::FILESYSTEM_CREATE_DIRECTORY_RECURSIVE,g_ResourceRegistrationDirectoryUtf16) != 0) {
+    return createError;
+  }
+  return InGameSaveGame_CreatePackage(savePath,packageHandle);
+}
+
+/* Writes the runtime segments army, modul, shot, effect, widget, light, field, level and daten and the campagne
+   entry (deleted without a campaign). Pointer-holding images are converted to offsets for writing and rebased
+   afterwards, also when the write failed. Returns true on success; stops at the first failed write. */
+static bool InGameSaveGame_WriteRuntimeEntries(void *worldView,EngineFileHandle packageHandle)
+
+{
+  InGameLevelConditionStorage *levelStorage;
+  ResourceRegistrationImagePair domainImagePair;
+  RuntimeHexSegmentImage segmentImage;
+  bool upsertOk;
+
+  ArmyRuntimePool_ConvertPointersToOffsetsForSave();
+  upsertOk = Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,
+                              (PckDecodedByteCount)(ARMY_RUNTIME_SLOT_COUNT * sizeof(ArmyRuntimeSlot)),
+                              SaveImage_Dwords(g_ArmyRuntimeSlots),g_ArmyHexPathUtf16,packageHandle);
+  ArmyRuntimePool_RebaseAfterLoad();
+  if (!upsertOk) {
+    return false;
+  }
+  /* the whole model runtime slot image (0x400000 bytes) */
+  ModelRuntimePool_UnrebaseBeforeSave();
+  upsertOk = Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,
+                              (PckDecodedByteCount)(MODEL_RUNTIME_SLOT_COUNT * sizeof(ModelRuntimeSlot)),
+                              SaveImage_Dwords(g_ModelRuntimeSlots),g_ModulHexPathUtf16,packageHandle);
+  ModelRuntimePool_RebaseAfterLoad();
+  if (!upsertOk) {
+    return false;
+  }
+  domainImagePair = InGameSaveGame_PrepareShotSlots();
+  upsertOk = Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,(PckDecodedByteCount)domainImagePair,
+                              SaveImage_PairImage(domainImagePair),g_ShotHexPathUtf16,packageHandle);
+  ShotRuntime_RebaseSlotsAfterLoad();
+  if (!upsertOk) {
+    return false;
+  }
+  domainImagePair = InGameSaveGame_PrepareEffectSlots();
+  upsertOk = Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,(PckDecodedByteCount)domainImagePair,
+                              SaveImage_PairImage(domainImagePair),g_EffectHexPathUtf16,packageHandle);
+  EffectRuntime_RebaseSlotsAfterLoad();
+  if (!upsertOk) {
+    return false;
+  }
+  domainImagePair =
+       InGameSaveGame_PrepareRegistrationRecords(static_cast<ResourceRegistrationRuntimeImageSavedView *>(worldView));
+  upsertOk = Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,(PckDecodedByteCount)domainImagePair,
+                              SaveImage_PairImage(domainImagePair),g_WidgetHexPathUtf16,packageHandle);
+  ResourceRegistrationRuntime_RebaseLoadedRecords(static_cast<ResourceRegistrationRuntimeImage *>(worldView));
+  if (!upsertOk) {
+    return false;
+  }
+  segmentImage = RuntimeHexSegment_GetLightImageAndToggleFlag();
+  upsertOk = Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,(PckDecodedByteCount)segmentImage.byteSize,
+                              segmentImage.image,g_LightHexPathUtf16,packageHandle);
+  RuntimeHexSegment_ToggleLightImageFlag();
+  if (!upsertOk) {
+    return false;
+  }
+  segmentImage = RuntimeHexSegment_GetFieldImage(static_cast<InGameFieldImageSaveContext58 *>(worldView));
+  upsertOk = Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,(PckDecodedByteCount)segmentImage.byteSize,
+                              segmentImage.image,g_FieldHexPathUtf16,packageHandle);
+  RuntimeHexSegment_AfterFieldImageNoOp(static_cast<InGameFieldImageSaveContext58 *>(worldView));
+  levelStorage = g_InGameLevelRuntimeGlobalBlock.conditionStorage;
+  if (!upsertOk) {
+    return false;
+  }
+  InGameSaveGame_StoreCameraAsPlayerStart(static_cast<ResourceRegistrationRuntimeImage *>(worldView));
+  upsertOk = Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,
+                              (levelStorage->levelImage).header.resourceTables.
+                              runtimePrefixByteSizeAndInitialArmyPlacementOffset,SaveImage_Dwords(levelStorage),
+                              g_LevelHexPathUtf16,packageHandle);
+  if (!upsertOk) {
+    return false;
+  }
+  domainImagePair = InGameSaveGame_PrepareFactionImage();
+  upsertOk = Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,(PckDecodedByteCount)domainImagePair,
+                              SaveImage_PairImage(domainImagePair),g_DatenHexPathUtf16,packageHandle);
+  GameFactionRuntime_RebaseLoadedArmyReferences();
+  if (!upsertOk) {
+    return false;
+  }
+  if (g_FrontendLoadedCampaignAsset == nullptr) {
+    /* The original ignored a failed delete; reported here so a stale campagne entry fails the save. */
+    return Package_DeleteEntry(g_CampagneHexPathUtf16,packageHandle,nullptr);
+  }
+  /* the loaded CGN image, kept as an integer address; its dword 1 is the allocation size */
+  return Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,reinterpret_cast<uint32_t *>(g_FrontendLoadedCampaignAsset)[1],
+                             reinterpret_cast<uint32_t *>(g_FrontendLoadedCampaignAsset),
+                             g_CampagneHexPathUtf16,packageHandle);
+}
+
+/* Reads the 0x200-byte package header into g_PackageScratchBuffer, fills in the save name (file name of savePath;
+   the directory lands behind the header), the packed date and time, the "date, time" text, the level title text
+   id and the campaign index, and writes it back. Returns 0 on success, else the file-system error code. */
+static uint32_t InGameSaveGame_WritePackageHeader(void *savePath,EngineFileHandle packageHandle)
+
+{
+  void *handle = reinterpret_cast<void *>(packageHandle); /* the Win32 HANDLE */
+  InGameSavePackageHeader *header = reinterpret_cast<InGameSavePackageHeader *>(g_PackageScratchBuffer);
+  uint32_t dateTextByteLength;
+  uint16_t *timeText;
+  uint32_t campaignIndex;
+  uint32_t fileError;
+
+  fileError = g_FileSystemSeek(FILESYSTEM_SEEK_BEGIN,0,handle);
+  if (fileError == 0) {
+    fileError = g_FileSystemReadExact(sizeof(InGameSavePackageHeader),header,handle);
+  }
+  if (fileError != 0) {
+    return fileError;
+  }
+  WidePath_SplitParentAndLeaf
+            (header->saveNameUtf16,Asset_RecordAfter<uint16_t>(header),static_cast<uint16_t *>(savePath));
+  header->packedDate = g_LocaleGetPackedCurrentDate();
+  header->packedTime = g_LocaleGetPackedCurrentTime();
+  dateTextByteLength = g_LocaleFormatCurrentDateUtf16(header->dateTimeTextUtf16);
+  timeText = Asset_RecordAt<uint16_t>(header->dateTimeTextUtf16,static_cast<size_t>(dateTextByteLength) + 4);
+  timeText[-2] = L','; /* ", " between date and time */
+  timeText[-1] = L' ';
+  g_LocaleFormatCurrentTimeUtf16(timeText);
+  if (g_FrontendLoadedCampaignAsset == nullptr) {
+    campaignIndex = INGAME_SAVE_NO_CAMPAIGN;
+  }
+  else {
+    campaignIndex = g_InGameLevelCampaignAssociationIndex;
+  }
+  header->levelTitleTextId = g_InGameLevelTitleTextResourceIndex;
+  header->campaignIndex = campaignIndex;
+  fileError = g_FileSystemSeek(FILESYSTEM_SEEK_BEGIN,0,handle);
+  if (fileError == 0) {
+    fileError = g_FileSystemWriteExactOrFlush(sizeof(InGameSavePackageHeader),header,handle);
+  }
+  return fileError;
+}
+
+/* Logs the step at which writing a save game failed and the error code; returns the error code for the
+   caller's failure return. */
+static uint32_t InGameSaveGame_LogWriteFailure(const char *step,uint32_t errorCode)
+{
+  Thandor_Log("savegame write: %s failed (error 0x%02X), save reported as failed",step,errorCode);
+  return errorCode;
+}
+
+/* A step of the package write failed: discards the temporary package (unmounts packageHandle, 0 when it was
+   never mounted, and deletes the temporary file; the old save at the target path stays as it was) and logs the
+   step. Unmounting also closes the file, so a later save does not find it locked by this one. Returns errorCode. */
+static uint32_t InGameSaveGame_FailPackageWrite(EngineFileHandle packageHandle,uint16_t *temporaryPath,
+                                                const char *step,uint32_t errorCode)
+{
+  Package_DiscardTemporary(packageHandle,temporaryPath);
+  return InGameSaveGame_LogWriteFailure(step,errorCode);
+}
+
+/* Creates the package at the temporary path savePath + ".tmp", writes every entry and the header into it and
+   then replaces the save at savePath by it (Package_CommitTemporary); on any failure the temporary package is
+   discarded and the old save is kept. The header still takes the save name from savePath, so the bytes are the
+   same as written in place. Returns 0 on success, else the error code of the failed step (one log line naming
+   the step); a failed Package_UpsertEntry, which reports no code, counts as FATAL_ERROR_FILE_WRITE_FAILED, and a
+   failed replace (the save file locked or read-only) as FATAL_ERROR_FILE_ACCESS_FAILED.
+   The original wrote the package in place, ignored the results of the package creation write, the stat upsert
+   and the entry deletes and reported such a save as written; they fail the save here. It also left the package
+   mounted after a failed step, so its open file made every later save to that path fail. */
+static uint32_t InGameSaveGame_WritePackageContents(void *worldView,void *savePath)
+
+{
+  uint16_t temporaryPath[THANDOR_PATH_CAPACITY];
+  EngineFileHandle packageHandle;
+  uint32_t errorCode;
+
+  packageHandle = 0;
+  if (!Package_MakeTemporaryPath(temporaryPath,static_cast<const uint16_t *>(savePath))) {
+    return InGameSaveGame_LogWriteFailure("building the temporary path",FATAL_ERROR_FILE_ACCESS_FAILED);
+  }
+  errorCode = InGameSaveGame_OpenNewPackage(temporaryPath,&packageHandle);
+  if (errorCode != 0) {
+    return InGameSaveGame_FailPackageWrite(0,temporaryPath,"creating the package",errorCode);
+  }
+  if (!InGameSaveGame_WriteRuntimeEntries(worldView,packageHandle)) {
+    return InGameSaveGame_FailPackageWrite(packageHandle,temporaryPath,"a runtime entry",
+                                           FATAL_ERROR_FILE_WRITE_FAILED);
+  }
+  if (!Package_UpsertEntry(PCK_COMPRESSION_HUFFMAN_RLE,GAME_STAT_TABLE_BYTES,
+                           static_cast<uint32_t *>(g_GameStatTableImage),g_StatHexPathUtf16,packageHandle)) {
+    return InGameSaveGame_FailPackageWrite(packageHandle,temporaryPath,"the stat entry",
+                                           FATAL_ERROR_FILE_WRITE_FAILED);
+  }
+  /* The oldunit entry is written when there are old-unit records or any secondary-table dword is set. */
+  if (InGameSaveGame_OldUnitTablesAreEmpty()) {
+    if (!Package_DeleteEntry(g_OldunitHexPathUtf16,packageHandle,&errorCode)) {
+      return InGameSaveGame_FailPackageWrite(packageHandle,temporaryPath,"deleting the oldunit entry",errorCode);
+    }
+  }
+  else if (!InGameSaveGame_WriteOldUnitEntry(packageHandle)) {
+    return InGameSaveGame_FailPackageWrite(packageHandle,temporaryPath,"the oldunit entry",
+                                           FATAL_ERROR_FILE_WRITE_FAILED);
+  }
+  errorCode = InGameSaveGame_WritePackageHeader(savePath,packageHandle);
+  if (errorCode != 0) {
+    return InGameSaveGame_FailPackageWrite(packageHandle,temporaryPath,"the package header",errorCode);
+  }
+  /* unmounts the package in either case and deletes the temporary file when the replace fails */
+  if (!Package_CommitTemporary(packageHandle,temporaryPath,static_cast<uint16_t *>(savePath))) {
+    return InGameSaveGame_LogWriteFailure("replacing the save file",FATAL_ERROR_FILE_ACCESS_FAILED);
+  }
+  return 0;
+}
+
+/* Writes a save game (called by InGameSaveGame_SaveSelectedOrTypedName with the world view): opens or creates
+   the package at savePath (creating its directory if needed) and stores every runtime segment as a
+   Huffman/RLE entry - army, modul, shot, effect, widget, light, field, level, daten, campagne (deleted without
+   a campaign), stat and oldunit (deleted when empty). Pointer-holding images are converted to offsets for
+   writing and rebased afterwards. Finally the 0x200-byte package header gets the save name, date and time
+   and the level title and campaign index. The package is built under a temporary name and replaces the old
+   save only when complete (InGameSaveGame_WritePackageContents). Returns 0 on success, else the error code of the failed step (for
+   FatalError_ReportIfFailed) with savePath in g_PackageLastErrorPath; the package is unmounted either way. The
+   busy count is raised meanwhile.
+   The original returned only a failure flag (true on failure) and left a failed package mounted.
+*/
+uint32_t InGameSaveGame_WritePackage(void *worldView,void *savePath)
+
+{
+  FrontendPlayerRuntimeBlockCount remainingPlayerBlocks;
+  FrontendPlayerRuntimeRecord *playerBlock;
+  uint32_t errorCode;
+
+  InGameTick_ResourceRegistrationBusyCount().fetch_add(1,std::memory_order_relaxed);
+  /* first hand every player's pending army asset back to its faction */
+  playerBlock = g_FrontendPlayerRuntimeBlocks;
+  for (remainingPlayerBlocks = g_FrontendPlayerRuntimeBlockCount; remainingPlayerBlocks != 0;
+       remainingPlayerBlocks--) {
+    GameFactionRuntime_ConsumePendingArmyAssetAndRefreshGrid
+              (playerBlock->playerRuntimeId,0,0,(playerBlock->factionAssignment).factionAssignmentIndex);
+    playerBlock++;
+  }
+  errorCode = InGameSaveGame_WritePackageContents(worldView,savePath);
+  InGameTick_ResourceRegistrationBusyCount().fetch_sub(1,std::memory_order_relaxed);
+  if (errorCode != 0) {
+    /* the error message names the save file, not the last path a file-system call left there */
+    Package_SetLastErrorPath(static_cast<uint16_t *>(savePath));
+  }
+  return errorCode;
+}
+
+/* Creates a new, empty PCK package at packagePath and mounts it: builds a fresh 0x200-byte archive header
+   (magic "pck", timestamps of now, the computer label as producer and source name, no entries) in the
+   package scratch buffer, writes it as the whole file and mounts it. Returns 0 and the mounted package's
+   file handle in *outHandle, or the error code of the write or of Package_Mount (outHandle untouched; the
+   original returned only a success flag, ignored a failed write and mounted whatever file was left at
+   packagePath). A locked or read-only file fails the write with FATAL_ERROR_FILE_ACCESS_FAILED.
+   Called directly by the save-game writer InGameSaveGame_WritePackage, which creates the
+   save directory and retries when it fails.
+*/
+uint32_t InGameSaveGame_CreatePackage(void *packagePath,EngineFileHandle *outHandle)
+
+{
+  uint8_t *header;
+  PckArchiveHeader *archiveHeader;
+  uint32_t packedTime;
+  uint32_t packedDate;
+  int byteIndex;
+  EngineFileHandle mountedHandle; /* the mounted handle, or Package_Mount's error code */
+  uint32_t writeError;
+
+  header = g_PackageScratchBuffer;
+  archiveHeader = reinterpret_cast<PckArchiveHeader *>(header); /* the same 0x200 bytes */
+  for (byteIndex = 0; byteIndex < PCK_ENTRY_HEADER_BYTES; byteIndex++) {
+    header[byteIndex] = 0;
+  }
+  /* PckArchiveHeader, written byte by byte (the original stores the same values as dwords):
+     +0x00 magic "pck\0", +0x04 archive size 0x200 (header only), +0x08 version 1, +0x0C format 0x10000 */
+  header[0] = 'p';
+  header[1] = 'c';
+  header[2] = 'k';
+  header[3] = 0;
+  header[4] = 0;
+  header[5] = 2;
+  header[6] = 0;
+  header[7] = 0;
+  header[8] = 1;
+  header[9] = 0;
+  header[10] = 0;
+  header[11] = 0;
+  header[12] = 0;
+  header[13] = 0;
+  header[14] = 1;
+  header[15] = 0;
+  /* three time/date pairs all set to now */
+  packedTime = g_LocaleGetPackedCurrentTime();
+  archiveHeader->timeValue0 = packedTime;
+  archiveHeader->timeValue1 = packedTime;
+  archiveHeader->timeValue2 = packedTime;
+  packedDate = g_LocaleGetPackedCurrentDate();
+  archiveHeader->dateValue0 = packedDate;
+  archiveHeader->dateValue1 = packedDate;
+  archiveHeader->dateValue2 = packedDate;
+  g_LocaleCopyDefaultComputerLabelUtf16(archiveHeader->producerName);
+  g_LocaleCopyDefaultComputerLabelUtf16(archiveHeader->sourceName);
+  header[256] = 0; /* unusedText: empty */
+  /* +0xB0 entryCount = 0 */
+  header[176] = 0;
+  header[177] = 0;
+  header[178] = 0;
+  header[179] = 0;
+  writeError = FileSystem_WriteBufferToPath(PCK_ENTRY_HEADER_BYTES,header,static_cast<uint16_t *>(packagePath));
+  if (writeError != 0) {
+    return writeError;
+  }
+  if (!Package_Mount(static_cast<uint16_t *>(packagePath),&mountedHandle)) {
+    return static_cast<uint32_t>(mountedHandle);
+  }
+  *outHandle = mountedHandle;
+  return 0;
+}
+
+/* Save-game preparation of the runtime registration records (the "widget.hex" entry): turns the pointers of
+   every allocated 0x100-byte record into saved offsets or ids, zeroes the free records and returns the record
+   array with its byte size (recordCount * 0x100) for Package_UpsertEntry. The payload pointer is rebased per
+   domain (0 army/model, 1 shot, 2 effect). ResourceRegistrationRuntime_RebaseLoadedRecords undoes it.
+   Called directly by the save-game writer InGameSaveGame_WritePackage.
+   Return value: (base << 32) | byteSize; the caller splits the qword the same way.
+*/
+ResourceRegistrationImagePair
+InGameSaveGame_PrepareRegistrationRecords
+          (ResourceRegistrationRuntimeImageSavedView *runtimeImage)
+
+{
+  uint32_t primaryOffset;
+  uint32_t secondaryOffset;
+  uint32_t nestedBaseOffset;
+  uint32_t auxiliaryOffset;
+  uint32_t nestedCount;
+  uint32_t payloadOffset;
+  uint32_t *recordDword;
+  uint32_t *nestedOffset;
+  ArmyRuntimeSlot *ownerArmy;
+  ResourceRegistrationRecord *tailRecord;
+  uint32_t recordsRemaining;
+  uint32_t recordCount;
+  ResourceRegistrationRecordSavedView *records;
+  ResourceRegistrationRecordSavedView *recordCursor;
+
+  recordCursor = runtimeImage->records;
+  recordsRemaining = runtimeImage->recordCount;
+  /* recordCount is always INGAME_WORLD_OBJECT_RECORD_COUNT (WorldRuntime_AttachObjectArray in startup.cpp), so >= 1 */
+  do {
+    if ((recordCursor->flags & RUNTIME_REGISTRATION_RECORD_ALLOCATED) == 0) {
+      /* free record: zero its 0x40 dwords */
+      recordDword = SaveImage_Dwords(recordCursor);
+      std::fill_n(recordDword,sizeof(ResourceRegistrationRecordSavedView) / 4,0);
+    }
+    else {
+      primaryOffset = recordCursor->primarySavedIdOrOffset;
+      secondaryOffset = recordCursor->secondarySavedIdOrOffset;
+      nestedBaseOffset = recordCursor->nestedBaseSavedOffset;
+      if (primaryOffset != 0) {
+        primaryOffset = primaryOffset - Thandor_PointerToI32(g_RuntimeObjectRebaseBaseMinusOne); /* 32-bit format field: ResourceRegistrationRecordSavedView.primarySavedIdOrOffset */
+      }
+      if (secondaryOffset != 0) {
+        secondaryOffset = secondaryOffset - Thandor_PointerToI32(g_RuntimeObjectRebaseBaseMinusOne); /* 32-bit format field: ResourceRegistrationRecordSavedView.secondarySavedIdOrOffset */
+      }
+      if (nestedBaseOffset != 0) {
+        nestedBaseOffset = nestedBaseOffset - Thandor_PointerToI32(g_RuntimeObjectRebaseBaseMinusOne); /* 32-bit format field: ResourceRegistrationRecordSavedView.nestedBaseSavedOffset */
+      }
+      recordCursor->primarySavedIdOrOffset = primaryOffset;
+      recordCursor->secondarySavedIdOrOffset = secondaryOffset;
+      recordCursor->nestedBaseSavedOffset = nestedBaseOffset;
+      recordCursor->ownerRuntimeSavedOffset = 0;
+      auxiliaryOffset = recordCursor->auxiliarySavedIdOrOffset;
+      nestedCount = recordCursor->nestedCount;
+      if (auxiliaryOffset != 0) {
+        auxiliaryOffset = auxiliaryOffset - THANDOR_ADDR(g_GraphicsShadingRuntimeRecords,-1); /* 1-based offset, 0 = none */
+      }
+      recordCursor->auxiliarySavedIdOrOffset = auxiliaryOffset;
+      /* nestedCount is not clamped to the 13 array entries: walk the dwords from the array start */
+      nestedOffset = recordCursor->nestedSavedOffsets;
+      for (; nestedCount != 0; nestedCount--) {
+        if (*nestedOffset != 0) {
+          *nestedOffset = *nestedOffset - Thandor_PointerToI32(g_RuntimeObjectRebaseBaseMinusOne); /* 32-bit format field: ResourceRegistrationRecordSavedView.nestedSavedOffsets */
+        }
+        nestedOffset++;
+      }
+      payloadOffset = recordCursor->runtimePayloadSavedOffset;
+      switch(recordCursor->domainIndex) {
+      case RESOURCE_DOMAIN_ARMY_RUNTIME:
+        /* the payload is a model runtime: the faction of its owner army is saved as the texture set
+           (army graphics binding) index */
+        ownerArmy = Thandor_U32ToPointer<ModelRuntimeSlot>(payloadOffset)->ownerArmyRuntimeOrSavedOffset.armyRuntime; /* 32-bit format field: ResourceRegistrationRecordSavedView.runtimePayloadSavedOffset */
+        recordCursor->paletteAssetSavedIdOrOffset = 0;
+        payloadOffset = payloadOffset - g_ModelRuntimeRebaseDelta;
+        recordCursor->textureSetSavedIdOrOffset = ownerArmy->factionIndex;
+        break;
+      case RESOURCE_DOMAIN_SHOT_RUNTIME:
+        payloadOffset = payloadOffset - Thandor_PointerToI32(g_ShotRuntimeRebaseBaseMinusOne); /* 32-bit format field: ResourceRegistrationRecordSavedView.runtimePayloadSavedOffset */
+        recordCursor->textureSetSavedIdOrOffset = 0;
+        recordCursor->paletteAssetSavedIdOrOffset = 0;
+        break;
+      case RESOURCE_DOMAIN_EFFECT_RUNTIME:
+        payloadOffset = payloadOffset - Thandor_PointerToI32(g_EffectRuntimeRebaseBaseMinusOne); /* 32-bit format field: ResourceRegistrationRecordSavedView.runtimePayloadSavedOffset */
+        recordCursor->textureSetSavedIdOrOffset = 0;
+        recordCursor->paletteAssetSavedIdOrOffset = 0;
+      }
+      recordCursor->runtimePayloadSavedOffset = payloadOffset;
+      /* the sprite asset pointer is replaced by the asset's registry id */
+      recordCursor->spriteAssetSavedIdOrOffset =
+           Thandor_U32ToPointer<SpriteAssetHeader>(recordCursor->spriteAssetSavedIdOrOffset)->registryHeader.registryId; /* 32-bit format field: ResourceRegistrationRecordSavedView.spriteAssetSavedIdOrOffset */
+    }
+    recordCursor = recordCursor + 1;
+    recordsRemaining--;
+  } while (recordsRemaining != 0);
+  tailRecord = runtimeImage->tailRecord;
+  records = runtimeImage->records;
+  if (tailRecord != nullptr) {
+    tailRecord = Thandor_U32ToPointer<ResourceRegistrationRecord>(Thandor_PointerToI32(tailRecord) - Thandor_PointerToI32(g_RuntimeObjectRebaseBaseMinusOne)); /* 32-bit format field: ResourceRegistrationImage.tailRecord (saved offset) */
+  }
+  recordCount = runtimeImage->recordCount;
+  /* the saved tail-record offset goes into the last dword of the image (record array + size - 4) */
+  records[recordCount - 1].nestedSavedOffsets[12] = Thandor_PointerToU32(tailRecord); /* 32-bit format field: ResourceRegistrationRecordSavedView.nestedSavedOffsets[12] (saved tail record) */
+  return ((uint64_t)(uint32_t)reinterpret_cast<uintptr_t>(records) << 32) |
+         (uint32_t)(recordCount * sizeof(ResourceRegistrationRecordSavedView));
+}
+
+/* Save-game preparation of the faction runtime image (the "daten.hex" entry): for each of the 8 faction
+   records the army asset pointers are replaced by the asset ids (registryId of each asset) and the 8x32 group member
+   pointers by saved army-slot offsets. Returns the image with its byte size 0x3A20 for Package_UpsertEntry;
+   GameFactionRuntime_RebaseLoadedArmyReferences undoes it. Called directly by the save-game writer
+   InGameSaveGame_WritePackage.
+   Return value: (base << 32) | byteSize.
+*/
+ResourceRegistrationImagePair InGameSaveGame_PrepareFactionImage()
+
+{
+  ArmyRuntimeSlot *runtimeMember;
+  int factionIndex;
+  FactionArmyAssetCount armyAssetPointersRemaining;
+  FactionArmyAssetCount primaryArmyAssetPointersRemaining;
+  int memberIndex;
+  GameFactionRuntimeRecord *factionRecord;
+  uint32_t *armyAssetPointerCursor;
+  uint32_t *primaryArmyAssetPointerCursor;
+  Ptr32<ArmyRuntimeSlot> *runtimeMembers;
+
+  for (factionIndex = 0; factionIndex < 8; factionIndex++) {
+    factionRecord = &g_GameFactionRuntimeImage.records[factionIndex];
+    armyAssetPointerCursor = factionRecord->secondaryArmyAssetPointersOrIds;
+    for (armyAssetPointersRemaining = factionRecord->secondaryArmyAssetCount;
+        armyAssetPointersRemaining != 0; armyAssetPointersRemaining--) {
+      *armyAssetPointerCursor = Thandor_U32ToPointer<ArmyAssetRecordPrefix>(*armyAssetPointerCursor)->registryId; /* 32-bit format field: GameFactionRuntimeRecord.secondaryArmyAssetPointersOrIds */
+      armyAssetPointerCursor = armyAssetPointerCursor + 1;
+    }
+    primaryArmyAssetPointerCursor = factionRecord->primaryArmyAssetPointersOrIds;
+    for (primaryArmyAssetPointersRemaining = factionRecord->primaryArmyAssetCount;
+        primaryArmyAssetPointersRemaining != 0; primaryArmyAssetPointersRemaining--) {
+      *primaryArmyAssetPointerCursor = Thandor_U32ToPointer<ArmyAssetRecordPrefix>(*primaryArmyAssetPointerCursor)->registryId; /* 32-bit format field: GameFactionRuntimeRecord.primaryArmyAssetPointersOrIds */
+      primaryArmyAssetPointerCursor = primaryArmyAssetPointerCursor + 1;
+    }
+    /* the 8x32 group member pointers become saved army-slot offsets (0 stays 0) */
+    runtimeMembers = factionRecord->runtimeGroupMembers8x32;
+    for (memberIndex = 0; memberIndex < 256; memberIndex++) {
+      runtimeMember = runtimeMembers[memberIndex];
+      if (runtimeMember != nullptr) {
+        runtimeMember =
+             Thandor_U32ToPointer<ArmyRuntimeSlot>(Thandor_PointerToI32(runtimeMember) - Thandor_PointerToI32(g_ArmyRuntimeRebaseBaseMinusOne)); /* 32-bit format field: GameFactionRuntimeRecord.runtimeGroupMembers8x32 */
+      }
+      runtimeMembers[memberIndex] = runtimeMember;
+    }
+  }
+  return ((uint64_t)(uint32_t)reinterpret_cast<uintptr_t>(&g_GameFactionRuntimeImage) << 32) |
+         sizeof(GameFactionRuntimeImage);
+}
+
+/* Save-game preparation of the 0x1000 effect runtime slots (the "effect.hex" entry): in every used slot the
+   model node and owner pointers become saved offsets (the owner is a model node or an army slot depending on
+   the completion action) and the definition pointer becomes the definition id; free slots are zeroed.
+   Returns the slot array with its byte size 0x40000; EffectRuntime_RebaseSlotsAfterLoad undoes it. Called
+   directly by the save-game writer InGameSaveGame_WritePackage.
+   Return value: (base << 32) | byteSize.
+*/
+ResourceRegistrationImagePair InGameSaveGame_PrepareEffectSlots()
+
+{
+  EffectRuntimeCompletionAction slotCompletionAction;
+  EffectDefinitionReferenceOrSavedId serializedDefinitionId;
+  int slotIndex;
+  int wordIndex;
+  ModelRuntimeNode *ownerModelNode;
+  EffectRuntimeSlot *slot;
+  uint32_t *slotWords;
+
+  for (slotIndex = 0; slotIndex < EFFECT_RUNTIME_SLOT_COUNT; slotIndex++) {
+    slot = g_EffectRuntimeSlots + slotIndex;
+    if (slot->modelNodeOrSavedOffset.modelNode == nullptr) {
+      /* free slot: zero its 0x10 dwords */
+      slotWords = SaveImage_Dwords(slot);
+      for (wordIndex = 0; wordIndex < 16; wordIndex++) {
+        slotWords[wordIndex] = 0;
+      }
+      if (slotIndex == EFFECT_RUNTIME_SLOT_COUNT - 1) {
+        /* Original quirk: slot 0's effectAgeTicks is inverted only on this exit (last slot free);
+           EffectRuntime_RebaseSlotsAfterLoad inverts it on every load */
+        g_EffectRuntimeSlots->effectAgeTicks = ~g_EffectRuntimeSlots->effectAgeTicks;
+      }
+      continue;
+    }
+    slotCompletionAction = slot->completionAction;
+    ownerModelNode = slot->lifecycleOwnerAndDefinition.ownerAndDefinition.owner.modelNode;
+    if (ownerModelNode != nullptr) {
+      if (slotCompletionAction == EFFECT_RUNTIME_COMPLETION_DESTROY_MODEL_HIERARCHY) {
+        ownerModelNode = reinterpret_cast<ModelRuntimeNode *>(Thandor_PointerToI32(ownerModelNode) - g_ModelRuntimeRebaseDelta); /* 32-bit format field: EffectRuntimeSlot.lifecycleOwnerAndDefinition.owner */
+      }
+      else if (slotCompletionAction == EFFECT_RUNTIME_COMPLETION_SPAWN_ARMY_FROM_MODEL) {
+        ownerModelNode =
+             Thandor_U32ToPointer<ModelRuntimeNode>(Thandor_PointerToI32(ownerModelNode) - Thandor_PointerToI32(g_ArmyRuntimeRebaseBaseMinusOne)); /* 32-bit format field: EffectRuntimeSlot.lifecycleOwnerAndDefinition.owner */
+      }
+    }
+    slot->modelNodeOrSavedOffset.modelNode =
+         Thandor_U32ToPointer<ModelRuntimeNode>(
+         Thandor_PointerToI32(slot->modelNodeOrSavedOffset.modelNode) - Thandor_PointerToI32(g_RuntimeObjectRebaseBaseMinusOne)); /* 32-bit format field: EffectRuntimeSlot.modelNodeOrSavedOffset */
+    serializedDefinitionId.savedId = slot->definitionOrSavedId.definition->definitionId;
+    slot->lifecycleOwnerAndDefinition.ownerAndDefinition.owner.modelNode = ownerModelNode;
+    slot->definitionOrSavedId = serializedDefinitionId;
+  }
+  return ((uint64_t)(uint32_t)reinterpret_cast<uintptr_t>(g_EffectRuntimeSlots) << 32) |
+         (EFFECT_RUNTIME_SLOT_COUNT * sizeof(EffectRuntimeSlot));
+}
+
+/* Save-game preparation of the 0x1000 shot runtime slots (the "shot.hex" entry): in every used slot the model
+   node, runtime state and owner army pointers become saved offsets and the definition pointer becomes the
+   definition id; free slots are zeroed. Returns the slot array with its byte size 0x40000;
+   ShotRuntime_RebaseSlotsAfterLoad undoes it. Called directly by the save-game writer
+   InGameSaveGame_WritePackage.
+   Return value: (base << 32) | byteSize.
+*/
+ResourceRegistrationImagePair InGameSaveGame_PrepareShotSlots()
+
+{
+  ShotDefinitionReferenceOrSavedId serializedDefinitionId;
+  void *runtimeStateRef;
+  int slotIndex;
+  int wordIndex;
+  ArmyRuntimeSlot *ownerArmyRuntime;
+  ShotRuntimeSlot *slot;
+  uint32_t *slotWords;
+  uint32_t *terminalToggleField;
+
+  for (slotIndex = 0; slotIndex < SHOT_RUNTIME_SLOT_COUNT; slotIndex++) {
+    slot = g_ShotRuntimeSlots + slotIndex;
+    if (slot->modelNodeOrSavedOffset.modelNode == nullptr) {
+      /* free slot: zero its 0x10 dwords */
+      slotWords = SaveImage_Dwords(slot);
+      for (wordIndex = 0; wordIndex < 16; wordIndex++) {
+        slotWords[wordIndex] = 0;
+      }
+      if (slotIndex == SHOT_RUNTIME_SLOT_COUNT - 1) {
+        /* Original quirk: slot 0's secondaryEffectCountdownTicks is inverted only on this exit (last slot free);
+           ShotRuntime_RebaseSlotsAfterLoad inverts it on every load */
+        terminalToggleField =
+             &g_ShotRuntimeSlots->ownerAndTrajectory.secondaryEffectCountdownTicks;
+        *terminalToggleField = ~*terminalToggleField;
+      }
+      continue;
+    }
+    runtimeStateRef = slot->runtimeStateOrSavedOffset.runtimeStatePointer;
+    ownerArmyRuntime = slot->ownerAndTrajectory.ownerArmyRuntime;
+    if (runtimeStateRef != nullptr) {
+      runtimeStateRef = reinterpret_cast<void *>(Thandor_PointerToI32(runtimeStateRef) - g_ModelRuntimeRebaseDelta); /* 32-bit format field: ShotRuntimeSlot.runtimeStateOrSavedOffset */
+    }
+    if (ownerArmyRuntime != nullptr) {
+      ownerArmyRuntime =
+           Thandor_U32ToPointer<ArmyRuntimeSlot>(Thandor_PointerToI32(ownerArmyRuntime) - Thandor_PointerToI32(g_ArmyRuntimeRebaseBaseMinusOne)); /* 32-bit format field: ShotRuntimeSlot.ownerAndTrajectory.ownerArmyRuntime */
+    }
+    slot->modelNodeOrSavedOffset.modelNode =
+         Thandor_U32ToPointer<ModelRuntimeNode>(
+         Thandor_PointerToI32(slot->modelNodeOrSavedOffset.modelNode) - Thandor_PointerToI32(g_RuntimeObjectRebaseBaseMinusOne)); /* 32-bit format field: ShotRuntimeSlot.modelNodeOrSavedOffset */
+    slot->runtimeStateOrSavedOffset.runtimeStatePointer = runtimeStateRef;
+    serializedDefinitionId.savedId = slot->definitionOrSavedId.definition->definitionId;
+    slot->ownerAndTrajectory.ownerArmyRuntime = ownerArmyRuntime;
+    slot->definitionOrSavedId = serializedDefinitionId;
+  }
+  return ((uint64_t)(uint32_t)reinterpret_cast<uintptr_t>(g_ShotRuntimeSlots) << 32) | SHOT_RUNTIME_POOL_BYTES;
+}
+
+/* Before the level image is saved: stores the current camera (orientation as magnitude plus packed
+   heading/pitch, and position) into the start-camera fields of the level player slot selected by
+   runtimeImage->factionAssignmentIndex, so a loaded game starts with the camera where it was.
+   Called directly by the save-game writer InGameSaveGame_WritePackage.
+*/
+
+void InGameSaveGame_StoreCameraAsPlayerStart(ResourceRegistrationRuntimeImage *runtimeImage)
+
+{
+  LevelPlayerSlotByteOffset32 playerSlotByteOffset;
+  InGameLevelConditionStorage *levelConditionStorage;
+  WorldCameraOrientation cameraOrientation;
+  WorldCameraPosition cameraPosition;
+  LevelPlayerSlotRecord *playerSlot;
+  
+  levelConditionStorage = g_InGameLevelRuntimeGlobalBlock.conditionStorage;
+  playerSlotByteOffset = g_InGameLevelRuntimeGlobalBlock.playerSlotByteOffsets
+          [runtimeImage->factionAssignmentIndex - 1];
+  cameraOrientation = WorldRuntime_GetCameraOrientation(reinterpret_cast<WorldRuntimeContext *>(runtimeImage));
+  playerSlot = Asset_RecordAt<LevelPlayerSlotRecord>(levelConditionStorage->levelImage.playerSlots,playerSlotByteOffset);
+  playerSlot->startCameraMagnitudeQ12 = cameraOrientation.magnitudeQ12;
+  playerSlot->packedHeadingLow16PitchHigh16 =
+       cameraOrientation.headingAngle & FIXED_ANGLE16_MASK | cameraOrientation.pitchAngle << 16;
+  cameraPosition = WorldRuntime_GetCameraPosition(reinterpret_cast<WorldRuntimeContext *>(runtimeImage));
+  playerSlot->startCameraXQ12 = cameraPosition.xQ12;
+  playerSlot->startCameraYQ12 = cameraPosition.yQ12;
+  playerSlot->startCameraZQ12 = cameraPosition.zQ12;
+}
+
+/* Savegame writing (called by the in-game save in ui/ingame/runtime): turns the four pointers of every used
+   army slot (model runtime, model node, command target, assigned target) into offsets and zeroes the unused
+   slots, so the pool can be written as it is (the caller then writes g_ArmyRuntimeSlots,
+   ARMY_RUNTIME_SLOT_COUNT slots); ArmyRuntimePool_RebaseAfterLoad is the counterpart.
+*/
+void ArmyRuntimePool_ConvertPointersToOffsetsForSave()
+
+{
+  uint32_t assignedTargetOffset;
+  ModelRuntimeSlot *savedModelRuntimeOffset;
+  ArmyRuntimeSlot *savedTargetOffset;
+  ArmyRuntimeSlot *slot;
+  uint32_t *slotWords;
+  int slotIndex;
+  int wordIndex;
+
+  for (slotIndex = 0; slotIndex < ARMY_RUNTIME_SLOT_COUNT; slotIndex++) {
+    slot = &g_ArmyRuntimeSlots[slotIndex];
+    if (slot->modelNodeRuntime == nullptr) {
+      /* an unused slot is zeroed dword by dword */
+      slotWords = SaveImage_Dwords(slot);
+      for (wordIndex = 0; wordIndex < (int)(sizeof(ArmyRuntimeSlot) / 4); wordIndex++) {
+        slotWords[wordIndex] = 0;
+      }
+      continue;
+    }
+    savedModelRuntimeOffset = reinterpret_cast<ModelRuntimeSlot *> /* 32-bit format field: ArmyRuntimeSlot.modelRuntimeOrSavedOffset (army.hex) */
+             ((int)(slot->modelRuntimeOrSavedOffset).modelRuntime - g_ModelRuntimeRebaseDelta);
+    savedTargetOffset = slot->commandTargetArmyRuntime;
+    if (savedTargetOffset != nullptr) {
+      savedTargetOffset = Thandor_U32ToPointer<ArmyRuntimeSlot>(Thandor_PointerToI32(savedTargetOffset) - Thandor_PointerToI32(g_ArmyRuntimeRebaseBaseMinusOne)); /* 32-bit format field: ArmyRuntimeSlot.commandTargetArmyRuntime (army.hex) */
+    }
+    slot->modelNodeRuntime = /* 32-bit format field: ArmyRuntimeSlot.modelNodeRuntime (army.hex) */
+         Thandor_U32ToPointer<ModelRuntimeNode>(Thandor_PointerToI32(slot->modelNodeRuntime) - Thandor_PointerToI32(g_RuntimeObjectRebaseBaseMinusOne));
+    assignedTargetOffset = slot->assignedTargetArmyRuntime;
+    (slot->modelRuntimeOrSavedOffset).modelRuntime = savedModelRuntimeOffset;
+    if (assignedTargetOffset != 0) {
+      assignedTargetOffset = assignedTargetOffset - Thandor_PointerToI32(g_ArmyRuntimeRebaseBaseMinusOne); /* 32-bit format field: ArmyRuntimeSlot.assignedTargetArmyRuntime (army.hex) */
+    }
+    slot->commandTargetArmyRuntime = savedTargetOffset;
+    slot->assignedTargetArmyRuntime = assignedTargetOffset;
+  }
+}
+
+/* Pre-serializer provider of the light.hex save segment (called by
+   InGameSaveGame_WritePackage): returns the shading runtime records and their byte
+   size 0x4000, and inverts serializationToggleDword of record 0 so the saved image carries the
+   inverted value; RuntimeHexSegment_ToggleLightImageFlag inverts it back after saving.
+*/
+RuntimeHexSegmentImage RuntimeHexSegment_GetLightImageAndToggleFlag()
+
+{
+  RuntimeHexSegmentImage segment;
+
+  g_GraphicsShadingRuntimeRecords[0].serializationToggleDword =
+       ~g_GraphicsShadingRuntimeRecords[0].serializationToggleDword;
+  segment.image = SaveImage_Dwords(g_GraphicsShadingRuntimeRecords);
+  segment.byteSize = sizeof(g_GraphicsShadingRuntimeRecords);
+  return segment;
+}
+
+/* Post-serializer hook of the light.hex save segment: inverts serializationToggleDword of shading record 0
+   back (RuntimeHexSegment_GetLightImageAndToggleFlag inverted it before), so the saved image carries the
+   inverted value while the live one is unchanged. The caller keeps the serializer flags.
+*/
+void RuntimeHexSegment_ToggleLightImageFlag()
+
+{
+  g_GraphicsShadingRuntimeRecords[0].serializationToggleDword =
+       ~g_GraphicsShadingRuntimeRecords[0].serializationToggleDword;
+}
+
+/* Pre-serializer provider of the field.hex save segment (called by
+   InGameSaveGame_WritePackage): returns the attached field grid (fieldGridAsset) and its whole
+   allocation size (common.allocationSizeBytes), so the field image is saved as one block.
+*/
+RuntimeHexSegmentImage RuntimeHexSegment_GetFieldImage(InGameFieldImageSaveContext58 *fieldImageContext)
+
+{
+  RuntimeHexSegmentImage segment;
+
+  segment.image = static_cast<uint32_t *>(fieldImageContext->fieldGridAsset); /* the field image as dwords */
+  segment.byteSize = (uint32_t)(fieldImageContext->fieldGridAsset->common).allocationSizeBytes;
+  return segment;
+}
+
+/* Post-serializer hook of the field.hex save segment (called by InGameSaveGame_WritePackage):
+   does nothing; the field image needs no restoring after saving. The caller keeps the serializer flags.
+*/
+void RuntimeHexSegment_AfterFieldImageNoOp(InGameFieldImageSaveContext58 *fieldImageContext)
+
+{
+}

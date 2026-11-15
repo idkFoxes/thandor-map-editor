@@ -1,3 +1,4 @@
+#include "editor_strings.hpp"
 #include "thandor/retail_contact.hpp"
 #include "thandor/retail_random.hpp"
 #include "simulation_lab_selected_residency.hpp"
@@ -62,6 +63,42 @@
 
 namespace editor {
 namespace {
+std::string stock_map_label(const thandor::MapAssetGroup& group) {
+    const auto& title = editor_text_country() == 49U ? group.game_title_de : group.game_title_en;
+    if (title.empty() || title == group.display_name) return group.display_name;
+    return title + " · " + group.display_name;
+}
+bool select_stock_map_row(const char* label, std::size_t index, bool selected) {
+    ImGui::PushID(static_cast<int>(index));
+    const bool chosen = ImGui::Selectable(label, selected);
+    if (selected) {
+        ImGui::SetItemDefaultFocus();
+        if (ImGui::IsWindowAppearing()) ImGui::SetScrollHereY(0.5F);
+    }
+    ImGui::PopID();
+    return chosen;
+}
+
+void stock_map_combo(const char* label, int& selection, std::span<const thandor::MapAssetGroup> groups,
+                     const char* extra_label = nullptr) {
+    if (groups.empty()) return;
+    selection = std::clamp(selection, 0, static_cast<int>(groups.size()) - (extra_label ? 0 : 1));
+    const auto selected_index = static_cast<std::size_t>(selection);
+    const auto preview = selected_index < groups.size() ? stock_map_label(groups[selected_index]) : extra_label;
+    if (!ImGui::BeginCombo(label, preview.c_str(), ImGuiComboFlags_HeightLarge)) return;
+    for (std::size_t i = 0; i < groups.size(); ++i)
+        if (select_stock_map_row(stock_map_label(groups[i]).c_str(), i, i == selected_index))
+            selection = static_cast<int>(i);
+    if (extra_label && select_stock_map_row(extra_label, groups.size(), groups.size() == selected_index))
+        selection = static_cast<int>(groups.size());
+    ImGui::EndCombo();
+}
+std::string asset_display_name(const thandor::ArmyAssetPreset& preset) {
+    if (editor_text_country() == 49U && !preset.localized_name.empty() && !preset.localized_name_de.empty() &&
+        preset.display_name.starts_with(preset.localized_name))
+        return preset.localized_name_de + preset.display_name.substr(preset.localized_name.size());
+    return tr(preset.display_name.c_str());
+}
 constexpr float kStatusBarHeight = 24.0F;
 constexpr float kAssetCardWidth = 150.0F;
 constexpr float kAssetCardHeight = 196.0F;
@@ -304,9 +341,9 @@ ImVec4 graphics_family_ui_text_color(uint32_t graphics_family) noexcept {
 
 std::string faction_single_player_label(uint32_t faction_index, uint32_t graphics_family,
                                         bool include_debug_family = true) {
-    if (faction_index == 0U) return "Neutral / map-owned";
+    if (faction_index == 0U) return tr("Neutral / map-owned");
     std::string label=thandor::graphics_family_single_player_faction_name(graphics_family);
-    label += " · Faction " + std::to_string(faction_index);
+    label += tr(" · Faction ") + std::to_string(faction_index);
     if (graphics_family == 8U) label += " [mission-only AI colour]";
     if (include_debug_family) label += " (army" + std::to_string(graphics_family) + ")";
     return label;
@@ -424,7 +461,30 @@ struct ModelHierarchyInstance {
     const thandor::SpriteAsset* sprite{};
     ModelHierarchyTransform transform{};
     bool root{};
+    uint64_t native_path{};
+    const thandor::SimulationLabNativeModelPose* native_pose{};
 };
+
+static void use_native_model_pose(ModelHierarchyInstance& instance,
+                                  const thandor::ModelVisualNode& node,
+                                  std::span<const ModelHierarchyInstance> parents,
+                                  const thandor::SimulationLabEntity* entity,
+                                  bool& active) {
+    if (!entity || entity->native_model_poses.empty()) return;
+    if (instance.root) instance.native_path = 1;
+    else if (node.parent_index < parents.size() && node.child_slot < 13 &&
+             parents[node.parent_index].native_path <= (UINT64_MAX >> 4)) {
+        const auto path = parents[node.parent_index].native_path;
+        if (path) instance.native_path = (path << 4) | node.child_slot;
+    }
+    const auto match = std::find_if(entity->native_model_poses.begin(), entity->native_model_poses.end(),
+        [&](const auto& pose) { return pose.child_path == instance.native_path; });
+    active = match != entity->native_model_poses.end() && !node.sprite_path.empty();
+    if (active) {
+        instance.native_pose = &*match;
+        instance.transform = {match->pose.basis, match->pose.position};
+    }
+}
 
 void record_render_receipt_geometry(SimulationLabRenderReceipt& receipt,
     std::span<const ObjectVertex> vertices,std::span<const uint32_t> indices,
@@ -469,7 +529,7 @@ bool apply_walker_pose_to_instances(const thandor::ArmyAssetPreset& preset,
     return true;
 }
 
-const char* tool_name(Tool tool){switch(tool){case Tool::Select:return "Select";case Tool::Raise:return "Raise";case Tool::Lower:return "Lower";case Tool::Smooth:return "Smooth";case Tool::Flatten:return "Flatten";case Tool::Water:return "Water";case Tool::ResourceField:return "Resource field";case Tool::Texture:return "Texture";case Tool::Resource:return "Resource";case Tool::PlayerStart:return "Player start";case Tool::EffectScenery:return "Effect / scenery";case Tool::SimulationTarget:return "Simulation target";case Tool::SimulationMove:return "Drive selected unit";case Tool::GenerateTerrain:return "Generate terrain";}return "Tool";}
+const char* tool_name(Tool tool){switch(tool){case Tool::Select:return tr("Select");case Tool::Raise:return tr("Raise");case Tool::Lower:return tr("Lower");case Tool::Smooth:return tr("Smooth");case Tool::Flatten:return tr("Flatten");case Tool::Water:return tr("Water");case Tool::ResourceField:return tr("Resource field");case Tool::Texture:return tr("Texture");case Tool::Resource:return tr("Resource");case Tool::PlayerStart:return tr("Player start");case Tool::EffectScenery:return tr("Effect / scenery");case Tool::SimulationTarget:return tr("Simulation target");case Tool::SimulationMove:return tr("Drive selected unit");case Tool::GenerateTerrain:return tr("Generate terrain");}return tr("Tool");}
 ImVec4 argb_to_imgui(uint32_t value){auto c=thandor::unpack_argb(value);return {c.r,c.g,c.b,c.a};}
 uint32_t imgui_to_argb(ImVec4 c){return thandor::pack_argb({c.x,c.y,c.z,c.w});}
 bool contains_ci(std::string_view text,std::string_view filter){if(filter.empty())return true;auto lower=[](char c){return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));};for(std::size_t i=0;i+filter.size()<=text.size();++i){bool same=true;for(std::size_t j=0;j<filter.size();++j)if(lower(text[i+j])!=lower(filter[j])){same=false;break;}if(same)return true;}return false;}
@@ -490,22 +550,22 @@ void show_item_tooltip(std::string_view text,float preferred_max_width=420.0F){
 const char* scheduled_condition_kind_name(thandor::LevelScheduledConditionKind kind){
     using K=thandor::LevelScheduledConditionKind;
     switch(kind){
-    case K::NoneOrUnused:return "None / unused";
-    case K::NoActiveEntityWithDefinition:return "Faction has no linked army";
-    case K::NoActiveEntityWithDefinitionAndClassCommandGroupA:return "Faction has no command-group-A army";
-    case K::NoActiveEntityWithDefinitionAndRuntimeId:return "Faction has no army of asset";
-    case K::FactionInactiveOrRelationAtLeast8:return "Faction inactive OR relation >= 8";
-    case K::XeniteCurrentAtLeast:return "Faction Xenite current >= threshold";
-    case K::TritiumCurrentAtLeast:return "Faction Tritium current >= threshold";
-    case K::ActiveArmyScaleValueAtLeast:return "Faction Tritium extraction rate Q4/tick >= threshold";
-    case K::MatchingDefinitionAndRuntimeIdActiveEntityCountAtLeast:return "Faction army asset count >= threshold";
-    case K::FactionTerrainOccupancyPercentAtLeast:return "Faction terrain occupancy percent >= threshold";
-    case K::CountdownElapsed:return "Countdown elapsed";
-    case K::XeniteStorageLimitAtMost0FA0:return "Faction Xenite storage limit <= 0xFA0";
-    case K::NoActiveEntityWithClassIdOutsideClassCommandGroupA:return "No active entity of class outside command group A";
-    case K::BooleanPostfixExpression:return "Boolean postfix expression";
+    case K::NoneOrUnused:return tr("None / unused");
+    case K::NoActiveEntityWithDefinition:return tr("Faction has no linked army");
+    case K::NoActiveEntityWithDefinitionAndClassCommandGroupA:return tr("Faction has no command-group-A army");
+    case K::NoActiveEntityWithDefinitionAndRuntimeId:return tr("Faction has no army of asset");
+    case K::FactionInactiveOrRelationAtLeast8:return tr("Faction inactive OR relation >= 8");
+    case K::XeniteCurrentAtLeast:return tr("Faction Xenite current >= threshold");
+    case K::TritiumCurrentAtLeast:return tr("Faction Tritium current >= threshold");
+    case K::ActiveArmyScaleValueAtLeast:return tr("Faction Tritium extraction rate Q4/tick >= threshold");
+    case K::MatchingDefinitionAndRuntimeIdActiveEntityCountAtLeast:return tr("Faction army asset count >= threshold");
+    case K::FactionTerrainOccupancyPercentAtLeast:return tr("Faction terrain occupancy percent >= threshold");
+    case K::CountdownElapsed:return tr("Countdown elapsed");
+    case K::XeniteStorageLimitAtMost0FA0:return tr("Faction Xenite storage limit <= 0xFA0");
+    case K::NoActiveEntityWithClassIdOutsideClassCommandGroupA:return tr("No active entity of class outside command group A");
+    case K::BooleanPostfixExpression:return tr("Boolean postfix expression");
     }
-    return "Unknown";
+    return tr("Unknown");
 }
 
 std::string format_condition_expression(const thandor::LevelScheduledCondition& condition){
@@ -533,7 +593,7 @@ std::string terrain_material_path(std::string_view base,uint32_t material){
 }
 std::string army_texture_family_path(std::string_view base,uint32_t faction,std::string_view extension){
     std::string normalized=terrain_base_path(base);
-    if(normalized.empty())throw std::runtime_error("LEV army texture path is empty");
+    if(normalized.empty())throw std::runtime_error(tr("LEV army texture path is empty"));
     return normalized+std::to_string(std::min(faction,8U))+std::string(extension);
 }
 
@@ -607,7 +667,7 @@ void order_dynamic_object_queue_like_game(
     for(const auto& run:runs){
         if(run.index_count==0U||run.index_count%3U!=0U||
            run.first_index>indices.size()||run.index_count>indices.size()-run.first_index)
-            throw std::runtime_error("dynamic object draw run is not triangle aligned");
+            throw std::runtime_error(tr("dynamic object draw run is not triangle aligned"));
         if(run.blend==PrimitiveBlendPreset::OpaqueDepthWrite){
             append_packet(run.blend,run.two_sided,run.sort_group,run.retail_world_pass,
                 std::span<const uint32_t>(indices).subspan(run.first_index,run.index_count));
@@ -625,7 +685,7 @@ void order_dynamic_object_queue_like_game(
                 run.first_index,run.index_count);
             Vec3f centroid{};
             for(const uint32_t index:packet.indices){
-                if(index>=vertices.size())throw std::runtime_error("dynamic object queue index exceeds vertex stream");
+                if(index>=vertices.size())throw std::runtime_error(tr("dynamic object queue index exceeds vertex stream"));
                 centroid=add(centroid,vertices[index].position);
             }
             centroid=mul(centroid,1.0F/static_cast<float>(packet.indices.size()));
@@ -645,7 +705,7 @@ void order_dynamic_object_queue_like_game(
             packet.source_order=source_order;
             Vec3f centroid{};
             for(const uint32_t index:packet.indices){
-                if(index>=vertices.size())throw std::runtime_error("dynamic object queue index exceeds vertex stream");
+                if(index>=vertices.size())throw std::runtime_error(tr("dynamic object queue index exceeds vertex stream"));
                 centroid=add(centroid,vertices[index].position);
             }
             centroid=mul(centroid,1.0F/3.0F);
@@ -712,26 +772,27 @@ EditorApp::EditorApp(GLFWwindow* window,VulkanContext& vulkan,std::filesystem::p
                 if(!pcx_path.empty()){
                     local_player_texture_override_=thandor::render_retail_frontend_player_texture(
                         thandor::decode_frontend_player_pcx64(thandor::read_file(pcx_path)));
-                    local_player_texture_override_status_="Retail local-player PCX: "+pcx_path.filename().string();
+                    local_player_texture_override_status_=tr("Retail local-player PCX: ")+pcx_path.filename().string();
                 }else{
-                    local_player_texture_override_status_="Retail local-player PCX not found: "+requested;
+                    local_player_texture_override_status_=tr("Retail local-player PCX not found: ")+requested;
                 }
-            }else local_player_texture_override_status_="thandor.dat has no persisted local player name";
-        }else local_player_texture_override_status_="thandor.dat not found; stock army textures are unchanged";
+            }else local_player_texture_override_status_=tr("thandor.dat has no persisted local player name");
+        }else local_player_texture_override_status_=tr("thandor.dat not found; stock army textures are unchanged");
     } catch(const std::exception& error){
         // Retail treats a missing/invalid PCX as a failed optional snapshot and keeps the loaded
         // army graphics package unchanged. Match that non-fatal behavior but keep the reason visible.
         local_player_texture_override_.reset();
-        local_player_texture_override_status_=std::string("Local-player PCX ignored: ")+error.what();
+        local_player_texture_override_status_=std::string(tr("Local-player PCX ignored: "))+error.what();
     }
-    if(catalog_.map_groups().empty())throw std::runtime_error("no paired LEV/FLD maps were found in the game PCK archives");
+    if(catalog_.map_groups().empty())throw std::runtime_error(tr("no paired LEV/FLD maps were found in the game PCK archives"));
     refresh_custom_maps();
-    load_scenario_catalog_labels();
     template_group_=0;
     user_settings_path_=editor_user_settings_path(application_directory());
     EditorUserSettings defaults;
     defaults.simulation_lab=simulation_lab_config_;
     const auto preferences=editor_user_settings_read(user_settings_path_,std::move(defaults));
+    set_editor_language(preferences.language, executable_directory());
+    load_scenario_catalog_labels();
     simulation_lab_config_=preferences.simulation_lab;
     if(ai_knowledge_){
         try{
@@ -770,9 +831,9 @@ EditorApp::EditorApp(GLFWwindow* window,VulkanContext& vulkan,std::filesystem::p
     }
     if(!reopened)load_map(0);
     user_settings_restoring_=false;
-    if(reopened)status_="Restored last map: "+document_->display_name();
-    else status_="Loaded "+document_->display_name()+(preferences.last_map_value.empty()?"":
-        "; previously opened map unavailable, using first stock map");
+    if(reopened)status_=tr("Restored last map: ")+document_->display_name();
+    else status_=tr("Loaded ")+document_->display_name()+(preferences.last_map_value.empty()?"":
+        tr("; previously opened map unavailable, using first stock map"));
     // Don't rewrite the INI just because the editor started. Changes flush on
     // a short debounce, plus at orderly shutdown.
     std::error_code preferences_error;
@@ -880,6 +941,7 @@ EditorUserSettings EditorApp::collect_user_settings() const{
     settings.logging_enabled=logging_enabled_;
     settings.ui_scale_percent=ui_scale_percent_;
     settings.ai_profile=ai_profiles_.use_custom?"custom":"default";
+    settings.language=editor_language();
     return settings;
 }
 
@@ -953,7 +1015,7 @@ void EditorApp::record_presented_frame(double now_seconds) noexcept {
     measured_present_fps_=elapsed>0.0
         ?static_cast<double>(measured_fps_presented_frames_)/elapsed:0.0;
     measured_present_frame_ms_=measured_present_fps_>0.0?1000.0/measured_present_fps_:0.0;
-    std::snprintf(measured_fps_label_,sizeof(measured_fps_label_),"%.1f FPS",measured_present_fps_);
+    std::snprintf(measured_fps_label_,sizeof(measured_fps_label_),tr("%.1f FPS"),measured_present_fps_);
     measured_fps_window_start_seconds_=now_seconds;
     measured_fps_presented_frames_=0U;
 }
@@ -990,7 +1052,13 @@ void EditorApp::frame(){
         retail_debug_draw_packet_accumulator_=0U;
     }
     {auto performance_update=editor_performance_log_.measure(EditorPerfStage::Update);
-    if(simulation_lab_active()) update_simulation_lab(presentation_time);
+    if (jandrenator_show_batch_) {
+        update_jandrenator_scene(presentation_time);
+        refresh_jandrenator_run_views(presentation_time);
+    }
+    if(simulation_lab_active()){
+        if(!jandrenator_scene_) update_simulation_lab(presentation_time);
+    }
     else update_simulation(current_presentation_tick_);
     if(simulation_lab_active()){
         const auto runs=simulation_lab_runs();
@@ -1158,23 +1226,28 @@ void EditorApp::draw_main_menu(){
         ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_MenuBar);
     if(!ImGui::BeginMenuBar()){ImGui::End();ImGui::PopStyleVar();return;}
     if(header.width>ui_px(1100.0F)){ImGui::TextColored({0.35F,0.71F,1.0F,1.0F},"THANDOR");
-        ImGui::SameLine();ImGui::TextUnformatted("Map Editor");ImGui::SameLine(0,ui_px(20)); }
-    if(ImGui::BeginMenu("File")){
-        if(ImGui::MenuItem("New map","Ctrl+N"))show_new_dialog_=true;
-        if(ImGui::BeginMenu("Open map")){
-            if(ImGui::BeginMenu("Stock maps (PCK)")){
-                for(std::size_t i=0;i<catalog_.map_groups().size();++i)
-                    if(ImGui::MenuItem(catalog_.map_groups()[i].display_name.c_str(),nullptr,
-                        current_stock_group_ && *current_stock_group_==i))load_map(i);
+        ImGui::SameLine();ImGui::TextUnformatted(tr("Map Editor"));ImGui::SameLine(0,ui_px(20)); }
+    if(ImGui::BeginMenu(tr_label("File"))){
+        if(ImGui::MenuItem(tr_label("New map"),tr("Ctrl+N")))show_new_dialog_=true;
+        if(ImGui::BeginMenu(tr_label("Open map"))){
+            if(ImGui::BeginMenu(tr_label("Stock maps (PCK)"))){
+                for(std::size_t i=0;i<catalog_.map_groups().size();++i){
+                    const bool selected=current_stock_group_==i;
+                    ImGui::PushID(static_cast<int>(i));
+                    const bool chosen=ImGui::MenuItem(stock_map_label(catalog_.map_groups()[i]).c_str(),nullptr,selected);
+                    if(selected&&ImGui::IsWindowAppearing())ImGui::SetScrollHereY(0.5F);
+                    ImGui::PopID();
+                    if(chosen)load_map(i);
+                }
                 ImGui::EndMenu();
             }
-            if(ImGui::BeginMenu("Custom maps")){
+            if(ImGui::BeginMenu(tr_label("Custom maps"))){
                 // Avoid a dependency on newer Dear ImGui APIs; the explicit Refresh
                 // option remains available after the initial directory discovery.
                 if(custom_maps_.empty())refresh_custom_maps();
-                if(ImGui::MenuItem("Refresh custom maps"))refresh_custom_maps();
+                if(ImGui::MenuItem(tr_label("Refresh custom maps")))refresh_custom_maps();
                 ImGui::Separator();
-                if(custom_maps_.empty())ImGui::TextDisabled("No .thmap or .lev files in maps/");
+                if(custom_maps_.empty())ImGui::TextDisabled(tr("No .thmap or .lev files in maps/"));
                 for(const auto& entry:custom_maps_){
                     if(ImGui::MenuItem(entry.label.c_str())){
                         if(!load_map_from_path(entry.path)){
@@ -1191,52 +1264,52 @@ void EditorApp::draw_main_menu(){
             }
             ImGui::EndMenu();
         }
-        if(ImGui::MenuItem("Load map or project...","Ctrl+O")){
+        if(ImGui::MenuItem(tr_label("Load map or project..."),tr("Ctrl+O"))){
             load_map_error_.clear();
             show_load_dialog_=true;
         }
-        if(ImGui::MenuItem("Save current stock map in place","Ctrl+S",false,current_stock_group_.has_value()))
+        if(ImGui::MenuItem(tr_label("Save current stock map in place"),tr("Ctrl+S"),false,current_stock_group_.has_value()))
             save_current_map();
-        if(ImGui::MenuItem("Save full map project",current_stock_group_.has_value()?nullptr:"Ctrl+S")){
+        if(ImGui::MenuItem(tr_label("Save full map project"),current_stock_group_.has_value()?nullptr:tr("Ctrl+S"))){
             if(current_project_path_.empty())show_save_dialog_=true;
             else save_project(current_project_path_);
         }
-        if(ImGui::MenuItem("Save full map project as..."))show_save_dialog_=true;
+        if(ImGui::MenuItem(tr_label("Save full map project as...")))show_save_dialog_=true;
         ImGui::Separator();
-        if(ImGui::MenuItem("Export loose complete map")){
-            try{document_->export_loose(catalog_.game_root()/"ThandorMapEditor"/"loose");status_="Exported LEV, FLD, and custom terrain assets.";}
+        if(ImGui::MenuItem(tr_label("Export loose complete map"))){
+            try{document_->export_loose(catalog_.game_root()/"ThandorMapEditor"/"loose");status_=tr("Exported LEV, FLD, and custom terrain assets.");}
             catch(const std::exception& e){status_=e.what();}
         }
-        if(ImGui::MenuItem("Install/repair game level package","Ctrl+E"))export_game_level_package();
-        if(ImGui::IsItemHovered())show_item_tooltip("Writes levelNN.pck and updates PATCH00.PCK in the game folder. The Export panel controls backups for both archives.");
-        if(ImGui::MenuItem("Update PATCH00.PCK overrides"))update_patch00_overrides();
-        if(ImGui::MenuItem("Quit"))glfwSetWindowShouldClose(window_,GLFW_TRUE);
+        if(ImGui::MenuItem(tr_label("Install/repair game level package"),tr("Ctrl+E")))export_game_level_package();
+        if(ImGui::IsItemHovered())show_item_tooltip(tr("Writes levelNN.pck and updates PATCH00.PCK in the game folder. The Export panel controls backups for both archives."));
+        if(ImGui::MenuItem(tr_label("Update PATCH00.PCK overrides")))update_patch00_overrides();
+        if(ImGui::MenuItem(tr_label("Quit")))glfwSetWindowShouldClose(window_,GLFW_TRUE);
         ImGui::EndMenu();
     }
-    if(ImGui::BeginMenu("Campaign")){
-        if(ImGui::MenuItem("Campaign workspace..."))show_campaign_window_=true;
+    if(ImGui::BeginMenu(tr_label("Campaign"))){
+        if(ImGui::MenuItem(tr_label("Campaign workspace...")))show_campaign_window_=true;
         ImGui::EndMenu();
     }
-    if(ImGui::BeginMenu("Edit")){
-        if(ImGui::MenuItem("Generate terrain..."))choose_workspace_tool(Tool::GenerateTerrain,1);
-        if(ImGui::MenuItem("Undo","Ctrl+Z",false,!undo_.empty()))undo();
-        if(ImGui::MenuItem("Redo","Ctrl+Y",false,!redo_.empty()))redo();
+    if(ImGui::BeginMenu(tr_label("Edit"))){
+        if(ImGui::MenuItem(tr_label("Generate terrain...")))choose_workspace_tool(Tool::GenerateTerrain,1);
+        if(ImGui::MenuItem(tr_label("Undo"),tr("Ctrl+Z"),false,!undo_.empty()))undo();
+        if(ImGui::MenuItem(tr_label("Redo"),tr("Ctrl+Y"),false,!redo_.empty()))redo();
         ImGui::EndMenu();
     }
-    if(ImGui::BeginMenu("View")){
-        ImGui::MenuItem("Show water/lava/ice surface",nullptr,&draw_water_);
-        ImGui::MenuItem("Animate water/lava/ice",nullptr,&animate_surface_);
-        if(ImGui::MenuItem("Animate visible buildings",nullptr,&animate_buildings_)){
+    if(ImGui::BeginMenu(tr_label("View"))){
+        ImGui::MenuItem(tr_label("Show water/lava/ice surface"),nullptr,&draw_water_);
+        ImGui::MenuItem(tr_label("Animate water/lava/ice"),nullptr,&animate_surface_);
+        if(ImGui::MenuItem(tr_label("Animate visible buildings"),nullptr,&animate_buildings_)){
             if(!animate_buildings_&&!simulation_actor_states_.empty())
                 simulation_static_replacement_dirty_=true;
             last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
         }
-        if(ImGui::MenuItem("Animate visible units",nullptr,&animate_units_)){
+        if(ImGui::MenuItem(tr_label("Animate visible units"),nullptr,&animate_units_)){
             if(!animate_units_&&!simulation_actor_states_.empty())
                 simulation_static_replacement_dirty_=true;
             last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
         }
-        if(ImGui::BeginMenu("Animation / simulation preview speed")){
+        if(ImGui::BeginMenu(tr_label("Animation / simulation preview speed"))){
             constexpr std::array<std::pair<const char*,uint32_t>,5> rates{{
                 {"Exact game rate (1x)",1U},{"2x",2U},{"4x",4U},{"8x",8U},{"16x",16U}}};
             for(const auto& [label,multiplier]:rates){
@@ -1247,11 +1320,11 @@ void EditorApp::draw_main_menu(){
             }
             ImGui::EndMenu();
         }
-        if(ImGui::MenuItem("Animate visible timed map effects",nullptr,&animate_timed_effects_))
+        if(ImGui::MenuItem(tr_label("Animate visible timed map effects"),nullptr,&animate_timed_effects_))
             last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
-        if(ImGui::MenuItem("Animate Xenite / Tritium resource fields",nullptr,&animate_resource_fields_))
+        if(ImGui::MenuItem(tr_label("Animate Xenite / Tritium resource fields"),nullptr,&animate_resource_fields_))
             last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
-        if(ImGui::MenuItem("Show moving-unit ground marks",nullptr,&show_movement_ground_marks_))
+        if(ImGui::MenuItem(tr_label("Show moving-unit ground marks"),nullptr,&show_movement_ground_marks_))
             last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
         ImGui::Separator();
         const std::string simulation_label="Simulation mode (20 Hz × "+
@@ -1262,15 +1335,15 @@ void EditorApp::draw_main_menu(){
             else reset_simulation(true);
             last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
         }
-        if(ImGui::MenuItem("Sound playback",nullptr,&sound_playback_enabled_)){
+        if(ImGui::MenuItem(tr_label("Sound playback"),nullptr,&sound_playback_enabled_)){
             if(!sound_playback_enabled_)stop_all_runtime_looping_sounds();
             else looping_sound_start_failures_.clear();
         }
-        ImGui::MenuItem("Simulation sound follows map focus",nullptr,&simulation_sound_at_map_focus_);
+        ImGui::MenuItem(tr_label("Simulation sound follows map focus"),nullptr,&simulation_sound_at_map_focus_);
         int sound_volume_percent=static_cast<int>(std::lround(
             static_cast<double>(sound_effects_gain_q15_)*100.0/32768.0));
         ImGui::SetNextItemWidth(ui_px(150.0F));
-        if(ImGui::SliderInt("Sound volume",&sound_volume_percent,0,100,"%d%%")){
+        if(ImGui::SliderInt(tr_label("Sound volume"),&sound_volume_percent,0,100,"%d%%")){
             sound_effects_gain_q15_=static_cast<uint32_t>(std::clamp(
                 static_cast<int>(std::lround(sound_volume_percent*32768.0/100.0)),0,32768));
             if(sound_effects_gain_q15_==0U)stop_all_runtime_looping_sounds();
@@ -1278,19 +1351,19 @@ void EditorApp::draw_main_menu(){
         }
 
         if(!sound_playback_status_.empty())ImGui::TextDisabled("%s",sound_playback_status_.c_str());
-        ImGui::MenuItem("Show simulation ranges",nullptr,&simulation_show_ranges_);
-        if(ImGui::BeginMenu("Fog of war preview")){
+        ImGui::MenuItem(tr_label("Show simulation ranges"),nullptr,&simulation_show_ranges_);
+        if(ImGui::BeginMenu(tr_label("Fog of war preview"))){
             bool fog_changed=false;
-            if(ImGui::MenuItem("Off",nullptr,fog_preview_mode_==0)){
+            if(ImGui::MenuItem(tr_label("Off"),nullptr,fog_preview_mode_==0)){
                 fog_preview_mode_=0;fog_changed=true;
             }
-            if(ImGui::MenuItem("Selected faction",nullptr,fog_preview_mode_==1)){
+            if(ImGui::MenuItem(tr_label("Selected faction"),nullptr,fog_preview_mode_==1)){
                 fog_preview_mode_=1;fog_changed=true;
             }
-            if(ImGui::MenuItem("All active factions",nullptr,fog_preview_mode_==2)){
+            if(ImGui::MenuItem(tr_label("All active factions"),nullptr,fog_preview_mode_==2)){
                 fog_preview_mode_=2;fog_changed=true;
             }
-            if(ImGui::BeginMenu("Faction")){
+            if(ImGui::BeginMenu(tr_label("Faction"))){
                 for(int faction=1;faction<=7;++faction){
                     const uint32_t family=graphics_family_for_faction(static_cast<uint32_t>(faction));
                     const std::string label=faction_single_player_label(
@@ -1304,8 +1377,9 @@ void EditorApp::draw_main_menu(){
                 }
                 ImGui::EndMenu();
             }
-            fog_changed|=ImGui::MenuItem("Whole map already explored",nullptr,&fog_preview_all_explored_);
-            ImGui::MenuItem("Show nominal observer-radius circle",nullptr,&fog_preview_show_nominal_radius_);
+            fog_changed|=ImGui::MenuItem(tr_label("Whole map already explored"),nullptr,&fog_preview_all_explored_);
+            fog_changed|=ImGui::MenuItem(tr_label("Tint visible terrain by faction"),nullptr,&fog_preview_tint_visible_terrain_);
+            ImGui::MenuItem(tr_label("Show nominal observer-radius circle"),nullptr,&fog_preview_show_nominal_radius_);
 
             if(fog_changed){
                 fog_preview_occupancy_history_.clear();
@@ -1318,43 +1392,53 @@ void EditorApp::draw_main_menu(){
             ImGui::EndMenu();
         }
         ImGui::Separator();
-        if(ImGui::BeginMenu("Panels")){
-            ImGui::MenuItem("Assets",nullptr,&show_left_panel_);
-            ImGui::MenuItem("Compact ribbon",nullptr,&compact_ribbon_);
-            ImGui::MenuItem("Expanded map overview",nullptr,&overview_expanded_);
-            ImGui::MenuItem("Inspector",nullptr,&show_right_panel_);
-            if(ImGui::MenuItem("Show both panels")){show_left_panel_=true;show_right_panel_=true;}
-            if(ImGui::MenuItem("Hide both panels")){show_left_panel_=false;show_right_panel_=false;}
+        if(ImGui::BeginMenu(tr_label("Panels"))){
+            ImGui::MenuItem(tr_label("Assets"),nullptr,&show_left_panel_);
+            ImGui::MenuItem(tr_label("Compact ribbon"),nullptr,&compact_ribbon_);
+            ImGui::MenuItem(tr_label("Expanded map overview"),nullptr,&overview_expanded_);
+            ImGui::MenuItem(tr_label("Inspector"),nullptr,&show_right_panel_);
+            if(ImGui::MenuItem(tr_label("Show both panels"))){show_left_panel_=true;show_right_panel_=true;}
+            if(ImGui::MenuItem(tr_label("Hide both panels"))){show_left_panel_=false;show_right_panel_=false;}
             ImGui::EndMenu();
         }
-        ImGui::MenuItem("Wireframe",nullptr,&wireframe_);
-        ImGui::MenuItem("Game cursor",nullptr,&game_cursor_enabled_);
-        if(ImGui::MenuItem("Center camera")){
+        ImGui::MenuItem(tr_label("Wireframe"),nullptr,&wireframe_);
+        ImGui::MenuItem(tr_label("Game cursor"),nullptr,&game_cursor_enabled_);
+        if(ImGui::MenuItem(tr_label("Center camera"))){
             center_camera();
         }
         ImGui::EndMenu();
     }
-    if(ImGui::BeginMenu("Settings")){
+    if(ImGui::BeginMenu(tr_label("Settings"))){
+        if(ImGui::BeginMenu(tr_label("Language"))){
+            for(const auto& [code,label]:{std::pair{"en","English"},std::pair{"de","Deutsch"}}){
+                if(ImGui::MenuItem(label,nullptr,editor_language()==code)){
+                    set_editor_language(code,executable_directory());
+                    load_scenario_catalog_labels();
+                    save_user_settings(true);
+                }
+            }
+            ImGui::EndMenu();
+        }
         bool logging=logging_enabled_;
-        if(ImGui::MenuItem("Create diagnostic logs",nullptr,&logging))set_logging_enabled(logging);
-        if(ImGui::IsItemHovered())show_item_tooltip("Enable or stop editor performance and Simulation Lab log files. Saved for the next session.");
-        if(logging_enabled_ && editor_performance_log_.capped())ImGui::TextDisabled("Log size limit reached");
-        if(ImGui::BeginMenu("UI scale")){
+        if(ImGui::MenuItem(tr_label("Create diagnostic logs"),nullptr,&logging))set_logging_enabled(logging);
+        if(ImGui::IsItemHovered())show_item_tooltip(tr("Enable or stop editor performance and Simulation Lab log files. Saved for the next session."));
+        if(logging_enabled_ && editor_performance_log_.capped())ImGui::TextDisabled(tr("Log size limit reached"));
+        if(ImGui::BeginMenu(tr_label("UI scale"))){
             constexpr int scales[]={0,100,125,150,175,200,250,300};
-            constexpr const char* labels[]={"Automatic","100%","125%","150%","175%","200%","250%","300%"};
+            const char* labels[]={tr("Automatic"),"100%","125%","150%","175%","200%","250%","300%"};
             for(std::size_t i=0;i<std::size(scales);++i)
                 if(ImGui::MenuItem(labels[i],nullptr,ui_scale_percent_==scales[i]))ui_scale_percent_=scales[i];
             ImGui::EndMenu();
         }
-        ImGui::MenuItem("Show FPS",nullptr,&show_measured_fps_counter_);
-        if(ImGui::BeginMenu("Diagnostics")){
-            ImGui::MenuItem("Runtime counters and coordinates",nullptr,&show_retail_debug_overlay_);
-            ImGui::MenuItem("Render counters",nullptr,&debug_show_render_counters_);
-            ImGui::MenuItem("World vectors",nullptr,&debug_show_world_vectors_);
-            ImGui::MenuItem("Cursor / selection coordinates",nullptr,&debug_show_cursor_coordinates_);
-            ImGui::MenuItem("Memory / resource state",nullptr,&debug_show_memory_resources_);
-            ImGui::MenuItem("Simulation clock",nullptr,&debug_show_simulation_clock_);
-            if(ImGui::MenuItem("Reset counter sample"))reset_retail_debug_counter_sample();
+        ImGui::MenuItem(tr_label("Show FPS"),nullptr,&show_measured_fps_counter_);
+        if(ImGui::BeginMenu(tr_label("Diagnostics"))){
+            ImGui::MenuItem(tr_label("Runtime counters and coordinates"),nullptr,&show_retail_debug_overlay_);
+            ImGui::MenuItem(tr_label("Render counters"),nullptr,&debug_show_render_counters_);
+            ImGui::MenuItem(tr_label("World vectors"),nullptr,&debug_show_world_vectors_);
+            ImGui::MenuItem(tr_label("Cursor / selection coordinates"),nullptr,&debug_show_cursor_coordinates_);
+            ImGui::MenuItem(tr_label("Memory / resource state"),nullptr,&debug_show_memory_resources_);
+            ImGui::MenuItem(tr_label("Simulation clock"),nullptr,&debug_show_simulation_clock_);
+            if(ImGui::MenuItem(tr_label("Reset counter sample")))reset_retail_debug_counter_sample();
             ImGui::EndMenu();
         }
         ImGui::EndMenu();
@@ -1362,22 +1446,27 @@ void EditorApp::draw_main_menu(){
     ImGui::SameLine(0,ui_px(18));
     if(header.width>ui_px(1250.0F)){
         ImGui::SetNextItemWidth(std::min(ui_px(260.0F),header.width*0.18F));
-        if(ImGui::BeginCombo("##workspace-map",(document_->display_name()+(document_->dirty()?" *":"")).c_str())){
-            for(std::size_t i=0;i<catalog_.map_groups().size();++i)
-                if(ImGui::Selectable(catalog_.map_groups()[i].display_name.c_str(),current_stock_group_==i))load_map(i);
-            if(ImGui::Selectable("Open custom map..."))show_load_dialog_=true;
+        const auto groups=catalog_.map_groups();
+        const auto preview=(current_stock_group_&&*current_stock_group_<groups.size()
+            ?stock_map_label(groups[*current_stock_group_]):document_->display_name())+(document_->dirty()?" *":"");
+        if(ImGui::BeginCombo("##workspace-map",preview.c_str(),ImGuiComboFlags_HeightLarge)){
+            for(std::size_t i=0;i<groups.size();++i){
+                if(select_stock_map_row(stock_map_label(groups[i]).c_str(),i,current_stock_group_==i))
+                    load_map(i);
+            }
+            if(ImGui::Selectable(tr_label("Open custom map...")))show_load_dialog_=true;
             ImGui::EndCombo();
         }
         ImGui::SameLine(0,ui_px(18));
     }
     ImGui::PushStyleColor(ImGuiCol_Button,ImVec4{0.10F,0.36F,0.25F,1});
-    if(ImGui::Button("Simulate")){show_right_panel_=true;requested_inspector_tab_=3;}
-    if(ImGui::IsItemHovered())show_item_tooltip("Open Simulation Lab settings and start controls.");
+    if(ImGui::Button(tr_label("Simulate"))){show_right_panel_=true;requested_inspector_tab_=3;}
+    if(ImGui::IsItemHovered())show_item_tooltip(tr("Open Simulation Lab settings and start controls."));
     ImGui::PopStyleColor();ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Button,ImVec4{0.12F,0.35F,0.61F,1});
-    if(ImGui::Button("Game export")){show_right_panel_=true;requested_inspector_tab_=5;}
+    if(ImGui::Button(tr_label("Game export"))){show_right_panel_=true;requested_inspector_tab_=5;}
     ImGui::PopStyleColor();ImGui::SameLine();
-    if(ImGui::Button("Map settings")){show_right_panel_=true;requested_inspector_tab_=4;}
+    if(ImGui::Button(tr_label("Map settings"))){show_right_panel_=true;requested_inspector_tab_=4;}
     // Persistent measured presented-FPS label, right-aligned inside the top navigation bar.
     // This uses our wall-clock presented-frame sample, not the ImGui-smoothed UI rate.
     if(show_measured_fps_counter_){
@@ -1394,63 +1483,63 @@ void EditorApp::draw_main_menu(){
 void EditorApp::draw_retail_debug_overlay(){
     if(!show_retail_debug_overlay_)return;
     ImGui::SetNextWindowSize({ui_px(430.0F),0.0F},ImGuiCond_FirstUseEver);
-    if(!ImGui::Begin("Retail debug overlay##thandor-debug",&show_retail_debug_overlay_,
+    if(!ImGui::Begin(tr_label("Retail debug overlay##thandor-debug"),&show_retail_debug_overlay_,
                      ImGuiWindowFlags_AlwaysAutoResize)){
         ImGui::End();return;
     }
-    ImGui::TextDisabled("game.exe: FrontendDebugOverlay_RefreshCountersAndWorldCoordinates @ 0x00546190");
-    ImGui::TextWrapped("The retail routine binds fourteen live UTF-16 slots. This window exposes the same proven diagnostic categories using editor runtime values; retail-only allocator state is labeled rather than guessed.");
+    ImGui::TextDisabled(tr("game.exe: FrontendDebugOverlay_RefreshCountersAndWorldCoordinates @ 0x00546190"));
+    ImGui::TextWrapped(tr("The retail routine binds fourteen live UTF-16 slots. This window exposes the same proven diagnostic categories using editor runtime values; retail-only allocator state is labeled rather than guessed."));
 
-    if(debug_show_render_counters_&&ImGui::CollapsingHeader("Render counters",ImGuiTreeNodeFlags_DefaultOpen)){
+    if(debug_show_render_counters_&&ImGui::CollapsingHeader(tr_label("Render counters"),ImGuiTreeNodeFlags_DefaultOpen)){
         const uint32_t sample_frames=retail_debug_sample_frames_!=0U?retail_debug_sample_frames_:retail_debug_frame_accumulator_;
         const uint64_t sample_packets=retail_debug_sample_frames_!=0U?retail_debug_sample_draw_packets_:retail_debug_draw_packet_accumulator_;
         const double packets_per_call=sample_frames==0U?0.0:static_cast<double>(sample_packets)/sample_frames;
-        ImGui::Text("Slot 00 · frames in 20-call sample: %u",sample_frames);
-        ImGui::Text("Slot 01 · editor draw-packet estimate / call: %.2f",packets_per_call);
-        ImGui::Text("Slot 02 · retail texture-bind state changes: unavailable in Vulkan rewrite");
-        ImGui::Text("Slot 03 · retail texture-device reloads: unavailable in Vulkan rewrite");
+        ImGui::Text(tr("Slot 00 · frames in 20-call sample: %u"),sample_frames);
+        ImGui::Text(tr("Slot 01 · editor draw-packet estimate / call: %.2f"),packets_per_call);
+        ImGui::Text(tr("Slot 02 · retail texture-bind state changes: unavailable in Vulkan rewrite"));
+        ImGui::Text(tr("Slot 03 · retail texture-device reloads: unavailable in Vulkan rewrite"));
         if(measured_present_fps_>0.0)
-            ImGui::Text("Editor measured present rate: %.1f FPS (%.2f ms)",
+            ImGui::Text(tr("Editor measured present rate: %.1f FPS (%.2f ms)"),
                         measured_present_fps_,measured_present_frame_ms_);
-        else ImGui::TextDisabled("Editor measured present rate: sampling");
-        ImGui::Text("Editor resource state · object texture layers: %u",renderer_.object_texture_layer_count());
-        ImGui::Text("Editor resource state · terrain/surface layers: %zu / %zu",loaded_material_count_,loaded_surface_material_count_);
-        ImGui::TextDisabled("Retail resets frame/draw/texture-state/reload counters every twenty calls.");
+        else ImGui::TextDisabled(tr("Editor measured present rate: sampling"));
+        ImGui::Text(tr("Editor resource state · object texture layers: %u"),renderer_.object_texture_layer_count());
+        ImGui::Text(tr("Editor resource state · terrain/surface layers: %zu / %zu"),loaded_material_count_,loaded_surface_material_count_);
+        ImGui::TextDisabled(tr("Retail resets frame/draw/texture-state/reload counters every twenty calls."));
     }
 
-    if(debug_show_world_vectors_&&ImGui::CollapsingHeader("World vectors",ImGuiTreeNodeFlags_DefaultOpen)){
+    if(debug_show_world_vectors_&&ImGui::CollapsingHeader(tr_label("World vectors"),ImGuiTreeNodeFlags_DefaultOpen)){
         const Vec3f target=camera_.target;
         const Vec3f eye=camera_.eye();
         const auto q12=[](float value){return static_cast<int32_t>(std::lround(static_cast<double>(value)*4096.0));};
-        ImGui::Text("Slots 04–06 · editor equivalent / camera target Q12: %d, %d, %d",q12(target.x),q12(target.y),q12(target.z));
-        ImGui::Text("Slots 07–09 · editor equivalent / camera eye Q12:    %d, %d, %d",q12(eye.x),q12(eye.y),q12(eye.z));
+        ImGui::Text(tr("Slots 04–06 · editor equivalent / camera target Q12: %d, %d, %d"),q12(target.x),q12(target.y),q12(target.z));
+        ImGui::Text(tr("Slots 07–09 · editor equivalent / camera eye Q12:    %d, %d, %d"),q12(eye.x),q12(eye.y),q12(eye.z));
     }
 
-    if(debug_show_cursor_coordinates_&&ImGui::CollapsingHeader("Cursor / selection coordinates",ImGuiTreeNodeFlags_DefaultOpen)){
+    if(debug_show_cursor_coordinates_&&ImGui::CollapsingHeader(tr_label("Cursor / selection coordinates"),ImGuiTreeNodeFlags_DefaultOpen)){
         if(hovered_terrain_point_){
             const auto q12=[](float value){return static_cast<int32_t>(std::lround(static_cast<double>(value)*4096.0));};
-            ImGui::Text("Slots 10–11 · terrain cursor Q12: %d, %d",q12(hovered_terrain_point_->x),q12(hovered_terrain_point_->y));
+            ImGui::Text(tr("Slots 10–11 · terrain cursor Q12: %d, %d"),q12(hovered_terrain_point_->x),q12(hovered_terrain_point_->y));
         }else{
             const ImVec2 mouse=ImGui::GetIO().MousePos;
-            ImGui::Text("Slots 10–11 · pointer pixels: %.0f, %.0f",mouse.x,mouse.y);
-            ImGui::TextDisabled("No terrain hit: retail-equivalent world cursor coordinates are unavailable.");
+            ImGui::Text(tr("Slots 10–11 · pointer pixels: %.0f, %.0f"),mouse.x,mouse.y);
+            ImGui::TextDisabled(tr("No terrain hit: retail-equivalent world cursor coordinates are unavailable."));
         }
-        if(selected_placement_)ImGui::Text("Selected placement index: %zu",*selected_placement_);
-        else ImGui::TextDisabled("Selected placement: none");
+        if(selected_placement_)ImGui::Text(tr("Selected placement index: %zu"),*selected_placement_);
+        else ImGui::TextDisabled(tr("Selected placement: none"));
     }
 
-    if(debug_show_memory_resources_&&ImGui::CollapsingHeader("Memory / resource state",ImGuiTreeNodeFlags_DefaultOpen)){
+    if(debug_show_memory_resources_&&ImGui::CollapsingHeader(tr_label("Memory / resource state"),ImGuiTreeNodeFlags_DefaultOpen)){
         const uint64_t dynamic_bytes=static_cast<uint64_t>(dynamic_scene_cpu_.vertices.size())*sizeof(ObjectVertex)+
             static_cast<uint64_t>(dynamic_scene_cpu_.indices.size())*sizeof(uint32_t)+
             static_cast<uint64_t>(dynamic_scene_cpu_.shadow_vertices.size())*sizeof(ObjectVertex)+
             static_cast<uint64_t>(dynamic_scene_cpu_.shadow_indices.size())*sizeof(uint32_t);
-        ImGui::Text("Slot 12 · retail free-arena bytes: unavailable in Vulkan rewrite");
-        ImGui::Text("Editor dynamic-scene CPU payload: %llu bytes",static_cast<unsigned long long>(dynamic_bytes));
-        ImGui::Text("Object textures: %zu · sprites cached: %zu · SAM cached: %zu",object_texture_layer_count_,sprite_cache_.size(),sam_pcm_cache_.size());
-        ImGui::Text("Active looping sounds: %zu",active_looping_sounds_.size());
+        ImGui::Text(tr("Slot 12 · retail free-arena bytes: unavailable in Vulkan rewrite"));
+        ImGui::Text(tr("Editor dynamic-scene CPU payload: %llu bytes"),static_cast<unsigned long long>(dynamic_bytes));
+        ImGui::Text(tr("Object textures: %zu · sprites cached: %zu · SAM cached: %zu"),object_texture_layer_count_,sprite_cache_.size(),sam_pcm_cache_.size());
+        ImGui::Text(tr("Active looping sounds: %zu"),active_looping_sounds_.size());
     }
 
-    if(debug_show_simulation_clock_&&ImGui::CollapsingHeader("Simulation clock",ImGuiTreeNodeFlags_DefaultOpen)){
+    if(debug_show_simulation_clock_&&ImGui::CollapsingHeader(tr_label("Simulation clock"),ImGuiTreeNodeFlags_DefaultOpen)){
         uint32_t clock_tick=current_presentation_tick_;
         if(simulation_lab_active()){
             const auto runs=simulation_lab_runs();
@@ -1461,11 +1550,11 @@ void EditorApp::draw_retail_debug_overlay(){
         const uint64_t hours=seconds/3600ULL;
         const uint64_t minutes=(seconds/60ULL)%60ULL;
         const uint64_t secs=seconds%60ULL;
-        ImGui::Text("Slot 13 · retail-style elapsed clock: %02llu:%02llu:%02llu",
+        ImGui::Text(tr("Slot 13 · retail-style elapsed clock: %02llu:%02llu:%02llu"),
                     static_cast<unsigned long long>(hours),static_cast<unsigned long long>(minutes),
                     static_cast<unsigned long long>(secs));
-        ImGui::Text("%s tick: %u",simulation_lab_active()?"Selected Lab run":"Presentation",clock_tick);
-        ImGui::Text("Preview multiplier: %ux",animation_preview_multiplier_);
+        ImGui::Text(tr("%s tick: %u"),simulation_lab_active()?tr("Selected Lab run"):tr("Presentation"),clock_tick);
+        ImGui::Text(tr("Preview multiplier: %ux"),animation_preview_multiplier_);
     }
     ImGui::End();
 }
@@ -1474,28 +1563,23 @@ void EditorApp::draw_left_panel(){
     const auto panel=workspace_layout().assets;
     ImGui::SetNextWindowPos({panel.x,panel.y});
     ImGui::SetNextWindowSize({panel.width,panel.height});
-    ImGui::Begin("Assets##workspace-assets",nullptr,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_NoSavedSettings);
-    if(ImGui::SmallButton("Collapse assets"))show_left_panel_=false;
+    ImGui::Begin(tr_label("Assets##workspace-assets"),nullptr,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_NoSavedSettings);
+    if(ImGui::SmallButton(tr_label("Collapse assets")))show_left_panel_=false;
     ImGui::Separator();
     char filter[128]{};
     std::snprintf(filter,sizeof(filter),"%s",asset_filter_.c_str());
     ImGui::SetNextItemWidth(-1.0F);
-    if(ImGui::InputTextWithHint("##filter","Search assets and camera starts",filter,sizeof(filter)))asset_filter_=filter;
+    if(ImGui::InputTextWithHint("##filter",tr("Search assets and camera starts"),filter,sizeof(filter)))asset_filter_=filter;
 
-    const char* scopes[]={"Current map","All placeable assets"};
+    const char* scopes[]={tr("Current map"),tr("All placeable assets")};
     ImGui::SetNextItemWidth(-1.0F);
     ImGui::Combo("##asset-scope",&asset_browser_scope_,scopes,2);
     asset_browser_scope_=std::clamp(asset_browser_scope_,0,1);
 
     std::vector<uint32_t> placement_ids;
     if(asset_browser_scope_==0){
-        std::vector<const char*> groups;
-        groups.reserve(catalog_.map_groups().size());
-        for(const auto& group:catalog_.map_groups())groups.push_back(group.display_name.c_str());
-        asset_browser_group_=std::clamp(asset_browser_group_,0,
-            std::max(0,static_cast<int>(groups.size())-1));
         ImGui::SetNextItemWidth(-1.0F);
-        ImGui::Combo("##asset-map-group",&asset_browser_group_,groups.data(),static_cast<int>(groups.size()));
+        stock_map_combo("##asset-map-group",asset_browser_group_,catalog_.map_groups());
         const auto ids=catalog_.map_groups()[static_cast<std::size_t>(asset_browser_group_)].placement_registry_ids;
         placement_ids.assign(ids.begin(),ids.end());
     }else{
@@ -1504,39 +1588,34 @@ void EditorApp::draw_left_panel(){
     }
 
     if(ImGui::BeginTabBar("asset-tabs",ImGuiTabBarFlags_FittingPolicyScroll)){
-        if(ImGui::BeginTabItem("Assets")){
+        if(ImGui::BeginTabItem(tr_label("Assets"))){
             draw_asset_categories(placement_ids);
             ImGui::EndTabItem();
         }
-        if(ImGui::BeginTabItem("Map items")){
+        if(ImGui::BeginTabItem(tr_label("Map items"))){
             draw_faction_camera_start_cards();
             draw_simulation_target_card();
-            ImGui::SeparatorText("Placeable map records");
+            ImGui::SeparatorText(tr("Placeable map records"));
             draw_placement_presets(placement_ids,thandor::PlacementBrowserKind::General);
             ImGui::EndTabItem();
         }
-        if(ImGui::BeginTabItem("World")){
+        if(ImGui::BeginTabItem(tr_label("World"))){
             draw_placement_presets(placement_ids,thandor::PlacementBrowserKind::Element);
             ImGui::EndTabItem();
         }
-        if(ImGui::BeginTabItem("Units")){
+        if(ImGui::BeginTabItem(tr_label("Units"))){
             draw_global_faction_selector("unit-browser-faction");
             draw_placement_presets(placement_ids,thandor::PlacementBrowserKind::Unit);
             ImGui::EndTabItem();
         }
-        if(ImGui::BeginTabItem("Buildings")){
+        if(ImGui::BeginTabItem(tr_label("Buildings"))){
             draw_global_faction_selector("building-browser-faction");
             draw_placement_presets(placement_ids,thandor::PlacementBrowserKind::Building);
             ImGui::EndTabItem();
         }
-        if(ImGui::BeginTabItem("Raw files")){
-            std::vector<const char*> groups;
-            groups.reserve(catalog_.map_groups().size()+1U);
-            for(const auto& group:catalog_.map_groups())groups.push_back(group.display_name.c_str());
-            groups.push_back("General PCK assets");
-            asset_file_group_=std::clamp(asset_file_group_,0,static_cast<int>(groups.size())-1);
+        if(ImGui::BeginTabItem(tr_label("Raw files"))){
             ImGui::SetNextItemWidth(-1.0F);
-            ImGui::Combo("##file-map-group",&asset_file_group_,groups.data(),static_cast<int>(groups.size()));
+            stock_map_combo("##file-map-group",asset_file_group_,catalog_.map_groups(),tr("General PCK assets"));
             ImGui::BeginChild("asset-file-scroll",{0,0},false,ImGuiWindowFlags_AlwaysVerticalScrollbar);
             if(asset_file_group_==static_cast<int>(catalog_.map_groups().size())){
                 draw_asset_group("general",catalog_.general_assets());
@@ -1560,11 +1639,11 @@ void EditorApp::draw_asset_group(const char*,std::span<const std::size_t> indice
             if(asset.kind==thandor::AssetKind::Texture){
                 auto it=std::find(material_names_.begin(),material_names_.end(),asset.normalized_path);
                 if(it!=material_names_.end())selected_material_=static_cast<uint8_t>(std::distance(material_names_.begin(),it));
-                status_="Selected texture: "+asset.normalized_path;
-            }else status_="Selected asset source: "+asset.normalized_path;
+                status_=tr("Selected texture: ")+asset.normalized_path;
+            }else status_=tr("Selected asset source: ")+asset.normalized_path;
         }
-        if(ImGui::IsItemHovered())show_item_tooltip("Archive: "+asset.archive_name+
-            "\nUnpacked: "+std::to_string(asset.unpacked_size)+" bytes");
+        if(ImGui::IsItemHovered())show_item_tooltip(tr("Archive: ")+asset.archive_name+
+            tr("\nUnpacked: ")+std::to_string(asset.unpacked_size)+tr(" bytes"));
         ImGui::PopID();
     }
 }
@@ -1598,7 +1677,7 @@ void EditorApp::draw_global_faction_selector(const char* widget_id){
     const std::string preview_label=faction_single_player_label(selected_faction_,selected_family);
     ImGui::SetNextItemWidth(-1.0F);
     if(selected_faction_!=0U)ImGui::PushStyleColor(ImGuiCol_Text,graphics_family_ui_text_color(selected_family));
-    const bool faction_combo_open=ImGui::BeginCombo("Placement faction",preview_label.c_str());
+    const bool faction_combo_open=ImGui::BeginCombo(tr_label("Placement faction"),preview_label.c_str());
     if(selected_faction_!=0U)ImGui::PopStyleColor();
     if(faction_combo_open){
         for(uint32_t faction=0U;faction<=7U;++faction){
@@ -1624,7 +1703,7 @@ void EditorApp::draw_global_faction_selector(const char* widget_id){
         ImGui::SameLine();
 
     }else{
-        ImGui::TextDisabled("Neutral / map-owned source colour");
+        ImGui::TextDisabled(tr("Neutral / map-owned source colour"));
     }
 
     if(family!=8U && document_){
@@ -1632,7 +1711,7 @@ void EditorApp::draw_global_faction_selector(const char* widget_id){
         for(uint32_t slot=1U;slot<=7U;++slot)
             has_mission_golrathen|=graphics_family_for_faction(slot)==8U;
         if(!has_mission_golrathen)
-            ImGui::TextDisabled("For Golrathen (army8), use Players > Mission-only faction setup.");
+            ImGui::TextDisabled(tr("For Golrathen (army8), use Players > Mission-only faction setup."));
     }
     if(!local_player_texture_override_status_.empty()){
         if(local_player_texture_override_.has_value()){
@@ -1642,7 +1721,7 @@ void EditorApp::draw_global_faction_selector(const char* widget_id){
             const std::string local_faction_label=faction_single_player_label(
                 local_player_runtime_faction_,local_family,false);
             ImGui::PushStyleColor(ImGuiCol_Text,graphics_family_ui_text_color(local_family));
-            const bool local_combo_open=ImGui::BeginCombo("Local player PCX faction",local_faction_label.c_str());
+            const bool local_combo_open=ImGui::BeginCombo(tr_label("Local player PCX faction"),local_faction_label.c_str());
             ImGui::PopStyleColor();
             if(local_combo_open){
                 for(uint32_t faction_index=1U;faction_index<=7U;++faction_index){
@@ -1668,7 +1747,7 @@ void EditorApp::draw_global_faction_selector(const char* widget_id){
     }
     if(selected_faction_!=0U&&(family<1U||family>8U))
         ImGui::TextColored({1.0F,0.45F,0.30F,1.0F},
-            "LEV resolves this faction to army%u; stock editor resources normally use families 1..8.",family);
+            tr("LEV resolves this faction to army%u; stock editor resources normally use families 1..8."),family);
     draw_faction_research_mask_editor(selected_faction_,"research-mask");
     ImGui::PopID();
 }
@@ -1680,23 +1759,23 @@ void EditorApp::draw_faction_research_mask_editor(uint32_t faction_index,const c
     ImGui::PushID(widget_id);
     if(faction_index!=0U){
         const uint32_t family=graphics_family_for_faction(faction_index);
-        ImGui::TextColored(graphics_family_ui_text_color(family),"%s · Faction %u",
+        ImGui::TextColored(graphics_family_ui_text_color(family),tr("%s · Faction %u"),
             thandor::graphics_family_single_player_faction_name(family),faction_index);
     }
-    if(ImGui::Button("Clear research")){
+    if(ImGui::Button(tr_label("Clear research"))){
         checkpoint();mask.fill(0U);document_->mark_dirty();
         faction_technology_hierarchy_cache_.clear();faction_technology_weapon_profile_cache_.clear();asset_preview_cache_.clear();
         reset_simulation(true);rebuild_objects();
-        status_="Cleared faction "+std::to_string(faction_index)+" 256-bit research preview mask.";
+        status_=tr("Cleared faction ")+std::to_string(faction_index)+tr(" 256-bit research preview mask.");
     }
     ImGui::SameLine();
-    if(ImGui::Button("Unlock all")){
+    if(ImGui::Button(tr_label("Unlock all"))){
         checkpoint();mask.fill(0xFFFFFFFFU);document_->mark_dirty();
         faction_technology_hierarchy_cache_.clear();faction_technology_weapon_profile_cache_.clear();asset_preview_cache_.clear();
         reset_simulation(true);rebuild_objects();
-        status_="Enabled all 256 faction research bits for runtime model preview.";
+        status_=tr("Enabled all 256 faction research bits for runtime model preview.");
     }
-    if(ImGui::TreeNode("Research state (all technologies)")){
+    if(ImGui::TreeNode(tr_label("Research state (all technologies)"))){
 
         ImGui::BeginChild("technology-mask-scroll",{0.0F,ui_px(190.0F)},true);
         for(const auto& technology:catalog_.technologies()){
@@ -1712,8 +1791,8 @@ void EditorApp::draw_faction_research_mask_editor(uint32_t faction_index,const c
                 document_->mark_dirty();
                 faction_technology_hierarchy_cache_.clear();faction_technology_weapon_profile_cache_.clear();asset_preview_cache_.clear();
                 reset_simulation(true);rebuild_objects();
-                status_=std::string(bit?"Unlocked ":"Locked ")+"TEC "+std::to_string(id)+
-                    " for faction "+std::to_string(faction_index)+" preview.";
+                status_=std::string(bit?tr("Unlocked "):tr("Locked "))+tr("TEC ")+std::to_string(id)+
+                    tr(" for faction ")+std::to_string(faction_index)+tr(" preview.");
             }
             ImGui::PopID();
         }
@@ -1738,7 +1817,7 @@ void EditorApp::draw_faction_camera_start_cards(){
     }
     if(visible_factions.empty())return;
 
-    ImGui::SeparatorText("Player / AI starting cameras");
+    ImGui::SeparatorText(tr("Player / AI starting cameras"));
 
     const float card_width=ui_px(210.0F);
     const float card_height=ui_px(184.0F);
@@ -1760,9 +1839,9 @@ void EditorApp::draw_faction_camera_start_cards(){
         const uint32_t graphics_family=graphics_family_for_faction(faction);
         const ImU32 heading_color=graphics_family_ui_swatch(graphics_family);
         ImGui::TextColored(graphics_family_ui_text_color(graphics_family),
-            "%s · Faction %u — %s starting camera",
+            tr("%s · Faction %u — %s starting camera"),
             thandor::graphics_family_single_player_faction_name(graphics_family),faction,
-            human?"Player":"AI");
+            human?tr("Player"):tr("AI"));
 
         try{
             const auto camera_start=document_->level().faction_camera_start(faction);
@@ -1780,24 +1859,24 @@ void EditorApp::draw_faction_camera_start_cards(){
             if(ImGui::IsItemClicked(ImGuiMouseButton_Left))selected_camera_faction_=static_cast<int>(faction);
             ImGui::Text("%.1f, %.1f, %.1f",camera_start.position_x(),camera_start.position_y(),
                 camera_start.position_z());
-            ImGui::TextDisabled("heading %.1f deg · pitch %.1f deg",
+            ImGui::TextDisabled(tr("heading %.1f deg · pitch %.1f deg"),
                 static_cast<float>(camera_start.heading_turn16)*(360.0F/65536.0F),
                 static_cast<float>(camera_start.pitch_turn16)*(360.0F/65536.0F));
-            if(ImGui::Button("View stored",{(card_width-ui_px(24.0F))*0.5F,0.0F})){
+            if(ImGui::Button(tr_label("View stored"),{(card_width-ui_px(24.0F))*0.5F,0.0F})){
                 selected_camera_faction_=static_cast<int>(faction);
                 focus_faction_camera_start(faction);
             }
             ImGui::SameLine();
-            if(ImGui::Button("Aim at start",{-1.0F,0.0F})){
+            if(ImGui::Button(tr_label("Aim at start"),{-1.0F,0.0F})){
                 selected_camera_faction_=static_cast<int>(faction);
                 aim_camera_at_faction_start_vehicle(faction);
             }
-            if(ImGui::Button("Set from current view",{-1.0F,0.0F})){
+            if(ImGui::Button(tr_label("Set from current view"),{-1.0F,0.0F})){
                 selected_camera_faction_=static_cast<int>(faction);
                 capture_faction_camera_start(faction);
             }
         }catch(const std::exception& error){
-            ImGui::TextWrapped("Camera record unavailable: %s",error.what());
+            ImGui::TextWrapped(tr("Camera record unavailable: %s"),error.what());
         }
         ImGui::EndChild();
         ImGui::PopID();
@@ -1809,28 +1888,28 @@ void EditorApp::draw_simulation_target_card(){
     if(!document_)return;
     const std::string searchable="simulation target test spot weapon shot firing range tower unit";
     if(!asset_filter_.empty()&&!contains_ci(searchable,asset_filter_))return;
-    ImGui::SeparatorText("Weapon simulation target");
+    ImGui::SeparatorText(tr("Weapon simulation target"));
     ImGui::BeginChild("simulation-target-card",{0.0F,ui_px(154.0F)},true,
         ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoScrollWithMouse);
-    ImGui::TextUnformatted("Target spot (editor-only)");
-    ImGui::TextWrapped("Place a global test target here, or select an actor and use the normal viewport command: right-click terrain to move/aim, or right-click a different-faction placement to attack it. Right-drag remains camera pan.");
+    ImGui::TextUnformatted(tr("Target spot (editor-only)"));
+    ImGui::TextWrapped(tr("Place a global test target here, or select an actor and use the normal viewport command: right-click terrain to move/aim, or right-click a different-faction placement to attack it. Right-drag remains camera pan."));
     if(simulation_target_point_){
-        ImGui::Text("World: %.2f, %.2f, %.2f",simulation_target_point_->x,
+        ImGui::Text(tr("World: %.2f, %.2f, %.2f"),simulation_target_point_->x,
             simulation_target_point_->y,simulation_target_point_->z);
-    }else ImGui::TextDisabled("No target spot placed.");
-    if(ImGui::Button("Place / move target",{ui_px(155.0F),0.0F})){
+    }else ImGui::TextDisabled(tr("No target spot placed."));
+    if(ImGui::Button(tr_label("Place / move target"),{ui_px(155.0F),0.0F})){
         tool_=Tool::SimulationTarget;simulation_mode_=true;animate_buildings_=true;animate_units_=true;
-        status_="Click terrain to place the simulation target spot.";
+        status_=tr("Click terrain to place the simulation target spot.");
     }
     ImGui::SameLine();
-    if(ImGui::Button("Clear all targets",{-1.0F,0.0F})){
+    if(ImGui::Button(tr_label("Clear all targets"),{-1.0F,0.0F})){
         simulation_target_point_.reset();
         simulation_attack_placement_targets_.clear();
         simulation_attack_point_targets_.clear();
         simulation_projectiles_.clear();
         last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
     }
-    if(ImGui::Checkbox("Simulation mode (20 Hz)",&simulation_mode_)&&simulation_mode_){
+    if(ImGui::Checkbox(tr_label("Simulation mode (20 Hz)"),&simulation_mode_)&&simulation_mode_){
         animate_buildings_=true;animate_units_=true;
     }
     ImGui::EndChild();
@@ -1848,7 +1927,8 @@ void EditorApp::draw_placement_presets(std::span<const uint32_t> registry_ids,
         if(!emitted_canonical_ids.insert(canonical_id).second)continue;
         const std::string role=thandor::placement_visual_kind_name(preset->visual_kind);
         const std::string type=thandor::placement_browser_kind_name(preset->browser_kind);
-        if(!contains_ci(preset->display_name,asset_filter_)&&!contains_ci(preset->short_name,asset_filter_)&&
+        if(!contains_ci(preset->display_name,asset_filter_)&&!contains_ci(asset_display_name(*preset),asset_filter_)&&
+            !contains_ci(preset->short_name,asset_filter_)&&
            !contains_ci(preset->source_path,asset_filter_)&&!contains_ci(preset->sprite_path,asset_filter_)&&
            !contains_ci(preset->group_hint,asset_filter_)&&!contains_ci(preset->loadout_name,asset_filter_)&&
            !contains_ci(preset->technology_summary,asset_filter_)&&
@@ -1860,7 +1940,7 @@ void EditorApp::draw_placement_presets(std::span<const uint32_t> registry_ids,
 
     ImGui::BeginChild("placement-card-scroll",{0,0},false,ImGuiWindowFlags_AlwaysVerticalScrollbar);
     if(visible.empty()){
-        ImGui::TextDisabled("No placeable assets match the filter.");
+        ImGui::TextDisabled(tr("No placeable assets match the filter."));
         ImGui::EndChild();
         return;
     }
@@ -1905,10 +1985,17 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
     const ImVec2 preview_max=ImGui::GetItemRectMax();
     const bool preview_hovered=ImGui::IsItemHovered();
     if(available_in_current_level&&ImGui::IsItemClicked(ImGuiMouseButton_Left)){
+        const auto* previous_vehicle=terrain_ground_overlays_[TerrainOverlayVehicle]
+            ?terrain_overlay_profile(TerrainOverlayVehicle):nullptr;
+        const auto* previous_building=terrain_ground_overlays_[TerrainOverlayBuilding]
+            ?terrain_overlay_profile(TerrainOverlayBuilding):nullptr;
         selected_asset_id_=preset.registry_id;
+        if((terrain_ground_overlays_[TerrainOverlayVehicle]&&previous_vehicle!=terrain_overlay_profile(TerrainOverlayVehicle))||
+            (terrain_ground_overlays_[TerrainOverlayBuilding]&&previous_building!=terrain_overlay_profile(TerrainOverlayBuilding)))
+            simulation_static_replacement_dirty_=true;
         tool_=preset.visual_kind==thandor::PlacementVisualKind::PlayerStart?Tool::PlayerStart:
             (thandor::placement_is_resource(preset)?Tool::Resource:Tool::EffectScenery);
-        status_="Selected "+preset.display_name+" for placement.";
+        status_=tr("Selected ")+asset_display_name(preset)+tr(" for placement.");
     }
 
     draw->AddRectFilled(preview_min,preview_max,IM_COL32(28,33,39,255),3.0F);
@@ -1947,7 +2034,7 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
         if(mesh.marker_only||mesh.covered_pixel_count==0U){
             const ImVec2 center{(preview_min.x+preview_max.x)*0.5F,(preview_min.y+preview_max.y)*0.5F};
             draw->AddCircleFilled(center,ui_px(28.0F),IM_COL32(88,112,140,220),24);
-            draw->AddText({center.x-ui_px(18.0F),center.y-ui_px(7.0F)},IM_COL32_WHITE,"Asset");
+            draw->AddText({center.x-ui_px(18.0F),center.y-ui_px(7.0F)},IM_COL32_WHITE,tr("Asset"));
         }
     }catch(const std::exception&){
         const ImVec2 center{(preview_min.x+preview_max.x)*0.5F,(preview_min.y+preview_max.y)*0.5F};
@@ -1958,19 +2045,19 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
     if(available_in_current_level&&ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
         const AssetDragPayload payload{preset.registry_id};
         ImGui::SetDragDropPayload(kAssetDragPayloadType,&payload,sizeof(payload));
-        ImGui::TextUnformatted(preset.display_name.c_str());
-        ImGui::TextDisabled("Drop on the 3D map to place");
+        ImGui::TextUnformatted(asset_display_name(preset).c_str());
+        ImGui::TextDisabled(tr("Drop on the 3D map to place"));
         ImGui::EndDragDropSource();
     }
 
     if(!available_in_current_level){
         draw->AddRectFilled(preview_min,preview_max,IM_COL32(40,16,16,118),3.0F);
         draw->AddText({preview_min.x+ui_px(8.0F),preview_max.y-ui_px(24.0F)},IM_COL32(255,155,145,255),
-            "Unavailable on this map");
+            tr("Unavailable on this map"));
     }
 
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX()+card_width-ui_px(14.0F));
-    ImGui::TextUnformatted(preset.display_name.c_str());
+    ImGui::TextUnformatted(asset_display_name(preset).c_str());
     ImGui::PopTextWrapPos();
 
     if(!preset.technology_summary.empty())
@@ -2003,75 +2090,75 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
         const float tooltip_width=std::clamp(ImGui::GetIO().DisplaySize.x*0.60F,ui_px(620.0F),ui_px(860.0F));
         ImGui::SetNextWindowSizeConstraints(ImVec2(tooltip_width,0.0F),ImVec2(tooltip_width,ui_px(10000.0F)));
         ImGui::BeginTooltip();
-        ImGui::TextColored(ImVec4(0.86F,0.93F,0.96F,1.0F),"%s",preset.display_name.c_str());
+        ImGui::TextColored(ImVec4(0.86F,0.93F,0.96F,1.0F),"%s",asset_display_name(preset).c_str());
         ImGui::SameLine();
-        ImGui::TextDisabled("%s · ARM %u · class %u",thandor::placement_browser_kind_name(preset.browser_kind),
+        ImGui::TextDisabled(tr("%s · ARM %u · class %u"),thandor::placement_browser_kind_name(preset.browser_kind),
             preset.registry_id,preset.runtime_model_class_id);
         if(available_in_current_level)
-            ImGui::TextDisabled("Ready to place · Shift = technical details");
+            ImGui::TextDisabled(tr("Ready to place · Shift = technical details"));
         else
-            ImGui::TextColored(ImVec4(1.0F,0.62F,0.56F,1.0F),"Not placeable here · %s",level_diagnostic.c_str());
+            ImGui::TextColored(ImVec4(1.0F,0.62F,0.56F,1.0F),tr("Not placeable here · %s"),level_diagnostic.c_str());
         ImGui::Separator();
 
         if(ImGui::BeginTable("##asset_tooltip_columns",2,
             ImGuiTableFlags_SizingStretchProp|ImGuiTableFlags_BordersInnerV|ImGuiTableFlags_NoSavedSettings)){
-            ImGui::TableSetupColumn("Gameplay",ImGuiTableColumnFlags_WidthStretch,1.0F);
-            ImGui::TableSetupColumn("Research / model",ImGuiTableColumnFlags_WidthStretch,1.0F);
+            ImGui::TableSetupColumn(tr("Gameplay"),ImGuiTableColumnFlags_WidthStretch,1.0F);
+            ImGui::TableSetupColumn(tr("Research / model"),ImGuiTableColumnFlags_WidthStretch,1.0F);
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX()+ImGui::GetContentRegionAvail().x);
-            ImGui::SeparatorText("Retail build card");
-            ImGui::Text("HP %lld · Demand %llu MWh · Xenite %u T · Time %u T",
+            ImGui::SeparatorText(tr("Retail build card"));
+            ImGui::Text(tr("HP %lld · Demand %llu MWh · Xenite %u T · Time %u T"),
                 static_cast<long long>(preset.retail_armour),
                 static_cast<unsigned long long>(preset.retail_energy_demand_q4 >> 4U),
                 preset.retail_xenite_cost_q4 >> 4U,preset.retail_build_time_q5 >> 5U);
             if(preset.retail_energy_generation_capacity_q4>0U)
-                ImGui::Text("Energy generation +%llu MWh",
+                ImGui::Text(tr("Energy generation +%llu MWh"),
                     static_cast<unsigned long long>(preset.retail_energy_generation_capacity_q4 >> 4U));
             if(preset.fog_uncover_radius_q12>0)
-                ImGui::Text("Fog %.3f · scan %u",thandor::q12_to_float(preset.fog_uncover_radius_q12),
+                ImGui::Text(tr("Fog %.3f · scan %u"),thandor::q12_to_float(preset.fog_uncover_radius_q12),
                     preset.fog_uncover_scan_steps);
 
             if(preset.has_placement_occupancy_class||preset.has_resource_storage_capacity_contribution){
-                ImGui::SeparatorText("Resources");
+                ImGui::SeparatorText(tr("Resources"));
                 if(preset.has_placement_occupancy_class){
-                    const char* field_name=preset.placement_occupancy_class==0U?"Xenite":
-                        (preset.placement_occupancy_class==1U?"Tritium":"resource field");
-                    ImGui::Text("Extractor · %s · weight %u",field_name,preset.resource_extraction_weight_u8);
+                    const char* field_name=preset.placement_occupancy_class==0U?tr("Xenite"):
+                        (preset.placement_occupancy_class==1U?tr("Tritium"):tr("resource field"));
+                    ImGui::Text(tr("Extractor · %s · weight %u"),field_name,preset.resource_extraction_weight_u8);
                 }
                 if(preset.has_resource_storage_capacity_contribution){
-                    const char* resource=preset.resource_storage_selector==0U?"Xenite":
-                        (preset.resource_storage_selector==1U?"Tritium":"unknown selector");
-                    ImGui::Text("Storage capacity +%.3f %s",
+                    const char* resource=preset.resource_storage_selector==0U?tr("Xenite"):
+                        (preset.resource_storage_selector==1U?tr("Tritium"):tr("unknown selector"));
+                    ImGui::Text(tr("Storage capacity +%.3f %s"),
                         static_cast<double>(preset.resource_storage_capacity_contribution_q4)/16.0,resource);
                 }
             }
 
             if(preset.runtime_model_class_id==2U||preset.runtime_model_class_id==3U||
                preset.runtime_model_class_id==18U){
-                ImGui::SeparatorText("Movement / environment");
-                ImGui::Text("Water damage: threshold %.3f · multiplier %d",
+                ImGui::SeparatorText(tr("Movement / environment"));
+                ImGui::Text(tr("Water damage: threshold %.3f · multiplier %d"),
                     thandor::q12_to_float(preset.water_damage_threshold_q12),preset.water_damage_multiplier);
                 if(preset.runtime_model_class_id==2U||preset.runtime_model_class_id==18U)
-                    ImGui::Text("Heading gate: near 0x%04X · far 0x%04X · blend %.3f",
+                    ImGui::Text(tr("Heading gate: near 0x%04X · far 0x%04X · blend %.3f"),
                         preset.ground_near_heading_error_limit_turn16,
                         preset.ground_far_heading_error_limit_turn16,
                         thandor::q12_to_float(preset.ground_heading_interpolation_distance_q12));
                 if(preset.runtime_model_class_id==3U)
-                    ImGui::Text("Walker contact: lift %.3f · steer 0x%04X · footstep %u",
+                    ImGui::Text(tr("Walker contact: lift %.3f · steer 0x%04X · footstep %u"),
                         thandor::q12_to_float(preset.articulated_contact_lift_q12),
                         preset.articulated_contact_steering_limit_turn16,
                         preset.articulated_contact_sound_asset_id);
             }
             if(preset.runtime_model_class_id==23U){
-                ImGui::SeparatorText("Vertical deployment");
-                ImGui::Text("Step %.3f/tick · travel %.3f",
+                ImGui::SeparatorText(tr("Vertical deployment"));
+                ImGui::Text(tr("Step %.3f/tick · travel %.3f"),
                     thandor::q12_to_float(preset.vertical_deployment_step_q12_per_tick),
                     thandor::q12_to_float(preset.vertical_deployment_travel_limit_q12));
             }
 
-            ImGui::SeparatorText("Weapons");
+            ImGui::SeparatorText(tr("Weapons"));
             std::unordered_set<uint32_t> displayed_damage_shots;
             std::size_t displayed_weapon_count=0U;
             for(const auto& weapon:preset.simulation_weapon_profiles){
@@ -2082,7 +2169,7 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
                 ++displayed_weapon_count;
                 const auto [damage_min,damage_max]=std::minmax_element(
                     shot->target_impact_damage_q12.begin(),shot->target_impact_damage_q12.end());
-                ImGui::Text("SHT %u · dmg %.3f..%.3f · range %.3f · reload %ut",shot->definition_id,
+                ImGui::Text(tr("SHT %u · dmg %.3f..%.3f · range %.3f · reload %ut"),shot->definition_id,
                     thandor::q12_to_float(*damage_min),thandor::q12_to_float(*damage_max),
                     thandor::shot_selection_range_world(*shot),weapon.reload_ticks);
                 if(technical_details){
@@ -2092,69 +2179,69 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
                         damage_classes+=std::to_string(impact_class)+":"+
                             std::to_string(shot->target_impact_damage_q12[impact_class]);
                     }
-                    ImGui::TextDisabled("target-class damage raw (+0xB0): %s",damage_classes.c_str());
-                    ImGui::TextDisabled("Timing: life %ut · ramp %ut · fixed %ut · shade %dt",
+                    ImGui::TextDisabled(tr("target-class damage raw (+0xB0): %s"),damage_classes.c_str());
+                    ImGui::TextDisabled(tr("Timing: life %ut · ramp %ut · fixed %ut · shade %dt"),
                         shot->projectile_lifetime_ticks,shot->trajectory_ramp_duration_ticks,
                         shot->fixed_range_transition_age_threshold_ticks,shot->shading_release_transition_ticks);
-                    ImGui::TextDisabled("Sound: mask %d · gain %.3fx · max %.3f",
+                    ImGui::TextDisabled(tr("Sound: mask %d · gain %.3fx · max %.3f"),
                         shot->terrain_grid_mask_index,thandor::q15_gain_to_float(shot->positioned_sound_gain_q15),
                         thandor::q12_to_float(static_cast<int32_t>(shot->positioned_sound_maximum_distance_q12)));
                     const auto terrain_references=thandor::validate_shot_terrain_material_references(
                         *shot,static_cast<uint32_t>(loaded_material_count_));
                     if(terrain_references.invalid_reference_count==0U)
-                        ImGui::TextDisabled("Terrain refs: %u ok · %u sentinel",
+                        ImGui::TextDisabled(tr("Terrain refs: %u ok · %u sentinel"),
                             terrain_references.valid_reference_count,terrain_references.sentinel_count);
                     else
                         ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),
-                            "Terrain refs: %u ok · %u sentinel · %u INVALID",
+                            tr("Terrain refs: %u ok · %u sentinel · %u INVALID"),
                             terrain_references.valid_reference_count,terrain_references.sentinel_count,
                             terrain_references.invalid_reference_count);
                 }
             }
             if(displayed_damage_shots.size()>displayed_weapon_count)
-                ImGui::TextDisabled("+%zu more shot definition(s)",displayed_damage_shots.size()-displayed_weapon_count);
-            if(displayed_weapon_count==0U)ImGui::TextDisabled("No resolved weapon profile");
+                ImGui::TextDisabled(tr("+%zu more shot definition(s)"),displayed_damage_shots.size()-displayed_weapon_count);
+            if(displayed_weapon_count==0U)ImGui::TextDisabled(tr("No resolved weapon profile"));
 
             const auto& pipeline_validation=preset.effect_pipeline_validation;
-            ImGui::SeparatorText("Effects");
-            ImGui::Text("Effect pipeline: %s · W%u S%u E%u P%u · depth %u",
-                pipeline_validation.ok()?"validated":"FAILED",pipeline_validation.weapon_pipeline_count,
+            ImGui::SeparatorText(tr("Effects"));
+            ImGui::Text(tr("Effect pipeline: %s · W%u S%u E%u P%u · depth %u"),
+                pipeline_validation.ok()?tr("validated"):tr("FAILED"),pipeline_validation.weapon_pipeline_count,
                 pipeline_validation.shot_reference_count,pipeline_validation.effect_reference_count,
                 pipeline_validation.sprite_reference_count,pipeline_validation.maximum_effect_depth);
             for(const auto& issue:pipeline_validation.issues)
                 ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),"%s",issue.c_str());
 
             if(technical_details){
-                ImGui::SeparatorText("PCK gameplay values");
-                ImGui::TextDisabled("Raw: %u ARM nodes · root HP %d · demand %lluQ4 · gen %lluQ4 · X %uQ4 · T %uQ5",
+                ImGui::SeparatorText(tr("PCK gameplay values"));
+                ImGui::TextDisabled(tr("Raw: %u ARM nodes · root HP %d · demand %lluQ4 · gen %lluQ4 · X %uQ4 · T %uQ5"),
                     preset.retail_stat_arm_node_count,preset.root_maximum_integrity,
                     static_cast<unsigned long long>(preset.retail_energy_demand_q4),
                     static_cast<unsigned long long>(preset.retail_energy_generation_capacity_q4),
                     preset.retail_xenite_cost_q4,preset.retail_build_time_q5);
                 if(preset.has_placement_occupancy_class){
-                    ImGui::TextDisabled("Field extraction weight: %u",preset.resource_extraction_weight_u8);
-                    ImGui::TextDisabled("MDL +0xC0 resource selector · +0xC8 extraction weight; production resolves over the connected field region");
+                    ImGui::TextDisabled(tr("Field extraction weight: %u"),preset.resource_extraction_weight_u8);
+                    ImGui::TextDisabled(tr("MDL +0xC0 resource selector · +0xC8 extraction weight; production resolves over the connected field region"));
                 }
                 if(preset.has_resource_storage_capacity_contribution)
-                    ImGui::TextDisabled("V537 class 14/15: MDL +0xC0 storage selector · +0xC4 contribution Q4");
+                    ImGui::TextDisabled(tr("V537 class 14/15: MDL +0xC0 storage selector · +0xC4 contribution Q4"));
                 if(preset.runtime_model_class_id==2U||preset.runtime_model_class_id==3U||
                    preset.runtime_model_class_id==18U)
-                    ImGui::TextDisabled("V537 water: MDL +0x194 multiplier · +0x198 threshold");
+                    ImGui::TextDisabled(tr("V537 water: MDL +0x194 multiplier · +0x198 threshold"));
                 if(preset.runtime_model_class_id==2U||preset.runtime_model_class_id==18U)
-                    ImGui::TextDisabled("V537 steering: MDL +0xC0/+0xC4/+0xC8");
+                    ImGui::TextDisabled(tr("V537 steering: MDL +0xC0/+0xC4/+0xC8"));
                 if(preset.runtime_model_class_id==3U){
-                    ImGui::TextDisabled("Footstep world sound index: %u",preset.articulated_contact_sound_asset_id);
-                    ImGui::TextDisabled("Dry / water contact effects: EFF %u / EFF %u",
+                    ImGui::TextDisabled(tr("Footstep world sound index: %u"),preset.articulated_contact_sound_asset_id);
+                    ImGui::TextDisabled(tr("Dry / water contact effects: EFF %u / EFF %u"),
                         preset.timed_effect_id,preset.timed_water_effect_id);
                 }
                 if(preset.runtime_model_class_id==23U)
-                    ImGui::TextDisabled("V537 class 23: MDL +0x0C step · +0x24 travel limit; collision hold deploys from zero, endpoint readiness permits the subsequent bidirectional link");
+                    ImGui::TextDisabled(tr("V537 class 23: MDL +0x0C step · +0x24 travel limit; collision hold deploys from zero, endpoint readiness permits the subsequent bidirectional link"));
             }
             ImGui::PopTextWrapPos();
 
             ImGui::TableSetColumnIndex(1);
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX()+ImGui::GetContentRegionAvail().x);
-            ImGui::SeparatorText("Research / model variants");
+            ImGui::SeparatorText(tr("Research / model variants"));
             if(document_){
                 const uint32_t preview_faction=std::min(selected_faction_,7U);
                 const auto& preview_mask=document_->faction_technology_mask(preview_faction);
@@ -2164,12 +2251,12 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
                 const auto exact_hierarchy=thandor::resolve_faction_technology_hierarchy(
                     preset,preview_mask,&selected_root,&linked_count,&deferred_count);
                 const uint32_t preview_family=graphics_family_for_faction(preview_faction);
-                ImGui::TextColored(graphics_family_ui_text_color(preview_family),"%s · Faction %u",
+                ImGui::TextColored(graphics_family_ui_text_color(preview_family),tr("%s · Faction %u"),
                     thandor::graphics_family_single_player_faction_name(preview_family),preview_faction);
                 ImGui::SameLine();
-                ImGui::TextDisabled("· research %u/256 · root MDL %u",
+                ImGui::TextDisabled(tr("· research %u/256 · root MDL %u"),
                     thandor::faction_technology_unlocked_count(preview_mask),selected_root);
-                ImGui::TextDisabled("Runtime: %zu MDL · %u ARM · %u deferred",exact_hierarchy.size(),
+                ImGui::TextDisabled(tr("Runtime: %zu MDL · %u ARM · %u deferred"),exact_hierarchy.size(),
                     linked_count,deferred_count);
 
                 uint32_t timed_rules=0U;
@@ -2185,7 +2272,7 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
                        node.simulation.repeat_creation_notification_movie_id!=0U){
                         ++notification_rules;
                         if(technical_details)
-                            ImGui::TextDisabled("Notification MDL %u · first movie %u · repeat movie %u",
+                            ImGui::TextDisabled(tr("Notification MDL %u · first movie %u · repeat movie %u"),
                                 node.model_definition_id,node.simulation.first_creation_notification_movie_id,
                                 node.simulation.repeat_creation_notification_movie_id);
                     }
@@ -2195,7 +2282,7 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
                        node.simulation.damage_effect_health_threshold_percent>0)++damage_rules;
                     if(technical_details&&node.simulation.damage_effect_id!=0U&&
                        node.simulation.damage_effect_health_threshold_percent>0){
-                        ImGui::TextDisabled("Damage MDL %u · EFF %u < %d%% · cd %u..%ut",
+                        ImGui::TextDisabled(tr("Damage MDL %u · EFF %u < %d%% · cd %u..%ut"),
                             node.model_definition_id,node.simulation.damage_effect_id,
                             node.simulation.damage_effect_health_threshold_percent,
                             node.simulation.damage_effect_min_cooldown_ticks,
@@ -2204,56 +2291,56 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
                                  node.simulation.damage_effect_random_cooldown_ticks-1U));
                     }
                 }
-                ImGui::TextDisabled("Runtime rules: timed %u · damage %u · notifications %u",
+                ImGui::TextDisabled(tr("Runtime rules: timed %u · damage %u · notifications %u"),
                     timed_rules,damage_rules,notification_rules);
             }
-            if(!preset.loadout_name.empty())ImGui::Text("Loadout: %s",preset.loadout_name.c_str());
-            if(!preset.technology_summary.empty())ImGui::Text("Panel: %s",preset.technology_summary.c_str());
+            if(!preset.loadout_name.empty())ImGui::Text(tr("Loadout: %s"),preset.loadout_name.c_str());
+            if(!preset.technology_summary.empty())ImGui::Text(tr("Panel: %s"),preset.technology_summary.c_str());
             if(preset.linked_technology_id!=0U)
-                ImGui::Text("Linked TEC %u · %s",preset.linked_technology_id,
-                    preset.linked_technology_title.empty()?"unnamed":preset.linked_technology_title.c_str());
-            ImGui::TextDisabled("TEC entries %zu · variant groups %zu",preset.technology_panel_entries.size(),
+                ImGui::Text(tr("Linked TEC %u · %s"),preset.linked_technology_id,
+                    preset.linked_technology_title.empty()?tr("unnamed"):preset.linked_technology_title.c_str());
+            ImGui::TextDisabled(tr("TEC entries %zu · variant groups %zu"),preset.technology_panel_entries.size(),
                 preset.model_variant_groups.size());
             const std::size_t technology_preview_count=std::min<std::size_t>(preset.technology_panel_entries.size(),3U);
             for(std::size_t i=0U;i<technology_preview_count;++i){
                 const auto& entry=preset.technology_panel_entries[i];
-                ImGui::Text("TEC %u %s · B%u/R%u · X%u Demand%u Time%u · %s",entry.technology_id,
-                    entry.title.empty()?"unnamed":entry.title.c_str(),entry.direction_index+1U,entry.row_index+1U,
+                ImGui::Text(tr("TEC %u %s · B%u/R%u · X%u Demand%u Time%u · %s"),entry.technology_id,
+                    entry.title.empty()?tr("unnamed"):entry.title.c_str(),entry.direction_index+1U,entry.row_index+1U,
                     entry.xenite_cost_q4 >> 4U,entry.energy_demand_q4 >> 4U,entry.research_duration_q5 >> 5U,
                     thandor::technology_category_retail_label(entry.category));
                 if(technical_details&&!entry.special_features.empty())
-                    ImGui::TextDisabled("special features: %s",entry.special_features.c_str());
+                    ImGui::TextDisabled(tr("special features: %s"),entry.special_features.c_str());
             }
             if(preset.technology_panel_entries.size()>technology_preview_count)
-                ImGui::TextDisabled("+%zu more technology entries",preset.technology_panel_entries.size()-technology_preview_count);
+                ImGui::TextDisabled(tr("+%zu more technology entries"),preset.technology_panel_entries.size()-technology_preview_count);
 
-            ImGui::SeparatorText("Visual / runtime");
-            ImGui::Text("Models %zu · linked ARM %u · deferred %u",
+            ImGui::SeparatorText(tr("Visual / runtime"));
+            ImGui::Text(tr("Models %zu · linked ARM %u · deferred %u"),
                 preset.resolved_model_hierarchy.empty()?preset.model_hierarchy.size():preset.resolved_model_hierarchy.size(),
                 preset.linked_model_runtime_count,preset.deferred_model_attachment_count);
-            ImGui::TextDisabled("Shared EFF IDs: %s",
-                shared_sprite_effect_ids.empty()?"none":shared_sprite_effect_ids.c_str());
-            ImGui::TextDisabled("Canonical ARM %u · stock placements %u",
+            ImGui::TextDisabled(tr("Shared EFF IDs: %s"),
+                shared_sprite_effect_ids.empty()?tr("none"):shared_sprite_effect_ids.c_str());
+            ImGui::TextDisabled(tr("Canonical ARM %u · stock placements %u"),
                 thandor::canonical_placement_registry_id(preset),preset.stock_placement_count);
 
             try{
                 const auto& preview=asset_preview(preset);
-                ImGui::TextDisabled("Preview: %zu tris · %zu px · %u×%u",preview.textured_source_triangle_count,
+                ImGui::TextDisabled(tr("Preview: %zu tris · %zu px · %u×%u"),preview.textured_source_triangle_count,
                     preview.covered_pixel_count,preview.raster_width,preview.raster_height);
             }catch(const std::exception& error){
-                ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),"Preview: %s",error.what());
+                ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),tr("Preview: %s"),error.what());
             }
 
             if(technical_details){
-                ImGui::SeparatorText("Identity / source");
-                ImGui::Text("Localized PCK name: %s",preset.localized_name.empty()?"unavailable":preset.localized_name.c_str());
-                ImGui::TextDisabled("Name source: %s · resource 0x%08X · p%u #%u · MDL name %u",
+                ImGui::SeparatorText(tr("Identity / source"));
+                ImGui::Text(tr("Localized PCK name: %s"),preset.localized_name.empty()?tr("unavailable"):preset.localized_name.c_str());
+                ImGui::TextDisabled(tr("Name source: %s · resource 0x%08X · p%u #%u · MDL name %u"),
                     localized_source.c_str(),preset.name_text_resource_id,thandor::kArmyAssetNameTextPage,
                     localized_index,preset.model_name_text_offset);
-                ImGui::Text("ARM: %s",preset.source_path.c_str());
-                ImGui::Text("MDL %u: %s",preset.model_definition_id,preset.model_source_path.c_str());
-                ImGui::Text("SPR: %s",preset.sprite_path.empty()?"marker only":preset.sprite_path.c_str());
-                ImGui::TextDisabled("Compatible ARM IDs: %s",compatible_ids.empty()?"same ID":compatible_ids.c_str());
+                ImGui::Text(tr("ARM: %s"),preset.source_path.c_str());
+                ImGui::Text(tr("MDL %u: %s"),preset.model_definition_id,preset.model_source_path.c_str());
+                ImGui::Text(tr("SPR: %s"),preset.sprite_path.empty()?tr("marker only"):preset.sprite_path.c_str());
+                ImGui::TextDisabled(tr("Compatible ARM IDs: %s"),compatible_ids.empty()?tr("same ID"):compatible_ids.c_str());
                 if(!preset.sprite_path.empty()){
                     try{
                         const auto& sprite=cached_sprite(preset.sprite_path);
@@ -2268,10 +2355,10 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
                                     ++scaled_lighting_triangles;
                             }
                         }
-                        ImGui::TextDisabled("SPR light %.3f · scaled tris %zu/%zu",
+                        ImGui::TextDisabled(tr("SPR light %.3f · scaled tris %zu/%zu"),
                             thandor::q12_to_float(sprite.lighting_scale_q12()),scaled_lighting_triangles,total_triangles);
                     }catch(const std::exception& error){
-                        ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),"SPR: %s",error.what());
+                        ImGui::TextColored(ImVec4(1.0F,0.55F,0.48F,1.0F),tr("SPR: %s"),error.what());
                     }
                 }
             }
@@ -2279,7 +2366,7 @@ void EditorApp::draw_placement_card(const thandor::ArmyAssetPreset& preset,float
             ImGui::EndTable();
         }
         ImGui::Separator();
-        ImGui::TextDisabled("%s",technical_details?"Release Shift for compact view":"Hold Shift for IDs, raw fields, and provenance");
+        ImGui::TextDisabled("%s",technical_details?tr("Release Shift for compact view"):tr("Hold Shift for IDs, raw fields, and provenance"));
         ImGui::EndTooltip();
     }
     ImGui::EndChild();
@@ -2290,9 +2377,9 @@ void EditorApp::load_scenario_catalog_labels(){
     scenario_difficulty_labels_.clear();scenario_size_labels_.clear();scenario_planet_labels_.clear();
     try{
         const auto text=thandor::TextResourceAsset::parse(catalog_.load("texte/level.str"));
-        for(uint32_t index=0;index<5U;++index)scenario_difficulty_labels_.push_back(text.string(index));
-        for(uint32_t index=5U;index<10U;++index)scenario_size_labels_.push_back(text.string(index));
-        for(uint32_t index=10U;index<20U;++index)scenario_planet_labels_.push_back(text.string(index));
+        for(uint32_t index=0;index<5U;++index)scenario_difficulty_labels_.push_back(text.string(index,editor_text_country()));
+        for(uint32_t index=5U;index<10U;++index)scenario_size_labels_.push_back(text.string(index,editor_text_country()));
+        for(uint32_t index=10U;index<20U;++index)scenario_planet_labels_.push_back(text.string(index,editor_text_country()));
     }catch(const std::exception&){
         for(uint32_t index=0;index<5U;++index){
             scenario_difficulty_labels_.push_back("Difficulty resource "+std::to_string(0x2200U+index));
@@ -2321,7 +2408,7 @@ void EditorApp::apply_scenario_text_buffers(){
         for(uint32_t index=0;index<scenario_text_buffers_.size();++index)
             document_->set_scenario_detail_string(index,scenario_text_buffers_[index].data());
         scenario_text_buffers_dirty_=false;
-        status_="Scenario summary and detail text updated.";
+        status_=tr("Scenario summary and detail text updated.");
     }catch(const std::exception& error){status_=error.what();}
 }
 
@@ -2329,50 +2416,50 @@ void EditorApp::draw_right_panel(){
     const auto panel=workspace_layout().inspector;
     ImGui::SetNextWindowPos({panel.x,panel.y});
     ImGui::SetNextWindowSize({panel.width,panel.height});
-    ImGui::Begin("Inspector",nullptr,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_NoSavedSettings);
-    if(ImGui::SmallButton("Collapse inspector"))show_right_panel_=false;
+    ImGui::Begin(tr_label("Inspector"),nullptr,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_NoSavedSettings);
+    if(ImGui::SmallButton(tr_label("Collapse inspector")))show_right_panel_=false;
     ImGui::Separator();
     if(requested_inspector_tab_>=0)inspector_page_=requested_inspector_tab_>=4?requested_inspector_tab_:0;
     if(inspector_page_>=4){
-        if(ImGui::SmallButton("< Editor tools")){inspector_page_=0;requested_inspector_tab_=0;}
+        if(ImGui::SmallButton(tr_label("< Editor tools"))){inspector_page_=0;requested_inspector_tab_=0;}
         ImGui::Separator();
     }
     if(ImGui::BeginTabBar("tools-tabs",ImGuiTabBarFlags_FittingPolicyScroll)){
-        if(begin_inspector_tab("Inspector",0)){
+        if(begin_inspector_tab(tr_label("Inspector"),0)){
             {auto scope=editor_performance_log_.measure(EditorPerfStage::UiInspectorSelection);draw_selected_object_editor();}
-            if(ImGui::CollapsingHeader("Placement / gameplay")){
+            if(ImGui::CollapsingHeader(tr_label("Placement / gameplay"))){
             const std::array<Tool,4> tools{Tool::Select,Tool::Resource,Tool::PlayerStart,Tool::EffectScenery};
             for(auto value:tools){
                 if(ImGui::RadioButton(tool_name(value),tool_==value))tool_=value;
                 if(value!=tools.back())ImGui::SameLine();
             }
-            if(ImGui::InputScalar("Asset ID",ImGuiDataType_U32,&selected_asset_id_))rebuild_objects();
+            if(ImGui::InputScalar(tr_label("Asset ID"),ImGuiDataType_U32,&selected_asset_id_))rebuild_objects();
             if(const auto* selected_preset=catalog_.army_preset(selected_asset_id_);selected_preset!=nullptr){
                 const auto diagnostic=catalog_.placement_compatibility_diagnostic(*selected_preset,document_->level());
-                if(!diagnostic.empty())ImGui::TextColored({1.0F,0.45F,0.4F,1.0F},"Not placeable: %s",diagnostic.c_str());
+                if(!diagnostic.empty())ImGui::TextColored({1.0F,0.45F,0.4F,1.0F},tr("Not placeable: %s"),diagnostic.c_str());
             }
             draw_global_faction_selector("object-view-faction");
-            ImGui::InputScalar("New orientation",ImGuiDataType_U32,&selected_orientation_);
-            ImGui::TextWrapped("Drag a 3D asset card from the left panel directly onto the map. Click a placed object to select it.");
+            ImGui::InputScalar(tr_label("New orientation"),ImGuiDataType_U32,&selected_orientation_);
+            ImGui::TextWrapped(tr("Drag a 3D asset card from the left panel directly onto the map. Click a placed object to select it."));
 
-            ImGui::SeparatorText("Transform gizmo");
-            if(ImGui::Button("Move  W",{ui_px(130.0F),0.0F})){tool_=Tool::Select;gizmo_mode_=GizmoMode::Translate;workspace_transform_action_=1;}
+            ImGui::SeparatorText(tr("Transform gizmo"));
+            if(ImGui::Button(tr_label("Move  W"),{ui_px(130.0F),0.0F})){tool_=Tool::Select;gizmo_mode_=GizmoMode::Translate;workspace_transform_action_=1;}
             ImGui::SameLine();
-            if(ImGui::Button("Rotate  E",{ui_px(130.0F),0.0F})){tool_=Tool::Select;gizmo_mode_=GizmoMode::Rotate;workspace_transform_action_=2;}
+            if(ImGui::Button(tr_label("Rotate  E"),{ui_px(130.0F),0.0F})){tool_=Tool::Select;gizmo_mode_=GizmoMode::Rotate;workspace_transform_action_=2;}
             if(gizmo_mode_==GizmoMode::Translate)
-                ImGui::TextDisabled("Red X and green Y move the LEV record. Blue Z raises or lowers its FLD terrain anchor.");
+                ImGui::TextDisabled(tr("Red X and green Y move the LEV record. Blue Z raises or lowers its FLD terrain anchor."));
             else
-                ImGui::TextDisabled("Drag the yellow ring to change the stock LEV yaw. Hold Shift for 15 degree snapping.");
+                ImGui::TextDisabled(tr("Drag the yellow ring to change the stock LEV yaw. Hold Shift for 15 degree snapping."));
 
             }
 
-            ImGui::SeparatorText("Placed records");
+            ImGui::SeparatorText(tr("Placed records"));
             ImGui::BeginChild("placed-record-scroll",{0,ui_px(170.0F)},false,ImGuiWindowFlags_AlwaysVerticalScrollbar);
             auto placements=document_->level().placements();
             for(std::size_t i=0;i<placements.size();++i){
                 const auto& placement=placements[i];
                 const auto* preset=catalog_.army_preset(placement.army_asset_id);
-                std::string placed_name=preset?preset->display_name:"unresolved";
+                std::string placed_name=preset?asset_display_name(*preset):tr("unresolved");
                 for(const auto& tag:document_->placement_tags())if(tag.placement_index==i&&!tag.display_name.empty()){placed_name=tag.display_name;break;}
                 char label[256];
                 std::snprintf(label,sizeof(label),"%s##placement_%zu",placed_name.c_str(),i);
@@ -2385,162 +2472,160 @@ void EditorApp::draw_right_panel(){
             ImGui::EndChild();
 
             if(object_build_error_count_!=0)
-                ImGui::TextWrapped("Some objects could not be displayed: %s",first_object_build_error_.c_str());
+                ImGui::TextWrapped(tr("Some objects could not be displayed: %s"),first_object_build_error_.c_str());
             if(!asset_load_failures_.empty())
-                ImGui::TextWrapped("Unavailable assets skipped (%zu): %s: %s",asset_load_failures_.size(),
+                ImGui::TextWrapped(tr("Unavailable assets skipped (%zu): %s: %s"),asset_load_failures_.size(),
                                    asset_load_failures_.begin()->first.c_str(),asset_load_failures_.begin()->second.c_str());
             ImGui::EndTabItem();
         }
-        if(begin_inspector_tab("Terrain",1)){
-            if(tool_!=Tool::GenerateTerrain&&ImGui::Button("Generate terrain...",{-1,0}))choose_workspace_tool(Tool::GenerateTerrain,1);
+        if(begin_inspector_tab(tr_label("Terrain"),1)){
+            if(tool_!=Tool::GenerateTerrain&&ImGui::Button(tr_label("Generate terrain..."),{-1,0}))choose_workspace_tool(Tool::GenerateTerrain,1);
             const auto draw_radius=[&](){
-                ImGui::SliderFloat("Radius",&brush_.radius_cells,0.25F,24.0F,"%.2f cells");
+                ImGui::SliderFloat(tr_label("Radius"),&brush_.radius_cells,0.25F,24.0F,"%.2f cells");
             };
             const auto draw_falloff=[&](){
                 int falloff=static_cast<int>(brush_.falloff);
-                const char* falloffs[]={"Constant","Linear","Smooth"};
-                if(ImGui::Combo("Falloff",&falloff,falloffs,3))
+                const char* falloffs[]={tr("Constant"),tr("Linear"),tr("Smooth")};
+                if(ImGui::Combo(tr_label("Falloff"),&falloff,falloffs,3))
                     brush_.falloff=static_cast<thandor::BrushFalloff>(falloff);
             };
             const auto draw_terrain_water_policy=[&](){
                 int water_policy=static_cast<int>(terrain_water_policy_);
-                const char* policies[]={"Keep absolute water level","Move water with terrain","Ignore water-covered cells"};
-                if(ImGui::Combo("Water response",&water_policy,policies,3))
+                const char* policies[]={tr("Keep absolute water level"),tr("Move water with terrain"),tr("Ignore water-covered cells")};
+                if(ImGui::Combo(tr_label("Water response"),&water_policy,policies,3))
                     terrain_water_policy_=static_cast<thandor::TerrainWaterEditPolicy>(water_policy);
-                show_item_tooltip("FLD stores water as a relative terrain delta. Ordinary height brushes preserve or adjust that delta according to this option.");
+                show_item_tooltip(tr("FLD stores water as a relative terrain delta. Ordinary height brushes preserve or adjust that delta according to this option."));
             };
 
             ImGui::SeparatorText(tool_name(tool_));
             switch(tool_){
                 case Tool::GenerateTerrain:draw_terrain_generator_panel();break;
                 case Tool::Select:
-                    ImGui::TextWrapped("Click a placed object to select it. Use the transform gizmo in the Inspector tab. Ctrl+D clears the temporary water selection and object selection.");
+                    ImGui::TextWrapped(tr("Click a placed object to select it. Use the transform gizmo in the Inspector tab. Ctrl+D clears the temporary water selection and object selection."));
                     break;
                 case Tool::Raise:
                 case Tool::Lower:
                 case Tool::Smooth:
                     draw_radius();
-                    ImGui::SliderFloat("Strength",&brush_.strength,0.01F,1.0F);
+                    ImGui::SliderFloat(tr_label("Strength"),&brush_.strength,0.01F,1.0F);
                     draw_falloff();
                     draw_terrain_water_policy();
-                    ImGui::TextDisabled("Left-drag edits terrain. In Select mode, left-drag turns the camera. Right-drag moves it.");
+                    ImGui::TextDisabled(tr("Left-drag edits terrain. In Select mode, left-drag turns the camera. Right-drag moves it."));
                     break;
                 case Tool::Flatten:
                     draw_radius();
-                    ImGui::SliderFloat("Strength",&brush_.strength,0.01F,1.0F);
+                    ImGui::SliderFloat(tr_label("Strength"),&brush_.strength,0.01F,1.0F);
                     draw_falloff();
                     draw_terrain_water_policy();
-                    ImGui::DragFloat("Target height",&flatten_height_,0.05F);
-                    if(ImGui::Button("Use map-center terrain height",{-1.0F,0.0F})){
+                    ImGui::DragFloat(tr_label("Target height"),&flatten_height_,0.05F);
+                    if(ImGui::Button(tr_label("Use map-center terrain height"),{-1.0F,0.0F})){
                         const auto& field=document_->field();
                         flatten_height_=field.at(field.width()/2U,field.height()/2U).terrain_height();
                     }
                     break;
                 case Tool::Water:{
                     ensure_water_selection_size();
-                    ImGui::Text("Active animated surface: %s",thandor::terrain_surface_family_name(surface_family_));
+                    ImGui::Text(tr("Active animated surface: %s"),thandor::terrain_surface_family_name(surface_family_));
 
                     draw_radius();
-                    ImGui::DragFloat("Level step",&water_level_step_,0.01F,0.01F,16.0F,"%.2f");
-                    ImGui::Text("Selected cells: %zu",water_selection_count());
-                    const char* stage=water_selection_stage_==WaterSelectionStage::SelectArea?"1. Select rough area":
-                        (water_selection_stage_==WaterSelectionStage::PickReference?"2. Pick reference terrain":"3. Adjust flat surface");
+                    ImGui::DragFloat(tr_label("Level step"),&water_level_step_,0.01F,0.01F,16.0F,"%.2f");
+                    ImGui::Text(tr("Selected cells: %zu"),water_selection_count());
+                    const char* stage=water_selection_stage_==WaterSelectionStage::SelectArea?tr("1. Select rough area"):
+                        (water_selection_stage_==WaterSelectionStage::PickReference?tr("2. Pick reference terrain"):tr("3. Adjust flat surface"));
                     ImGui::TextColored({0.35F,0.78F,1.0F,1.0F},"%s",stage);
                     if(water_selection_stage_==WaterSelectionStage::SelectArea){
-                        ImGui::TextWrapped("Left-drag marks the rough water area. Hold Shift to remove cells. The cyan overlay is temporary and is not exported.");
-                        if(ImGui::Button("Continue: pick level from selected terrain",{-1.0F,0.0F})){
-                            if(water_selection_count()==0U)status_="Select at least one cell first.";
+                        ImGui::TextWrapped(tr("Left-drag marks the rough water area. Hold Shift to remove cells. The cyan overlay is temporary and is not exported."));
+                        if(ImGui::Button(tr_label("Continue: pick level from selected terrain"),{-1.0F,0.0F})){
+                            if(water_selection_count()==0U)status_=tr("Select at least one cell first.");
                             else water_selection_stage_=WaterSelectionStage::PickReference;
                         }
                     }else if(water_selection_stage_==WaterSelectionStage::PickReference){
-                        ImGui::TextWrapped("Click a cyan cell on the rim or surrounding terrain. Its terrain Z becomes the initial perfectly flat water surface.");
-                        if(ImGui::Button("Back to area selection",{-1.0F,0.0F}))
+                        ImGui::TextWrapped(tr("Click a cyan cell on the rim or surrounding terrain. Its terrain Z becomes the initial perfectly flat water surface."));
+                        if(ImGui::Button(tr_label("Back to area selection"),{-1.0F,0.0F}))
                             water_selection_stage_=WaterSelectionStage::SelectArea;
                     }else{
-                        ImGui::DragFloat("Absolute water surface Z",&water_height_,0.01F);
-                        if(ImGui::Button("Water down",{ui_px(155.0F),0.0F}))adjust_water_selection_level(-water_level_step_);
+                        ImGui::DragFloat(tr_label("Absolute water surface Z"),&water_height_,0.01F);
+                        if(ImGui::Button(tr_label("Water down"),{ui_px(155.0F),0.0F}))adjust_water_selection_level(-water_level_step_);
                         ImGui::SameLine();
-                        if(ImGui::Button("Water up",{ui_px(155.0F),0.0F}))adjust_water_selection_level(water_level_step_);
-                        if(ImGui::Button("Apply flat water to selection",{-1.0F,0.0F}))
+                        if(ImGui::Button(tr_label("Water up"),{ui_px(155.0F),0.0F}))adjust_water_selection_level(water_level_step_);
+                        if(ImGui::Button(tr_label("Apply flat water to selection"),{-1.0F,0.0F}))
                             apply_flat_water_selection(true);
-                        if(ImGui::Button("Erase water in selection",{-1.0F,0.0F}))
+                        if(ImGui::Button(tr_label("Erase water in selection"),{-1.0F,0.0F}))
                             apply_flat_water_selection(false);
-                        ImGui::TextWrapped("Mouse wheel over the map raises/lowers this single absolute surface. Every selected wet cell stays at the same Z; no radial hill or falloff is applied.");
-                        if(ImGui::Button("Pick another reference point",{-1.0F,0.0F}))
+                        ImGui::TextWrapped(tr("Mouse wheel over the map raises/lowers this single absolute surface. Every selected wet cell stays at the same Z; no radial hill or falloff is applied."));
+                        if(ImGui::Button(tr_label("Pick another reference point"),{-1.0F,0.0F}))
                             water_selection_stage_=WaterSelectionStage::PickReference;
                     }
-                    if(ImGui::Button("Clear selection  Ctrl+D",{-1.0F,0.0F}))clear_water_selection();
+                    if(ImGui::Button(tr_label("Clear selection  Ctrl+D"),{-1.0F,0.0F}))clear_water_selection();
                     break;
                 }
                 case Tool::ResourceField:{
                     draw_radius();
-                    ImGui::TextWrapped("Paint resource fields. Crystal objects are placed separately.");
+                    ImGui::TextWrapped(tr("Paint resource fields. Crystal objects are placed separately."));
                     int type=resource_field_occupancy_class_==0U?0:1;
-                    const char* types[]={"Xenite (gold)","Tritium (blue)"};
-                    if(ImGui::Combo("Field type",&type,types,2))resource_field_occupancy_class_=type==0?0U:1U;
-                    if(ImGui::RadioButton("Paint",!resource_field_erase_mode_))resource_field_erase_mode_=false;
+                    const char* types[]={tr("Xenite (gold)"),tr("Tritium (blue)")};
+                    if(ImGui::Combo(tr_label("Field type"),&type,types,2))resource_field_occupancy_class_=type==0?0U:1U;
+                    if(ImGui::RadioButton(tr_label("Paint"),!resource_field_erase_mode_))resource_field_erase_mode_=false;
                     ImGui::SameLine();
-                    if(ImGui::RadioButton("Erase",resource_field_erase_mode_))resource_field_erase_mode_=true;
-                    ImGui::TextDisabled("Shift temporarily reverses Paint/Erase.");
+                    if(ImGui::RadioButton(tr_label("Erase"),resource_field_erase_mode_))resource_field_erase_mode_=true;
+                    ImGui::TextDisabled(tr("Shift temporarily reverses Paint/Erase."));
                     break;
                 }
                 case Tool::Texture:{
                     draw_radius();
-                    ImGui::SliderFloat("Strength",&brush_.strength,0.01F,1.0F);
+                    ImGui::SliderFloat(tr_label("Strength"),&brush_.strength,0.01F,1.0F);
                     draw_falloff();
                     draw_material_palette();
-                    ImGui::SeparatorText("Editable texture exchange");
-                    ImGui::InputTextWithHint("##texture-exchange","Path to a 256x256 .tga",texture_exchange_path_,sizeof(texture_exchange_path_));
-                    if(ImGui::Button("Export selected layer as TGA",{-1.0F,0.0F})){
+                    ImGui::SeparatorText(tr("Editable texture exchange"));
+                    ImGui::InputTextWithHint("##texture-exchange",tr("Path to a 256x256 .tga"),texture_exchange_path_,sizeof(texture_exchange_path_));
+                    if(ImGui::Button(tr_label("Export selected layer as TGA"),{-1.0F,0.0F})){
                         try{
-                            if(selected_material_>=material_images_.size())throw std::runtime_error("selected terrain layer is unavailable");
+                            if(selected_material_>=material_images_.size())throw std::runtime_error(tr("selected terrain layer is unavailable"));
                             thandor::save_tga_rgba(texture_exchange_path_,material_images_[selected_material_]);
-                            status_="Exported editable terrain layer to "+std::string(texture_exchange_path_)+".";
+                            status_=tr("Exported editable terrain layer to ")+std::string(texture_exchange_path_)+".";
                         }catch(const std::exception& e){status_=e.what();}
                     }
-                    if(ImGui::Button("Import TGA into selected layer",{-1.0F,0.0F})){
+                    if(ImGui::Button(tr_label("Import TGA into selected layer"),{-1.0F,0.0F})){
                         try{
                             auto image=thandor::load_tga_rgba(texture_exchange_path_);
                             if(image.width!=256U||image.height!=256U)
-                                throw std::runtime_error("terrain texture import requires exactly 256x256 pixels");
+                                throw std::runtime_error(tr("terrain texture import requires exactly 256x256 pixels"));
                             checkpoint();
                             document_->import_terrain_material_bytes(catalog_,selected_material_,
                                 std::string("tga:")+texture_exchange_path_,thandor::encode_single_rgba_gfx(image));
                             load_materials();rebuild_mesh();
-                            status_="Imported TGA into terrain layer "+std::string(1,static_cast<char>('A'+selected_material_))+".";
+                            status_=tr("Imported TGA into terrain layer ")+std::string(1,static_cast<char>('A'+selected_material_))+".";
                         }catch(const std::exception& e){status_=e.what();}
                     }
-                    ImGui::TextDisabled("Imported textures are included when you save the project or export game assets.");
+                    ImGui::TextDisabled(tr("Imported textures are included when you save the project or export game assets."));
 
-                    std::vector<const char*> texture_sources;
-                    for(const auto& group:catalog_.map_groups())texture_sources.push_back(group.display_name.c_str());
                     static std::array<std::string,26> layer_storage=[](){std::array<std::string,26> a{};for(int i=0;i<26;++i)a[i]=std::string(1,static_cast<char>('A'+i));return a;}();
                     const char* layer_names[26]{};for(int i=0;i<26;++i)layer_names[i]=layer_storage[static_cast<std::size_t>(i)].c_str();
-                    ImGui::SeparatorText("Copy layer from another map");
-                    ImGui::Combo("Source map",&texture_source_group_,texture_sources.data(),static_cast<int>(texture_sources.size()));
-                    ImGui::Combo("Source layer",&texture_source_material_,layer_names,26);
-                    ImGui::Combo("Destination layer",&texture_destination_material_,layer_names,26);
-                    if(ImGui::Button("Import layer from stock map",{-1.0F,0.0F})){
+                    ImGui::SeparatorText(tr("Copy layer from another map"));
+                    stock_map_combo(tr_label("Source map"),texture_source_group_,catalog_.map_groups());
+                    ImGui::Combo(tr_label("Source layer"),&texture_source_material_,layer_names,26);
+                    ImGui::Combo(tr_label("Destination layer"),&texture_destination_material_,layer_names,26);
+                    if(ImGui::Button(tr_label("Import layer from stock map"),{-1.0F,0.0F})){
                         try{
                             checkpoint();
                             const auto source=thandor::LevelAsset::parse(catalog_.load(catalog_.map_groups()[static_cast<std::size_t>(texture_source_group_)].level_path));
                             const std::string source_path=terrain_material_path(terrain_base_path(source.paths().ground_textures),static_cast<uint32_t>(texture_source_material_));
                             document_->import_terrain_material(catalog_,static_cast<uint8_t>(texture_destination_material_),source_path);
                             selected_material_=static_cast<uint8_t>(texture_destination_material_);load_materials();rebuild_mesh();
-                            status_="Imported "+source_path+" into the current map.";
+                            status_=tr("Imported ")+source_path+tr(" into the current map.");
                         }catch(const std::exception& e){status_=e.what();}
                     }
-                    ImGui::InputTextWithHint("##biome-project","Optional source .thmap project path",texture_import_project_path_,sizeof(texture_import_project_path_));
-                    if(ImGui::Button("Import layer from project",{-1.0F,0.0F})){
+                    ImGui::InputTextWithHint("##biome-project",tr("Optional source .thmap project path"),texture_import_project_path_,sizeof(texture_import_project_path_));
+                    if(ImGui::Button(tr_label("Import layer from project"),{-1.0F,0.0F})){
                         try{
-                            if(texture_import_project_path_[0]=='\0')throw std::runtime_error("source project path is empty");
+                            if(texture_import_project_path_[0]=='\0')throw std::runtime_error(tr("source project path is empty"));
                             checkpoint();
                             auto source_document=thandor::MapDocument::open_project(catalog_,texture_import_project_path_);
                             const std::string source_path=terrain_material_path(terrain_base_path(source_document.level().paths().ground_textures),static_cast<uint32_t>(texture_source_material_));
                             document_->import_terrain_material_bytes(catalog_,static_cast<uint8_t>(texture_destination_material_),
                                 std::string("project:")+texture_import_project_path_+"#"+source_path,source_document.load_asset(catalog_,source_path));
                             selected_material_=static_cast<uint8_t>(texture_destination_material_);load_materials();rebuild_mesh();
-                            status_="Imported custom terrain layer from project.";
+                            status_=tr("Imported custom terrain layer from project.");
                         }catch(const std::exception& e){status_=e.what();}
                     }
                     break;
@@ -2548,26 +2633,125 @@ void EditorApp::draw_right_panel(){
                 default: break;
             }
 
-            ImGui::SeparatorText("Terrain compatibility overlay");
-            const char* compatibility_modes[]={"Off","Vehicle traversal","Building placement","All terrain bands"};
-            if(ImGui::Combo("Overlay",&terrain_compatibility_overlay_,compatibility_modes,4))rebuild_objects();
-            if(terrain_compatibility_overlay_!=0)
-                ImGui::TextDisabled("Cells: %zu safe · %zu caution · %zu blocked",
-                    terrain_overlay_safe_cell_count_,terrain_overlay_caution_cell_count_,terrain_overlay_blocked_cell_count_);
+            ImGui::SeparatorText(tr("Terrain overlays"));
+            std::array ground_labels{tr("Vehicle traversal"),tr("Building Resource Fields"),tr("Building Placement"),tr("All terrain bands")};
+            const std::array ground_summary{tr("Vehicle"),tr("Resource fields"),tr("Placement"),tr("Terrain bands")};
+            bool overlay_changed=false;
+            for(std::size_t mode=0;mode<ground_labels.size();++mode){
+                overlay_changed|=ImGui::Checkbox(ground_labels[mode],&terrain_ground_overlays_[mode]);
+                if(mode==TerrainOverlayResources)show_item_tooltip(tr("Xenite and Tritium extractor fields."));
+                if(mode==TerrainOverlayBuilding){
+                    if(const auto* profile=terrain_overlay_profile(TerrainOverlayBuilding))
+                        show_item_tooltip(profile->display_name.c_str());
+                }
+            }
+            if(std::count(terrain_ground_overlays_.begin(),terrain_ground_overlays_.end(),true)>1)
+                ImGui::TextDisabled(tr("Cell strips follow the order above."));
+            ImGui::SeparatorText(tr("Route and defence overlays"));
+            overlay_changed|=ImGui::Checkbox(tr_label("Base and Factory Access Routes"),&terrain_base_routes_);
+            overlay_changed|=ImGui::Checkbox(tr_label("Faction Resource Routes"),&terrain_resource_routes_);
+            overlay_changed|=ImGui::Checkbox(tr_label("Alternate routes"),&terrain_route_alternatives_);
+            show_item_tooltip(tr("Show dashed detours for the selected route layers. With both primary route layers off, show both kinds of detour."));
+            overlay_changed|=ImGui::Checkbox(tr_label("Wall rows"),&terrain_wall_sites_);
+            overlay_changed|=ImGui::Checkbox(tr_label("Turret sites"),&terrain_turret_sites_);
+            overlay_changed|=ImGui::Checkbox(tr_label("Rally points"),&terrain_rally_points_);
+            overlay_changed|=ImGui::Checkbox(tr_label("Radar sites"),&terrain_radar_sites_);
+            show_item_tooltip(tr("Buildable sites with useful new sight. At a shared radar and turret marker, either structure can use the spot."));
+            overlay_changed|=ImGui::Checkbox(tr_label("Pioneer staging sites"),&terrain_pioneer_sites_);
+            show_item_tooltip(tr("Dry ground a Pioneer can reach beside a suggested turret position."));
+            overlay_changed|=ImGui::Checkbox(tr_label("Alternate base sites"),&terrain_alternate_bases_);
+            show_item_tooltip(tr("Headquarters sites at least 10 world units from existing bases. Ground factions get equal numbers of sites at comparable Pioneer travel distances."));
+            const bool base_routes=terrain_overlay_has_base_routes();
+            const bool resource_routes=terrain_overlay_has_resource_routes();
+            const bool defence_sites=terrain_overlay_has_defence_sites();
+            const bool alternate_only=terrain_overlay_only_alternate_routes();
+            const auto active_factions=static_cast<int>(std::min(document_->player_ai_configuration().active_factions,7U));
+            if(base_routes||resource_routes||alternate_only)
+                overlay_changed|=ImGui::Checkbox(tr_label("Mark route cells"),&terrain_route_show_cells_);
+            if(resource_routes||alternate_only||terrain_overlay_has_planning_sites()){
+                const char* factions[]={tr("All factions"),tr("Faction 1"),tr("Faction 2"),tr("Faction 3"),tr("Faction 4"),tr("Faction 5"),tr("Faction 6"),tr("Faction 7")};
+                if(terrain_route_resource_faction_>active_factions){
+                    terrain_route_resource_faction_=0;
+                    overlay_changed=true;
+                }
+                overlay_changed|=ImGui::Combo(tr_label("Faction filter"),&terrain_route_resource_faction_,factions,active_factions+1);
+            }
+            if(overlay_changed)rebuild_objects();
+            for(std::size_t mode=0;mode<ground_labels.size();++mode)
+                if(terrain_ground_overlays_[mode]){
+                    const auto& counts=terrain_overlay_cell_counts_[mode];
+                    ImGui::TextDisabled(tr("%s · %zu safe / %zu caution / %zu blocked"),
+                        ground_summary[mode],counts[0],counts[1],counts[2]);
+                }
+            if(base_routes){
+                ImGui::TextWrapped(tr("Cyan routes link bases. Amber routes follow factory production lanes to the network."));
+                if(terrain_route_relocated_starts_)
+                    ImGui::TextWrapped(tr("Rings mark route starts moved away from enclosed headquarters."));
+                const auto factions=terrain_route_bases_;
+                const auto pairs=factions>1U?factions*(factions-1U)/2U:0U;
+                if(pairs)
+                    ImGui::TextDisabled(tr("Base pairs planned %zu / %zu   Networks %zu"),
+                        terrain_route_connected_pairs_,pairs,terrain_route_networks_);
+                else
+                    ImGui::TextDisabled(tr("At least two placed faction bases or ground starts are needed."));
+                if(terrain_route_connected_pairs_<pairs)
+                    ImGui::TextWrapped(tr("Some bases have no ground connection."));
+                ImGui::TextDisabled(tr("Ground factory exits connected %zu / %zu"),
+                    terrain_route_connected_factories_,terrain_route_factories_);
+                if(terrain_route_factory_starts_)
+                    ImGui::TextDisabled(tr("Factions routed from factory exits %zu"),terrain_route_factory_starts_);
+            }
+            if(terrain_route_alternatives_&&(base_routes||alternate_only))
+                ImGui::TextDisabled(tr("Base pairs with alternates %zu / %zu"),
+                    terrain_route_alternate_base_pairs_,terrain_route_connected_pairs_);
+            if(resource_routes){
+                ImGui::TextWrapped(tr("Faction colours show resource routes. White shows shared routes."));
+                ImGui::TextColored({0.59F,0.94F,0.40F,1.F},tr("Xenite"));
+                ImGui::SameLine();
+                ImGui::TextColored({0.78F,0.58F,1.F,1.F},tr("Tritium"));
+                ImGui::SameLine();
+                ImGui::TextDisabled(tr("Grey when unreachable"));
+                const auto selected=terrain_route_resource_faction_;
+                if(terrain_route_resource_deposits_==0)
+                    ImGui::TextDisabled(tr("No Xenite or Tritium deposits on this map."));
+                else if(selected>0)
+                    ImGui::TextDisabled(tr("Deposits reachable %zu / %zu"),
+                        terrain_route_resource_connections_[selected-1],terrain_route_resource_deposits_);
+                else {
+                    std::size_t links=0;
+                    for(int faction=0;faction<active_factions;++faction)links+=terrain_route_resource_connections_[faction];
+                    ImGui::TextDisabled(tr("%zu deposits · %zu / %zu faction connections"),
+                        terrain_route_resource_deposits_,links,terrain_route_resource_deposits_*active_factions);
+                }
+            }
+            if(defence_sites){
+                if(terrain_wall_sites_)ImGui::TextColored({1.F,0.77F,0.29F,1.F},tr("Wall rows %zu"),terrain_defence_wall_sites_);
+                if(terrain_turret_sites_)ImGui::TextColored({1.F,0.45F,0.37F,1.F},tr("Turret sites %zu"),terrain_defence_sites_);
+                if(terrain_rally_points_)ImGui::TextColored({0.35F,0.86F,1.F,1.F},tr("Rally points %zu"),terrain_rally_sites_);
+            }
+            if(terrain_radar_sites_)ImGui::TextColored({0.81F,0.52F,1.F,1.F},tr("Radar sites %zu"),terrain_radar_site_count_);
+            if(terrain_pioneer_sites_)ImGui::TextColored({0.55F,0.92F,0.52F,1.F},tr("Pioneer staging sites %zu"),terrain_pioneer_site_count_);
+            if(terrain_alternate_bases_){
+                ImGui::TextColored({0.90F,0.90F,1.F,1.F},tr("Alternate base sites %zu"),terrain_alternate_base_count_);
+                if(terrain_alternate_base_count_==0 && terrain_route_resource_faction_==0 && terrain_alternate_base_factions_)
+                    ImGui::TextWrapped(tr("No comparable expansion set found for all %u ground factions."),terrain_alternate_base_factions_);
+            }
 
-            ImGui::SeparatorText("Fog of war preview");
-            const char* fog_modes[]={"Off","Selected faction","All active factions"};
-            bool fog_changed=ImGui::Combo("Visibility",&fog_preview_mode_,fog_modes,3);
+            ImGui::SeparatorText(tr("Fog of war preview"));
+            const char* fog_modes[]={tr("Off"),tr("Selected faction"),tr("All active factions")};
+            bool fog_changed=ImGui::Combo(tr_label("Visibility"),&fog_preview_mode_,fog_modes,3);
             if(fog_preview_mode_==1){
                 int faction=std::clamp(fog_preview_faction_,1,7);
-                if(ImGui::SliderInt("View faction",&faction,1,7)){
+                if(ImGui::SliderInt(tr_label("View faction"),&faction,1,7)){
                     fog_preview_faction_=faction;fog_changed=true;
                 }
             }
-            if(ImGui::Checkbox("Whole map already explored",&fog_preview_all_explored_))fog_changed=true;
+            if(ImGui::Checkbox(tr_label("Whole map already explored"),&fog_preview_all_explored_))fog_changed=true;
+            fog_changed|=ImGui::Checkbox(tr_label("Tint visible terrain by faction"),&fog_preview_tint_visible_terrain_);
+            show_item_tooltip(tr("Darken cells currently in sight to discovered-terrain brightness and colour them by faction."));
             if(fog_preview_all_explored_)
-                ImGui::TextDisabled("Discovered terrain and remembered models remain dimly visible. Models marked not remembered require current sight.");
-            ImGui::Checkbox("Show nominal observer-radius circle",&fog_preview_show_nominal_radius_);
+                ImGui::TextDisabled(tr("Discovered terrain and remembered models remain dimly visible. Models marked not remembered require current sight."));
+            ImGui::Checkbox(tr_label("Show nominal observer-radius circle"),&fog_preview_show_nominal_radius_);
             if(fog_changed){
                 fog_preview_occupancy_history_.clear();
                 last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
@@ -2578,32 +2762,32 @@ void EditorApp::draw_right_panel(){
             }
             ImGui::EndTabItem();
         }
-        if(begin_inspector_tab("Players",2)){
+        if(begin_inspector_tab(tr_label("Players"),2)){
             const auto faction_summary=document_->playable_faction_summary();
-            ImGui::TextWrapped("Choose the active factions and the default player faction for Custom maps. All other active factions are computer-controlled.");
+            ImGui::TextWrapped(tr("Choose the active factions and the default player faction for Custom maps. All other active factions are computer-controlled."));
             try{
                 auto configuration=document_->player_ai_configuration();
                 int active=static_cast<int>(configuration.active_factions);
                 int human=static_cast<int>(configuration.human_assignable_factions);
                 const int minimum_active=std::clamp(static_cast<int>(faction_summary.highest_faction_index),2,7);
                 bool counts_changed=false;
-                counts_changed|=ImGui::SliderInt("Total active factions",&active,minimum_active,7);
+                counts_changed|=ImGui::SliderInt(tr_label("Total active factions"),&active,minimum_active,7);
                 human=std::min(human,active);
                 int default_human=static_cast<int>(document_->default_human_faction());
-                if(ImGui::SliderInt("Human player slot",&default_human,1,active)){
+                if(ImGui::SliderInt(tr_label("Human player slot"),&default_human,1,active)){
                     if(graphics_family_for_faction(static_cast<uint32_t>(default_human))==8U)
-                        status_="Golrathen must stay computer-controlled.";
-                    else{checkpoint();document_->set_default_human_faction(static_cast<uint32_t>(default_human));status_="Default player faction updated.";}
+                        status_=tr("Golrathen must stay computer-controlled.");
+                    else{checkpoint();document_->set_default_human_faction(static_cast<uint32_t>(default_human));status_=tr("Default player faction updated.");}
                 }
-                ImGui::TextDisabled("Custom maps preselect this faction; the player can choose another. The others use AI.");
-                const bool original_slots_open=ImGui::CollapsingHeader("Original-game slot compatibility");
+                ImGui::TextDisabled(tr("Custom maps preselect this faction; the player can choose another. The others use AI."));
+                const bool original_slots_open=ImGui::CollapsingHeader(tr_label("Original-game slot compatibility"));
                 int requested_human=human;
-                if(original_slots_open&&ImGui::SliderInt("Human player slots",&requested_human,1,active)){
+                if(original_slots_open&&ImGui::SliderInt(tr_label("Human player slots"),&requested_human,1,active)){
                     bool would_make_golrathen_human=false;
                     for(int slot=1;slot<=requested_human;++slot)
                         would_make_golrathen_human|=graphics_family_for_faction(static_cast<uint32_t>(slot))==8U;
                     if(would_make_golrathen_human){
-                        status_="Golrathen (army8) is mission-only: its slot must stay computer-controlled.";
+                        status_=tr("Golrathen (army8) is mission-only: its slot must stay computer-controlled.");
                     }else{
                         human=requested_human;
                         counts_changed=true;
@@ -2613,20 +2797,23 @@ void EditorApp::draw_right_panel(){
                     checkpoint();
                     document_->set_player_ai_configuration({static_cast<uint32_t>(human),
                                                             static_cast<uint32_t>(active)});
-                    status_="Player and computer faction setup updated.";
+                    if(terrain_overlay_has_base_routes()||terrain_overlay_has_resource_routes()||
+                        terrain_route_alternatives_||terrain_overlay_has_defence_sites()||terrain_overlay_has_planning_sites())
+                        simulation_static_replacement_dirty_=true;
+                    status_=tr("Player and computer faction setup updated.");
                 }
-                ImGui::Text("Computer factions in Custom maps: %d",std::max(0,active-1));
+                ImGui::Text(tr("Computer factions in Custom maps: %d"),std::max(0,active-1));
 
-                ImGui::SeparatorText("Mission-only faction: Golrathen");
-                ImGui::TextWrapped("Golrathen (gray army8) is a graphics family, not gameplay faction 8. "
+                ImGui::SeparatorText(tr("Mission-only faction: Golrathen"));
+                ImGui::TextWrapped(tr("Golrathen (gray army8) is a graphics family, not gameplay faction 8. "
                     "Assign it to a computer-controlled faction row (2..7). That row's units and buildings "
-                    "then use Golrathen graphics in mission maps; the slot cannot be human-playable.");
+                    "then use Golrathen graphics in mission maps; the slot cannot be human-playable."));
                 bool imported_golrathen_human=false;
                 for(int slot=1;slot<=human;++slot)
                     imported_golrathen_human|=graphics_family_for_faction(static_cast<uint32_t>(slot))==8U;
                 if(imported_golrathen_human)
                     ImGui::TextColored({1.0F,0.42F,0.30F,1.0F},
-                        "Imported map uses army8 in a human slot; lower human slots or change its family.");
+                        tr("Imported map uses army8 in a human slot; lower human slots or change its family."));
                 int assigned_golrathen_ai_slot=0;
                 for(int slot=human+1;slot<=7;++slot)
                     if(graphics_family_for_faction(static_cast<uint32_t>(slot))==8U){
@@ -2644,7 +2831,7 @@ void EditorApp::draw_right_panel(){
                     const std::string target_label="Faction "+std::to_string(target)+
                         (target>active?" (new AI slot)":" (active AI slot)");
                     ImGui::SetNextItemWidth(-1.0F);
-                    if(ImGui::BeginCombo("Golrathen AI faction row",target_label.c_str())){
+                    if(ImGui::BeginCombo(tr_label("Golrathen AI faction row"),target_label.c_str())){
                         for(int slot=human+1;slot<=7;++slot){
                             const uint32_t family=graphics_family_for_faction(static_cast<uint32_t>(slot));
                             std::string row_label="Faction "+std::to_string(slot)+" — "+
@@ -2661,19 +2848,19 @@ void EditorApp::draw_right_panel(){
                         static_cast<uint32_t>(mission_golrathen_ai_slot_));
                     if(target_family==8U){
                         ImGui::TextColored(graphics_family_ui_text_color(8U),
-                            "Golrathen is assigned to AI faction %d.",mission_golrathen_ai_slot_);
+                            tr("Golrathen is assigned to AI faction %d."),mission_golrathen_ai_slot_);
                     }else{
                         std::size_t affected=0;
                         for(const auto& placement:document_->level().placements())
                             if(placement.faction_index==static_cast<uint32_t>(mission_golrathen_ai_slot_))
                                 ++affected;
                         if(affected!=0U)
-                            ImGui::TextWrapped("Warning: %zu existing placements share this owner. "
-                                "All of them will switch to the gray army8 graphics family.",affected);
+                            ImGui::TextWrapped(tr("Warning: %zu existing placements share this owner. "
+                                "All of them will switch to the gray army8 graphics family."),affected);
                         if(mission_golrathen_ai_slot_>active)
-                            ImGui::TextDisabled("This also activates AI faction %d, leaving existing faction colours intact.",
+                            ImGui::TextDisabled(tr("This also activates AI faction %d, leaving existing faction colours intact."),
                                 mission_golrathen_ai_slot_);
-                        if(ImGui::Button("Assign Golrathen (army8) to this AI faction",{-1.0F,0.0F})){
+                        if(ImGui::Button(tr_label("Assign Golrathen (army8) to this AI faction"),{-1.0F,0.0F})){
                             try{
                                 const auto mission_slot=static_cast<uint32_t>(mission_golrathen_ai_slot_);
                                 checkpoint();
@@ -2688,49 +2875,51 @@ void EditorApp::draw_right_panel(){
                                 asset_preview_cache_.clear();
                                 asset_preview_texture_cache_.clear();
                                 rebuild_mesh();
-                                status_="Assigned Golrathen gray army8 to computer-only faction "+
-                                    std::to_string(mission_slot)+"; new placements use this row.";
+                                status_=tr("Assigned Golrathen gray army8 to computer-only faction ")+
+                                    std::to_string(mission_slot)+tr("; new placements use this row.");
                             }catch(const std::exception& e){
-                                status_=std::string("Could not assign Golrathen: ")+e.what();
+                                status_=std::string(tr("Could not assign Golrathen: "))+e.what();
                             }
                         }
                     }
                     if(assigned_golrathen_ai_slot!=0&&assigned_golrathen_ai_slot!=mission_golrathen_ai_slot_)
-                        ImGui::TextDisabled("A second AI row (faction %d) already uses army8.",
+                        ImGui::TextDisabled(tr("A second AI row (faction %d) already uses army8."),
                             assigned_golrathen_ai_slot);
                 }else{
-                    ImGui::TextDisabled("No computer-only row is available. Reduce Human player slots first.");
+                    ImGui::TextDisabled(tr("No computer-only row is available. Reduce Human player slots first."));
                 }
-                ImGui::TextDisabled("After assignment, pick Golrathen in the Units / Buildings / Objects faction selector.");
+                ImGui::TextDisabled(tr("After assignment, pick Golrathen in the Units / Buildings / Objects faction selector."));
                 if(original_slots_open){
-                    if(human<active) ImGui::TextDisabled("Original-game computer-only rows: %d..%d.",human+1,active);
-                    else ImGui::TextDisabled("Original-game slots allow a human in every row.");
+                    if(human<active) ImGui::TextDisabled(tr("Original-game computer-only rows: %d..%d."),human+1,active);
+                    else ImGui::TextDisabled(tr("Original-game slots allow a human in every row."));
                 }
                 if(active<static_cast<int>(faction_summary.highest_faction_index))
-                    ImGui::TextColored({1.0F,0.35F,0.25F,1.0F},"Active count is below the highest faction used by placements.");
+                    ImGui::TextColored({1.0F,0.35F,0.25F,1.0F},tr("Active count is below the highest faction used by placements."));
 
-                if(ImGui::CollapsingHeader("Faction relations")){
+                if(ImGui::CollapsingHeader(tr_label("Faction relations"))){
                     uint32_t relation_ui_flags=document_->level().relation_ui_flags();
                     uint32_t relation_state8=document_->level().relation_state8_faction_group_masks();
                     uint32_t relation_state4=document_->level().relation_state4_faction_group_masks();
                     bool relation_changed=false;
-                    relation_changed|=ImGui::InputScalar("Relation UI flags",ImGuiDataType_U32,
+                    relation_changed|=ImGui::InputScalar(tr_label("Relation UI flags"),ImGuiDataType_U32,
                         &relation_ui_flags,nullptr,nullptr,"%08X",ImGuiInputTextFlags_CharsHexadecimal);
-                    relation_changed|=ImGui::InputScalar("State-8 faction group masks",ImGuiDataType_U32,
+                    relation_changed|=ImGui::InputScalar(tr_label("State-8 faction group masks"),ImGuiDataType_U32,
                         &relation_state8,nullptr,nullptr,"%08X",ImGuiInputTextFlags_CharsHexadecimal);
-                    relation_changed|=ImGui::InputScalar("State-4 faction group masks",ImGuiDataType_U32,
+                    relation_changed|=ImGui::InputScalar(tr_label("State-4 faction group masks"),ImGuiDataType_U32,
                         &relation_state4,nullptr,nullptr,"%08X",ImGuiInputTextFlags_CharsHexadecimal);
                     if(relation_changed){
                         checkpoint();
                         document_->level().set_initial_relation_setup(
                             relation_ui_flags,relation_state8,relation_state4);
                         document_->mark_dirty();
-                        status_="Initial authored faction relation masks updated.";
+                        if(terrain_overlay_has_defence_sites()||terrain_overlay_has_planning_sites())
+                            simulation_static_replacement_dirty_=true;
+                        status_=tr("Initial authored faction relation masks updated.");
                     }
 
                 }
 
-                ImGui::SeparatorText("Starting resources by active faction");
+                ImGui::SeparatorText(tr("Starting resources by active faction"));
                 bool any_resource_changed=false;
                 for(int faction=1;faction<=active;++faction){
                     ImGui::PushID(faction);
@@ -2747,11 +2936,11 @@ void EditorApp::draw_right_panel(){
                     int tritium_units=static_cast<int>(document_->level().faction_tritium_q4(
                         static_cast<uint32_t>(faction))/16U);
                     bool changed=false;
-                    changed|=ImGui::InputInt("Xenite",&xenite_units,100,1000);
-                    changed|=ImGui::InputInt("Tritium",&tritium_units,100,1000);
+                    changed|=ImGui::InputInt(tr_label("Xenite"),&xenite_units,100,1000);
+                    changed|=ImGui::InputInt(tr_label("Tritium"),&tritium_units,100,1000);
                     int ai_class_or_mode=static_cast<int32_t>(document_->level().faction_graphics_family_offset_raw(
                         static_cast<uint32_t>(faction)));
-                    bool ai_mode_changed=ImGui::InputInt("Graphics family offset (raw LEV)",&ai_class_or_mode,1,1);
+                    bool ai_mode_changed=ImGui::InputInt(tr_label("Graphics family offset (raw LEV)"),&ai_class_or_mode,1,1);
                     uint32_t resolved_graphics_family=static_cast<uint32_t>(faction)+
                         static_cast<uint32_t>(static_cast<int32_t>(ai_class_or_mode));
                     if(ai_mode_changed&&!computer&&resolved_graphics_family==8U){
@@ -2759,7 +2948,7 @@ void EditorApp::draw_right_panel(){
                         ai_class_or_mode=static_cast<int32_t>(
                             document_->level().faction_graphics_family_offset_raw(static_cast<uint32_t>(faction)));
                         resolved_graphics_family=graphics_family_for_faction(static_cast<uint32_t>(faction));
-                        status_="Golrathen gray (army8) is mission-only and must use a computer-controlled row.";
+                        status_=tr("Golrathen gray (army8) is mission-only and must use a computer-controlled row.");
                     }
 
                     xenite_units=std::clamp(xenite_units,0,10000000);
@@ -2775,68 +2964,68 @@ void EditorApp::draw_right_panel(){
                                 static_cast<uint32_t>(faction),
                                 static_cast<uint32_t>(static_cast<int32_t>(ai_class_or_mode)));
                         document_->mark_dirty();
-                        status_="Faction player-slot metadata updated.";
+                        status_=tr("Faction player-slot metadata updated.");
                     }
                     if(xenite_units==0&&tritium_units==0)
-                        ImGui::TextDisabled("Starts with no Xenite or Tritium.");
+                        ImGui::TextDisabled(tr("Starts with no Xenite or Tritium."));
                     ImGui::PopID();
                 }
-                if(ImGui::Button("Apply 6500 / 3000 to all active factions",{-1.0F,0.0F})){
+                if(ImGui::Button(tr_label("Apply 6500 / 3000 to all active factions"),{-1.0F,0.0F})){
                     checkpoint();
                     for(int faction=1;faction<=active;++faction)
                         document_->level().set_faction_starting_resources_q4(
                             static_cast<uint32_t>(faction),thandor::LevelAsset::kDefaultXeniteQ4,
                             thandor::LevelAsset::kDefaultTritiumQ4);
                     document_->mark_dirty();
-                    status_="Applied stock skirmish starting resources to all active factions.";
+                    status_=tr("Applied stock skirmish starting resources to all active factions.");
                 }
-                ImGui::SeparatorText("Placement readiness");
-                ImGui::Text("Highest faction used by placements: %u",faction_summary.highest_faction_index);
-                ImGui::Text("Faction-owned placements: %u · start vehicles: %u",
+                ImGui::SeparatorText(tr("Placement readiness"));
+                ImGui::Text(tr("Highest faction used by placements: %u"),faction_summary.highest_faction_index);
+                ImGui::Text(tr("Faction-owned placements: %u · start vehicles: %u"),
                             faction_summary.nonneutral_placement_count,faction_summary.player_start_count);
                 ImGui::TextWrapped("%s",faction_summary.diagnostic.c_str());
 
             }catch(const std::exception& error){
-                ImGui::TextWrapped("Player/AI metadata unavailable: %s",error.what());
+                ImGui::TextWrapped(tr("Player/AI metadata unavailable: %s"),error.what());
             }
-            if(ImGui::CollapsingHeader("KI.DAT reference"))
+            if(ImGui::CollapsingHeader(tr_label("KI.DAT reference")))
                 {auto scope=editor_performance_log_.measure(EditorPerfStage::UiInspectorAiKnowledge);
-                ImGui::TextWrapped("Values from %s. Choose the profile in Simulation Lab.",ai_profiles_.use_custom?"ki.dat_custom.ini":"ki.dat.ini");
+                ImGui::TextWrapped(tr("Values from %s. Choose the profile in Simulation Lab."),ai_profiles_.use_custom?"ki.dat_custom.ini":"ki.dat.ini");
                 draw_ai_knowledge_panel(ai_knowledge_, ai_knowledge_load_error_, ai_knowledge_ui_);}
             ImGui::EndTabItem();
         }
-        if(begin_inspector_tab("Simulation",3)){
+        if(begin_inspector_tab(tr_label("Simulation"),3)){
             {auto scope=editor_performance_log_.measure(EditorPerfStage::UiInspectorSimulation);draw_simulation_lab_panel();}
             ImGui::EndTabItem();
         }
-        if(begin_inspector_tab("Map",4)){
-            if(ImGui::CollapsingHeader("Map validation")){
-                ImGui::Checkbox("Show resource support",&retail_field_diagnostics_);
+        if(begin_inspector_tab(tr_label("Map"),4)){
+            if(ImGui::CollapsingHeader(tr_label("Map validation"))){
+                ImGui::Checkbox(tr_label("Show resource support"),&retail_field_diagnostics_);
                 if(retail_field_diagnostics_){
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(ui_px(150.0F));
-                    ImGui::Combo("Resource support",&retail_field_resource_selector_,
+                    ImGui::Combo(tr_label("Resource support"),&retail_field_resource_selector_,
                         "Xenite\0Tritium\0");
 
                 }
-                ImGui::TextWrapped("Checks resource-field objects for a missing Xenite (0x0800) or Tritium (0x1000) flag on their terrain cell.");
+                ImGui::TextWrapped(tr("Checks resource-field objects for a missing Xenite (0x0800) or Tritium (0x1000) flag on their terrain cell."));
                 const auto validation=validate_resource_deposit_flags(document_->field(),document_->level().placements());
                 const auto& resource_issues=validation.issues;
                 const auto resource_checks=validation.checked;
                 if(resource_issues.empty())
                     ImGui::TextColored({0.55F,0.90F,0.62F,1.0F},
-                        "Resource support flags: %zu checked · no mismatches",resource_checks);
+                        tr("Resource support flags: %zu checked · no mismatches"),resource_checks);
                 else
                     ImGui::TextColored({1.0F,0.52F,0.30F,1.0F},
-                        "Resource support flags: %zu checked · %zu issue%s",resource_checks,
+                        tr("Resource support flags: %zu checked · %zu issue%s"),resource_checks,
                         resource_issues.size(),resource_issues.size()==1U?"":"s");
 
-                if(!resource_issues.empty()&&ImGui::BeginTable("resource_flag_issues",5,
+                if(!resource_issues.empty()&&ImGui::BeginTable(tr_label("resource_flag_issues"),5,
                     ImGuiTableFlags_Borders|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,
                     ImVec2(0.0F,std::min(ui_px(220.0F),ui_px(56.0F)+ui_px(24.0F)*static_cast<float>(resource_issues.size()))))){
-                    ImGui::TableSetupColumn("Placement");ImGui::TableSetupColumn("ARM");
-                    ImGui::TableSetupColumn("Cell");
-                    ImGui::TableSetupColumn("Need");ImGui::TableSetupColumn("FLD flags");
+                    ImGui::TableSetupColumn(tr("Placement"));ImGui::TableSetupColumn(tr("ARM"));
+                    ImGui::TableSetupColumn(tr("Cell"));
+                    ImGui::TableSetupColumn(tr("Need"));ImGui::TableSetupColumn(tr("FLD flags"));
                     ImGui::TableHeadersRow();
                     for(const auto& issue:resource_issues){
                         ImGui::TableNextRow();
@@ -2851,46 +3040,46 @@ void EditorApp::draw_right_panel(){
             }
             char name[64]{};
             std::snprintf(name,sizeof(name),"%s",document_->map_name().c_str());
-            if(ImGui::InputText("Map name",name,sizeof(name),ImGuiInputTextFlags_EnterReturnsTrue)){
-                try{checkpoint();document_->set_map_name(name);status_="Map renamed.";}catch(const std::exception& e){status_=e.what();}
+            if(ImGui::InputText(tr_label("Map name"),name,sizeof(name),ImGuiInputTextFlags_EnterReturnsTrue)){
+                try{checkpoint();document_->set_map_name(name);status_=tr("Map renamed.");}catch(const std::exception& e){status_=e.what();}
             }
             char display_name[128]{};
             std::snprintf(display_name,sizeof(display_name),"%s",document_->display_name().c_str());
-            if(ImGui::InputText("Display name",display_name,sizeof(display_name),ImGuiInputTextFlags_EnterReturnsTrue)){
-                try{checkpoint();document_->set_display_name(display_name);status_="Map display name updated.";}catch(const std::exception& e){status_=e.what();}
+            if(ImGui::InputText(tr_label("Display name"),display_name,sizeof(display_name),ImGuiInputTextFlags_EnterReturnsTrue)){
+                try{checkpoint();document_->set_display_name(display_name);status_=tr("Map display name updated.");}catch(const std::exception& e){status_=e.what();}
             }
             char author[256]{};
             std::snprintf(author,sizeof(author),"%s",document_->author().c_str());
-            if(ImGui::InputText("Author",author,sizeof(author),ImGuiInputTextFlags_EnterReturnsTrue)){
-                checkpoint();document_->set_author(author);document_->mark_dirty();status_="Map author updated.";
+            if(ImGui::InputText(tr_label("Author"),author,sizeof(author),ImGuiInputTextFlags_EnterReturnsTrue)){
+                checkpoint();document_->set_author(author);document_->mark_dirty();status_=tr("Map author updated.");
             }
-            ImGui::TextDisabled("The display name is stored in the full editor project; the internal map name remains the LEV/FLD filename.");
+            ImGui::TextDisabled(tr("The display name is stored in the full editor project; the internal map name remains the LEV/FLD filename."));
             const auto faction_summary=document_->playable_faction_summary();
-            ImGui::TextDisabled("Player roles and starting resources are in Players.");
+            ImGui::TextDisabled(tr("Player roles and starting resources are in Players."));
 
-            ImGui::SeparatorText("Faction camera starts");
-            ImGui::SliderInt("Camera faction",&selected_camera_faction_,1,
+            ImGui::SeparatorText(tr("Faction camera starts"));
+            ImGui::SliderInt(tr_label("Camera faction"),&selected_camera_faction_,1,
                              static_cast<int>(thandor::LevelAsset::kFactionCameraStartCount));
             try{
                 const auto camera_start=document_->level().faction_camera_start(
                     static_cast<uint32_t>(selected_camera_faction_));
-                ImGui::Text("Position: %.2f, %.2f, %.2f",camera_start.position_x(),
+                ImGui::Text(tr("Position: %.2f, %.2f, %.2f"),camera_start.position_x(),
                             camera_start.position_y(),camera_start.position_z());
-                ImGui::Text("Heading %.1f deg · pitch %.1f deg · magnitude %.2f",
+                ImGui::Text(tr("Heading %.1f deg · pitch %.1f deg · magnitude %.2f"),
                     static_cast<float>(camera_start.heading_turn16)*(360.0F/65536.0F),
                     static_cast<float>(camera_start.pitch_turn16)*(360.0F/65536.0F),
                     thandor::q12_to_float(static_cast<int32_t>(camera_start.motion_magnitude_q12)));
-                if(ImGui::Button("Use stored camera",{-1.0F,0.0F}))
+                if(ImGui::Button(tr_label("Use stored camera"),{-1.0F,0.0F}))
                     focus_faction_camera_start(static_cast<uint32_t>(selected_camera_faction_));
-                if(ImGui::Button("Aim current view at faction start vehicle",{-1.0F,0.0F}))
+                if(ImGui::Button(tr_label("Aim current view at faction start vehicle"),{-1.0F,0.0F}))
                     aim_camera_at_faction_start_vehicle(static_cast<uint32_t>(selected_camera_faction_));
-                if(ImGui::Button("Save current view as faction camera",{-1.0F,0.0F}))
+                if(ImGui::Button(tr_label("Save current view as faction camera"),{-1.0F,0.0F}))
                     capture_faction_camera_start(static_cast<uint32_t>(selected_camera_faction_));
             }catch(const std::exception& error){
-                ImGui::TextWrapped("Camera record unavailable: %s",error.what());
+                ImGui::TextWrapped(tr("Camera record unavailable: %s"),error.what());
             }
 
-            ImGui::SeparatorText("Single-player list parameters");
+            ImGui::SeparatorText(tr("Single-player list parameters"));
             auto frontend=document_->scenario_frontend_metadata();
             int planet=static_cast<int>(frontend.planet_theme_index);
             int difficulty=static_cast<int>(frontend.difficulty_index);
@@ -2909,24 +3098,24 @@ void EditorApp::draw_right_panel(){
                     checkpoint();
                     document_->set_scenario_frontend_metadata({static_cast<uint32_t>(planet),
                         static_cast<uint32_t>(difficulty),static_cast<uint32_t>(size_category)});
-                    status_="Single-player catalog parameters updated.";
+                    status_=tr("Single-player catalog parameters updated.");
                 }catch(const std::exception& error){status_=error.what();}
             }
 
-            ImGui::Text("Actual field dimensions: %u x %u",document_->field().width(),document_->field().height());
-            ImGui::Text("FLD converter version: 0x%08X",document_->field().converter_version());
+            ImGui::Text(tr("Actual field dimensions: %u x %u"),document_->field().width(),document_->field().height());
+            ImGui::Text(tr("FLD converter version: 0x%08X"),document_->field().converter_version());
             if(!document_->field().has_game_compatible_dimensions() ||
                (document_->field().converter_version()!=thandor::FieldGrid::kGameConverterVersion &&
                 document_->field().converter_version()!=thandor::FieldGrid::kLegacyEditorConverterVersion)){
-                ImGui::TextWrapped("Game export blocked: FLD must use converter 0x00060006, each axis must follow the 8*n+3 stock sequence from 59 through 139, and total area must not exceed 131 x 131.");
+                ImGui::TextWrapped(tr("Game export blocked: FLD must use converter 0x00060006, each axis must follow the 8*n+3 stock sequence from 59 through 139, and total area must not exceed 131 x 131."));
             }else if(document_->field().converter_version()==thandor::FieldGrid::kLegacyEditorConverterVersion){
-                ImGui::TextWrapped("Legacy editor FLD 0x00070001 detected. Game export will rewrite it to the required 0x00060006 header.");
+                ImGui::TextWrapped(tr("Legacy editor FLD 0x00070001 detected. Game export will rewrite it to the required 0x00060006 header."));
             }
 
-            ImGui::SeparatorText("Environment movie / biome shell");
-            static constexpr std::array<const char*,4> movie_labels{
-                "Earth (flm\\erde)", "Ice (flm\\eis)",
-                "Desert (flm\\wüste)", "Lava (flm\\lava)"};
+            ImGui::SeparatorText(tr("Environment movie / biome shell"));
+            static std::array<const char*,4> movie_labels{
+                tr("Earth (flm\\erde)"), tr("Ice (flm\\eis)"),
+                tr("Desert (flm\\wüste)"), tr("Lava (flm\\lava)")};
             static constexpr std::array<const char*,4> movie_paths{
                 "flm/erde", "flm/eis", "flm/wüste", "flm/lava"};
             int movie_index=0;
@@ -2934,43 +3123,43 @@ void EditorApp::draw_right_panel(){
             for(int i=0;i<static_cast<int>(movie_paths.size());++i){
                 if(current_movie==movie_paths[static_cast<std::size_t>(i)])movie_index=i;
             }
-            if(ImGui::Combo("Environment",&movie_index,movie_labels.data(),static_cast<int>(movie_labels.size()))){
+            if(ImGui::Combo(tr_label("Environment"),&movie_index,movie_labels.data(),static_cast<int>(movie_labels.size()))){
                 checkpoint();
                 document_->level().paths().ending_movie=movie_paths[static_cast<std::size_t>(movie_index)];
                 document_->mark_dirty();
-                status_="Environment movie base updated; export will verify the matching FLM exists.";
+                status_=tr("Environment movie base updated; export will verify the matching FLM exists.");
             }
             if(current_movie.empty())
-                ImGui::TextWrapped("Game export blocked: game.exe opens and advances this FLM before loading terrain or placements.");
+                ImGui::TextWrapped(tr("Game export blocked: game.exe opens and advances this FLM before loading terrain or placements."));
             else
-                ImGui::TextDisabled("Required startup asset: %s.flm",current_movie.c_str());
+                ImGui::TextDisabled(tr("Required startup asset: %s.flm"),current_movie.c_str());
 
-            if(ImGui::CollapsingHeader("Scenario summary, labels, and objectives")){
-                ImGui::TextWrapped("STR string 1 is the map summary/setup text. Strings 2..8 and 9..15 are the seven paired scenario/faction label and objective slots used by the detail panel. Editing text changes presentation; player counts remain derived from faction placements.");
-                scenario_text_buffers_dirty_|=ImGui::InputTextMultiline("Summary / setup##scenario1",scenario_text_buffers_[0].data(),scenario_text_buffers_[0].size(),{-1,ui_px(86)});
+            if(ImGui::CollapsingHeader(tr_label("Scenario summary, labels, and objectives"))){
+                ImGui::TextWrapped(tr("STR string 1 is the map summary/setup text. Strings 2..8 and 9..15 are the seven paired scenario/faction label and objective slots used by the detail panel. Editing text changes presentation; player counts remain derived from faction placements."));
+                scenario_text_buffers_dirty_|=ImGui::InputTextMultiline(tr_label("Summary / setup##scenario1"),scenario_text_buffers_[0].data(),scenario_text_buffers_[0].size(),{-1,ui_px(86)});
                 for(int row=0;row<7;++row){
                     ImGui::PushID(row);
-                    ImGui::Text("Detail row %d",row+1);
-                    scenario_text_buffers_dirty_|=ImGui::InputText("Label",scenario_text_buffers_[1+row].data(),scenario_text_buffers_[1+row].size());
-                    scenario_text_buffers_dirty_|=ImGui::InputTextMultiline("Objective / description",scenario_text_buffers_[8+row].data(),scenario_text_buffers_[8+row].size(),{-1,ui_px(64)});
+                    ImGui::Text(tr("Detail row %d"),row+1);
+                    scenario_text_buffers_dirty_|=ImGui::InputText(tr_label("Label"),scenario_text_buffers_[1+row].data(),scenario_text_buffers_[1+row].size());
+                    scenario_text_buffers_dirty_|=ImGui::InputTextMultiline(tr_label("Objective / description"),scenario_text_buffers_[8+row].data(),scenario_text_buffers_[8+row].size(),{-1,ui_px(64)});
                     ImGui::PopID();
                 }
-                if(ImGui::Button("Apply scenario text",{-1,0}))apply_scenario_text_buffers();
-                if(scenario_text_buffers_dirty_)ImGui::TextDisabled("Scenario text has unapplied edits.");
+                if(ImGui::Button(tr_label("Apply scenario text"),{-1,0}))apply_scenario_text_buffers();
+                if(scenario_text_buffers_dirty_)ImGui::TextDisabled(tr("Scenario text has unapplied edits."));
             }
-            if(ImGui::CollapsingHeader("Campaign / mission script (LEV conditions)")){
+            if(ImGui::CollapsingHeader(tr_label("Campaign / mission script (LEV conditions)"))){
                 try{
                     const uint32_t condition_count=document_->level().active_scheduled_condition_count();
                     const uint32_t trigger_count=document_->level().active_end_condition_trigger_count();
                     const bool stock_skirmish_shape=condition_count==14U&&trigger_count==8U;
-                    ImGui::Text("Active scheduled conditions: %u / 64",condition_count);
-                    ImGui::Text("Active end triggers: %u / 16",trigger_count);
+                    ImGui::Text(tr("Active scheduled conditions: %u / 64"),condition_count);
+                    ImGui::Text(tr("Active end triggers: %u / 16"),trigger_count);
                     ImGui::TextColored(stock_skirmish_shape?ImVec4{0.55F,0.85F,0.55F,1.0F}:ImVec4{0.95F,0.75F,0.35F,1.0F},
-                        "%s",stock_skirmish_shape?"Stock skirmish elimination script shape":"Custom mission/campaign script shape");
+                        "%s",stock_skirmish_shape?tr("Stock skirmish elimination script shape"):tr("Custom mission/campaign script shape"));
 
                     static int selected_condition=0;
                     static int selected_trigger=0;
-                    ImGui::SliderInt("Condition slot",&selected_condition,0,63);
+                    ImGui::SliderInt(tr_label("Condition slot"),&selected_condition,0,63);
                     auto condition=document_->level().scheduled_condition(static_cast<uint32_t>(selected_condition));
                     static constexpr std::array<thandor::LevelScheduledConditionKind,14> kinds{{
                         thandor::LevelScheduledConditionKind::NoneOrUnused,
@@ -2993,7 +3182,7 @@ void EditorApp::draw_right_panel(){
                     std::array<const char*,kinds.size()> kind_names{};
                     for(std::size_t i=0;i<kinds.size();++i)kind_names[i]=scheduled_condition_kind_name(kinds[i]);
                     bool script_changed=false;
-                    if(ImGui::Combo("Condition kind",&kind_index,kind_names.data(),static_cast<int>(kind_names.size()))){
+                    if(ImGui::Combo(tr_label("Condition kind"),&kind_index,kind_names.data(),static_cast<int>(kind_names.size()))){
                         condition.status_and_kind=static_cast<uint8_t>(kinds[static_cast<std::size_t>(kind_index)]);
                         condition.payload_bytes.fill(0U);
                         if(condition.kind()==thandor::LevelScheduledConditionKind::BooleanPostfixExpression)
@@ -3032,7 +3221,7 @@ void EditorApp::draw_right_panel(){
                         script_changed|=edit_operand("Percent threshold",1);break;
                     case CK::CountdownElapsed:
                         script_changed|=edit_operand("Countdown steps",1);
-                        if(ImGui::IsItemHovered())show_item_tooltip("Decremented on each 20-tick condition pass by the simulation step batch (normally 1). This is not a raw simulation-tick counter.");
+                        if(ImGui::IsItemHovered())show_item_tooltip(tr("Decremented on each 20-tick condition pass by the simulation step batch (normally 1). This is not a raw simulation-tick counter."));
                         break;
                     case CK::XeniteStorageLimitAtMost0FA0:
                         script_changed|=edit_operand("Faction",0,7U);break;
@@ -3047,16 +3236,16 @@ void EditorApp::draw_right_panel(){
                             std::snprintf(expression_text,sizeof(expression_text),"%s",thandor::campaign_expression_text(condition).c_str());
                             expression_slot=selected_condition;expression_image=condition.payload_bytes;expression_error.clear();
                         }
-                        ImGui::InputText("Expression tokens",expression_text,sizeof(expression_text));
-                        ImGui::TextDisabled("Example: C0 C1 AND C2 NOT OR. END is added automatically.");
-                        if(ImGui::Button("Apply expression")) {
+                        ImGui::InputText(tr_label("Expression tokens"),expression_text,sizeof(expression_text));
+                        ImGui::TextDisabled(tr("Example: C0 C1 AND C2 NOT OR. END is added automatically."));
+                        if(ImGui::Button(tr_label("Apply expression"))) {
                             try{condition=thandor::campaign_expression_from_text(expression_text);script_changed=true;expression_error.clear();}
                             catch(const std::exception& e){expression_error=e.what();}
                         }
                         if(!expression_error.empty())ImGui::TextWrapped("%s",expression_error.c_str());
-                        if(ImGui::CollapsingHeader("Advanced expression bytes")){
-                            ImGui::Text("Expression: %s",format_condition_expression(condition).c_str());
-                            ImGui::TextDisabled("Tokens: C0..C63 reference condition slots; FD=NOT, FE=AND, FF=OR, FC=END. Evaluation is postfix and can combine earlier or later condition slots.");
+                        if(ImGui::CollapsingHeader(tr_label("Advanced expression bytes"))){
+                            ImGui::Text(tr("Expression: %s"),format_condition_expression(condition).c_str());
+                            ImGui::TextDisabled(tr("Tokens: C0..C63 reference condition slots; FD=NOT, FE=AND, FF=OR, FC=END. Evaluation is postfix and can combine earlier or later condition slots."));
                             for(std::size_t token=0;token<condition.payload_bytes.size();++token){
                                 ImGui::PushID(static_cast<int>(token));
                                 uint8_t value=condition.payload_bytes[token];
@@ -3071,32 +3260,32 @@ void EditorApp::draw_right_panel(){
                         break;
                     }
                     default:
-                        ImGui::TextDisabled("No operands.");break;
+                        ImGui::TextDisabled(tr("No operands."));break;
                     }
                     if(script_changed){
                         checkpoint();
                         document_->level().set_scheduled_condition(static_cast<uint32_t>(selected_condition),condition);
                         document_->mark_dirty();
-                        status_="LEV mission condition updated.";
+                        status_=tr("LEV mission condition updated.");
                     }
 
-                    ImGui::SeparatorText("End-condition triggers");
-                    ImGui::SliderInt("Trigger slot",&selected_trigger,0,15);
+                    ImGui::SeparatorText(tr("End-condition triggers"));
+                    ImGui::SliderInt(tr_label("Trigger slot"),&selected_trigger,0,15);
                     auto trigger=document_->level().end_condition_trigger(static_cast<uint32_t>(selected_trigger));
                     bool active=trigger.active();
-                    bool trigger_changed=ImGui::Checkbox("Active trigger",&active);
+                    bool trigger_changed=ImGui::Checkbox(tr_label("Active trigger"),&active);
                     if(active)trigger.state_flags=1U;else trigger.state_flags=0U;
                     int trigger_faction=trigger.faction_runtime_index;
                     int trigger_condition=trigger.condition_index;
                     int end_movie_index=trigger.end_movie_selection_index;
                     int movie_variant=trigger.movie_variant_selector;
                     bool skip_disable=trigger.skip_army_disable_when_one==1U;
-                    trigger_changed|=ImGui::InputInt("Faction ended by trigger",&trigger_faction,1,1);
-                    trigger_changed|=ImGui::InputInt("Condition slot used",&trigger_condition,1,1);
-                    trigger_changed|=ImGui::InputInt("Campaign outcome (0-7)",&end_movie_index,1,1);
+                    trigger_changed|=ImGui::InputInt(tr_label("Faction ended by trigger"),&trigger_faction,1,1);
+                    trigger_changed|=ImGui::InputInt(tr_label("Condition slot used"),&trigger_condition,1,1);
+                    trigger_changed|=ImGui::InputInt(tr_label("Campaign outcome (0-7)"),&end_movie_index,1,1);
                     draw_campaign_trigger_destination(static_cast<uint8_t>(std::clamp(end_movie_index,0,7)));
-                    trigger_changed|=ImGui::InputInt("Movie variant selector",&movie_variant,1,1);
-                    trigger_changed|=ImGui::Checkbox("End immediately without disabling armies",&skip_disable);
+                    trigger_changed|=ImGui::InputInt(tr_label("Movie variant selector"),&movie_variant,1,1);
+                    trigger_changed|=ImGui::Checkbox(tr_label("End immediately without disabling armies"),&skip_disable);
                     trigger.faction_runtime_index=static_cast<uint8_t>(std::clamp(trigger_faction,0,7));
                     trigger.condition_index=static_cast<uint8_t>(std::clamp(trigger_condition,0,63));
                     trigger.end_movie_selection_index=static_cast<uint8_t>(std::clamp(end_movie_index,0,7));
@@ -3106,30 +3295,30 @@ void EditorApp::draw_right_panel(){
                         checkpoint();
                         document_->level().set_end_condition_trigger(static_cast<uint32_t>(selected_trigger),trigger);
                         document_->mark_dirty();
-                        status_="LEV mission end trigger updated.";
+                        status_=tr("LEV mission end trigger updated.");
                     }
-                    ImGui::TextDisabled("When the selected condition becomes satisfied, an active trigger is marked processed, transitions its faction toward ended state, optionally disables that faction's armies, and chooses the campaign/skirmish ending movie record. It is not the ordinary notification queue.");
+                    ImGui::TextDisabled(tr("When the selected condition becomes satisfied, an active trigger is marked processed, transitions its faction toward ended state, optionally disables that faction's armies, and chooses the campaign/skirmish ending movie record. It is not the ordinary notification queue."));
                 }catch(const std::exception& error){
-                    ImGui::TextWrapped("Mission script image unavailable: %s",error.what());
+                    ImGui::TextWrapped(tr("Mission script image unavailable: %s"),error.what());
                 }
             }
 
             // Keep the draft across frames so the separate Apply button can use it.
-            ImGui::InputInt("Width",&resize_width_);
-            ImGui::InputInt("Height",&resize_height_);
-            if(ImGui::Button("Resize centered")){
+            ImGui::InputInt(tr_label("Width"),&resize_width_);
+            ImGui::InputInt(tr_label("Height"),&resize_height_);
+            if(ImGui::Button(tr_label("Resize centered"))){
                 try{
                     if(resize_width_<0||resize_height_<0||!thandor::FieldGrid::is_game_compatible_shape(
                         static_cast<uint32_t>(resize_width_),static_cast<uint32_t>(resize_height_)))
-                        throw std::runtime_error("Choose game-compatible dimensions (59..139 in 8-cell steps, area at most 131 x 131).");
+                        throw std::runtime_error(tr("Choose game-compatible dimensions (59..139 in 8-cell steps, area at most 131 x 131)."));
                     checkpoint();
                     document_->resize_field(static_cast<uint32_t>(resize_width_),
                                             static_cast<uint32_t>(resize_height_),true);
                     reset_terrain_generator();rebuild_mesh();center_camera();
-                    status_="Resized field and translated retained placements.";
+                    status_=tr("Resized field and translated retained placements.");
                 }catch(const std::exception& e){status_=e.what();}
             }
-            ImGui::SeparatorText("Lighting and color");
+            ImGui::SeparatorText(tr("Lighting and color"));
             auto lighting=document_->level().lighting();
             bool lighting_changed=false;
             const auto edit_argb=[&](const char* label,uint32_t& packed){
@@ -3142,7 +3331,7 @@ void EditorApp::draw_right_panel(){
             lighting_changed|=edit_argb("Primary ramp 1",lighting.ramp_124);
             lighting_changed|=edit_argb("Primary color 1",lighting.color_128);
             lighting_changed|=edit_argb("Primary ramp 2",lighting.ramp_12c);
-            if(ImGui::CollapsingHeader("Primary extended colors")){
+            if(ImGui::CollapsingHeader(tr_label("Primary extended colors"))){
                 lighting_changed|=edit_argb("Primary color 2",lighting.color_130);
                 lighting_changed|=edit_argb("Primary color 3",lighting.color_134);
                 lighting_changed|=edit_argb("Primary color 4",lighting.color_138);
@@ -3150,27 +3339,27 @@ void EditorApp::draw_right_panel(){
             }
             int elevation=lighting.elevation;
             int azimuth=lighting.azimuth;
-            lighting_changed|=ImGui::SliderInt("Primary elevation",&elevation,0,65535);
-            lighting_changed|=ImGui::SliderInt("Primary azimuth",&azimuth,0,65535);
+            lighting_changed|=ImGui::SliderInt(tr_label("Primary elevation"),&elevation,0,65535);
+            lighting_changed|=ImGui::SliderInt(tr_label("Primary azimuth"),&azimuth,0,65535);
             int field_width=lighting.field_region_width;
             int field_height=lighting.field_region_height;
-            lighting_changed|=ImGui::InputInt("Field-region width",&field_width);
-            lighting_changed|=ImGui::InputInt("Field-region height",&field_height);
+            lighting_changed|=ImGui::InputInt(tr_label("Field-region width"),&field_width);
+            lighting_changed|=ImGui::InputInt(tr_label("Field-region height"),&field_height);
             field_width=std::clamp(field_width,0,65535);
             field_height=std::clamp(field_height,0,65535);
             uint32_t cycle_duration=lighting.cycle_duration_ticks;
-            if(ImGui::InputScalar("Lighting cycle duration ticks",ImGuiDataType_U32,&cycle_duration))
+            if(ImGui::InputScalar(tr_label("Lighting cycle duration ticks"),ImGuiDataType_U32,&cycle_duration))
                 lighting_changed=true;
 
-            if(ImGui::CollapsingHeader("Alternate lighting endpoint")){
+            if(ImGui::CollapsingHeader(tr_label("Alternate lighting endpoint"))){
                 int alt_elevation=lighting.alternate_elevation;
                 int alt_azimuth=lighting.alternate_azimuth;
-                lighting_changed|=ImGui::SliderInt("Alternate elevation",&alt_elevation,0,65535);
-                lighting_changed|=ImGui::SliderInt("Alternate azimuth",&alt_azimuth,0,65535);
+                lighting_changed|=ImGui::SliderInt(tr_label("Alternate elevation"),&alt_elevation,0,65535);
+                lighting_changed|=ImGui::SliderInt(tr_label("Alternate azimuth"),&alt_azimuth,0,65535);
                 int alt_width=lighting.alternate_field_region_width;
                 int alt_height=lighting.alternate_field_region_height;
-                lighting_changed|=ImGui::InputInt("Alternate field width",&alt_width);
-                lighting_changed|=ImGui::InputInt("Alternate field height",&alt_height);
+                lighting_changed|=ImGui::InputInt(tr_label("Alternate field width"),&alt_width);
+                lighting_changed|=ImGui::InputInt(tr_label("Alternate field height"),&alt_height);
                 alt_width=std::clamp(alt_width,0,65535);
                 alt_height=std::clamp(alt_height,0,65535);
                 lighting_changed|=edit_argb("Alternate base",lighting.alternate_base_color);
@@ -3198,71 +3387,71 @@ void EditorApp::draw_right_panel(){
                 if(lighting.cycle_duration_ticks==0U)lighting_cycle_preview_tick_=0U;
                 rebuild_mesh();
             }
-            bool preview_changed=ImGui::Checkbox("Preview lighting cycle",&lighting_cycle_preview_enabled_);
+            bool preview_changed=ImGui::Checkbox(tr_label("Preview lighting cycle"),&lighting_cycle_preview_enabled_);
             if(lighting.cycle_duration_ticks==0U){
-                ImGui::SameLine();ImGui::TextDisabled("(cycle duration is zero)");
+                ImGui::SameLine();ImGui::TextDisabled(tr("(cycle duration is zero)"));
             }else{
                 uint32_t preview_tick=std::min(lighting_cycle_preview_tick_,lighting.cycle_duration_ticks-1U);
                 const uint32_t preview_max=lighting.cycle_duration_ticks-1U;
-                if(ImGui::InputScalar("Preview cycle tick",ImGuiDataType_U32,&preview_tick)){
+                if(ImGui::InputScalar(tr_label("Preview cycle tick"),ImGuiDataType_U32,&preview_tick)){
                     lighting_cycle_preview_tick_=std::min(preview_tick,preview_max);preview_changed=true;
                 }
 
             }
             if(preview_changed)rebuild_mesh();
 
-            if(ImGui::Checkbox("Detailed terrain transitions",&exact_soil_packets_))
+            if(ImGui::Checkbox(tr_label("Detailed terrain transitions"),&exact_soil_packets_))
                 rebuild_mesh();
 
             uint32_t seed=soil_transition_rng_seed_;
-            if(ImGui::InputScalar("Soil transition RNG seed",ImGuiDataType_U32,&seed,nullptr,nullptr,"0x%08X",ImGuiInputTextFlags_CharsHexadecimal)){
+            if(ImGui::InputScalar(tr_label("Soil transition RNG seed"),ImGuiDataType_U32,&seed,nullptr,nullptr,"0x%08X",ImGuiInputTextFlags_CharsHexadecimal)){
                 soil_transition_rng_seed_=seed;rebuild_mesh();
             }
-            if(ImGui::Button("Reset soil RNG seed to game default",{-1.0F,0.0F})){
+            if(ImGui::Button(tr_label("Reset soil RNG seed to game default"),{-1.0F,0.0F})){
                 soil_transition_rng_seed_=thandor::FieldGrid::kDefaultSoilRandomSeed;rebuild_mesh();
             }
 
             uint32_t resource_seed=resource_animation_rng_seed_;
-            if(ImGui::InputScalar("Resource animation RNG seed",ImGuiDataType_U32,&resource_seed,nullptr,nullptr,"0x%08X",ImGuiInputTextFlags_CharsHexadecimal)){
+            if(ImGui::InputScalar(tr_label("Resource animation RNG seed"),ImGuiDataType_U32,&resource_seed,nullptr,nullptr,"0x%08X",ImGuiInputTextFlags_CharsHexadecimal)){
                 resource_animation_rng_seed_=resource_seed;rebuild_objects();
             }
-            if(ImGui::Button("Reset resource animation seed",{-1.0F,0.0F})){
+            if(ImGui::Button(tr_label("Reset resource animation seed"),{-1.0F,0.0F})){
                 resource_animation_rng_seed_=thandor::FieldGrid::kDefaultSoilRandomSeed;rebuild_objects();
             }
 
-            ImGui::Checkbox("Object shadows",&projected_object_shadows_);
+            ImGui::Checkbox(tr_label("Object shadows"),&projected_object_shadows_);
 
             ImGui::EndTabItem();
         }
-        if(begin_inspector_tab("Export",5)){
-            ImGui::SeparatorText("Editor project");
-            if(ImGui::Button("Save as THMAP...",{-1,0})){
+        if(begin_inspector_tab(tr_label("Export"),5)){
+            ImGui::SeparatorText(tr("Editor project"));
+            if(ImGui::Button(tr_label("Save as THMAP..."),{-1,0})){
                 save_project_path_[0]='\0';show_save_dialog_=true;
             }
-            ImGui::TextWrapped("Save an editable .thmap project in the maps folder beside the editor executable, with terrain, objects, names and imported textures.");
+            ImGui::TextWrapped(tr("Save an editable .thmap project in the maps folder beside the editor executable, with terrain, objects, names and imported textures."));
 
             int slot=static_cast<int>(level_package_slot_);
-            if(ImGui::SliderInt("Game level slot",&slot,0,99))level_package_slot_=static_cast<unsigned>(slot);
-            ImGui::SeparatorText("Playable numbered level package");
+            if(ImGui::SliderInt(tr_label("Game level slot"),&slot,0,99))level_package_slot_=static_cast<unsigned>(slot);
+            ImGui::SeparatorText(tr("Playable numbered level package"));
             const auto export_factions=document_->playable_faction_summary();
             try{
                 const auto player_ai=document_->player_ai_configuration();
-                ImGui::Text("Exported factions: %u human slot(s), %u active total, %u computer",
+                ImGui::Text(tr("Exported factions: %u human slot(s), %u active total, %u computer"),
                     player_ai.human_assignable_factions,player_ai.active_factions,
                     player_ai.active_factions-player_ai.human_assignable_factions);
             }catch(const std::exception& error){
-                ImGui::TextWrapped("Faction metadata unavailable: %s",error.what());
+                ImGui::TextWrapped(tr("Faction metadata unavailable: %s"),error.what());
             }
-            if(!export_factions.exportable)ImGui::TextWrapped("Export blocked: %s",export_factions.diagnostic.c_str());
-            ImGui::Checkbox("Back up replaced level and PATCH archives",&backup_existing_level_package_);
-            ImGui::TextWrapped("Installing writes levelNN.pck and updates PATCH00.PCK in the game folder, including map text aliases and conflicting overrides. With backups enabled, existing level and PATCH archives are backed up before changes.");
-            if(ImGui::Button("Install playable map",{-1,0}))export_game_level_package();
+            if(!export_factions.exportable)ImGui::TextWrapped(tr("Export blocked: %s"),export_factions.diagnostic.c_str());
+            ImGui::Checkbox(tr_label("Back up replaced level and PATCH archives"),&backup_existing_level_package_);
+            ImGui::TextWrapped(tr("Installing writes levelNN.pck and updates PATCH00.PCK in the game folder, including map text aliases and conflicting overrides. With backups enabled, existing level and PATCH archives are backed up before changes."));
+            if(ImGui::Button(tr_label("Install playable map"),{-1,0}))export_game_level_package();
 
-            ImGui::SeparatorText("Custom game resources");
-            ImGui::Checkbox("Imported/custom terrain and assets",&patch00_include_custom_assets_);
-            ImGui::Checkbox("Back up modified PATCH archive",&backup_existing_patch00_);
-            ImGui::TextWrapped("Update custom resources and map text in the active PATCH archive. Use level export above to install the map itself.");
-            if(ImGui::Button("Update game resources",{-1,0}))update_patch00_overrides();
+            ImGui::SeparatorText(tr("Custom game resources"));
+            ImGui::Checkbox(tr_label("Imported/custom terrain and assets"),&patch00_include_custom_assets_);
+            ImGui::Checkbox(tr_label("Back up modified PATCH archive"),&backup_existing_patch00_);
+            ImGui::TextWrapped(tr("Update custom resources and map text in the active PATCH archive. Use level export above to install the map itself."));
+            if(ImGui::Button(tr_label("Update game resources"),{-1,0}))update_patch00_overrides();
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
@@ -3281,72 +3470,72 @@ void EditorApp::draw_status_bar(){
 }
 
 void EditorApp::draw_new_map_dialog(){
-    if(show_new_dialog_){ImGui::OpenPopup("Create new map");show_new_dialog_=false;new_map_error_.clear();}
-    if(!ImGui::BeginPopupModal("Create new map",nullptr,ImGuiWindowFlags_AlwaysAutoResize))return;
-    ImGui::InputText("Internal map name",new_map_name_,sizeof(new_map_name_));
-    ImGui::InputText("Display name",new_display_name_,sizeof(new_display_name_));
+    if(show_new_dialog_){ImGui::OpenPopup(tr_label("Create new map"));show_new_dialog_=false;new_map_error_.clear();}
+    if(!ImGui::BeginPopupModal(tr_label("Create new map"),nullptr,ImGuiWindowFlags_AlwaysAutoResize))return;
+    ImGui::InputText(tr_label("Internal map name"),new_map_name_,sizeof(new_map_name_));
+    ImGui::InputText(tr_label("Display name"),new_display_name_,sizeof(new_display_name_));
     bool from_template=!new_empty_map_;
-    if(ImGui::Checkbox("Use terrain from an existing map",&from_template))new_empty_map_=!from_template;
+    if(ImGui::Checkbox(tr_label("Use terrain from an existing map"),&from_template))new_empty_map_=!from_template;
     if(new_empty_map_){
         int type=static_cast<int>(new_terrain_settings_.type);
-        const char* types[]{"Land / room for lakes","Shallow water","Deep water","Island"};
-        if(ImGui::Combo("Map type",&type,types,4))new_terrain_settings_=thandor::new_map_terrain_defaults(static_cast<thandor::NewMapTerrainType>(type));
+        const char* types[]{tr("Land / room for lakes"),tr("Shallow water"),tr("Deep water"),tr("Island")};
+        if(ImGui::Combo(tr_label("Map type"),&type,types,4))new_terrain_settings_=thandor::new_map_terrain_defaults(static_cast<thandor::NewMapTerrainType>(type));
         if(new_terrain_settings_.type==thandor::NewMapTerrainType::Island){
-            ImGui::InputScalar("Island seed",ImGuiDataType_U32,&new_terrain_settings_.seed);
-            if(ImGui::Button("Reroll island"))new_terrain_settings_.seed=thandor::next_terrain_seed(new_terrain_settings_.seed);
+            ImGui::InputScalar(tr_label("Island seed"),ImGuiDataType_U32,&new_terrain_settings_.seed);
+            if(ImGui::Button(tr_label("Reroll island")))new_terrain_settings_.seed=thandor::next_terrain_seed(new_terrain_settings_.seed);
         }
-        const char* surfaces[]{"Water","Ice","Lava","From terrain style"};
-        ImGui::Combo("Surface",&new_surface_type_,surfaces,4);
+        const char* surfaces[]{tr("Water"),tr("Ice"),tr("Lava"),tr("From terrain style")};
+        ImGui::Combo(tr_label("Surface"),&new_surface_type_,surfaces,4);
     }
     if(!new_empty_map_){
-        ImGui::Checkbox("Use source map's original terrain dimensions",&new_use_template_dimensions_);
+        ImGui::Checkbox(tr_label("Use source map's original terrain dimensions"),&new_use_template_dimensions_);
     }
     const bool use_source_size=!new_empty_map_&&new_use_template_dimensions_;
     if(use_source_size){
-        ImGui::TextDisabled("Size: original source FLD width and height");
+        ImGui::TextDisabled(tr("Size: original source FLD width and height"));
     }else{
-        ImGui::InputInt("Width",&new_width_);ImGui::InputInt("Height",&new_height_);
+        ImGui::InputInt(tr_label("Width"),&new_width_);ImGui::InputInt(tr_label("Height"),&new_height_);
     }
     const bool new_dimensions_ok=use_source_size||
         (new_width_>=0&&new_height_>=0&&
         thandor::FieldGrid::is_game_compatible_shape(static_cast<uint32_t>(new_width_),
                                                      static_cast<uint32_t>(new_height_)));
-    if(!new_dimensions_ok)ImGui::TextWrapped("Game-compatible shape: each axis must be 59, 67, 75, 83, 91, 99, 107, 115, 123, 131, or 139, and total area must not exceed 131 x 131. A 139-cell axis requires a smaller opposite axis.");
-    std::vector<const char*> names;for(const auto& g:catalog_.map_groups())names.push_back(g.display_name.c_str());
-    if(names.empty())ImGui::TextWrapped("No stock maps were found. Load a game folder containing map FLD/LEV assets first.");
-    else ImGui::Combo(new_empty_map_?"Terrain style":"Terrain template",&template_group_,names.data(),static_cast<int>(names.size()));
+    if(!new_dimensions_ok)ImGui::TextWrapped(tr("Game-compatible shape: each axis must be 59, 67, 75, 83, 91, 99, 107, 115, 123, 131, or 139, and total area must not exceed 131 x 131. A 139-cell axis requires a smaller opposite axis."));
+    const auto& groups=catalog_.map_groups();
+    if(groups.empty())ImGui::TextWrapped(tr("No stock maps were found. Load a game folder containing map FLD/LEV assets first."));
+    else stock_map_combo(new_empty_map_?tr_label("Terrain style"):tr_label("Terrain template"),template_group_,groups);
     if(new_empty_map_){
         using T=thandor::NewMapTerrainType;
-        if(new_terrain_settings_.type==T::Land)ImGui::TextWrapped("Dry land starts above surface level, leaving room to carve lakes and rivers.");
-        else if(new_terrain_settings_.type==T::ShallowWater)ImGui::TextWrapped("A flat shallow bed with a visible surface. Raise terrain to create dry ground.");
-        else if(new_terrain_settings_.type==T::DeepWater)ImGui::TextWrapped("A submerged flat bed. Raise terrain to create shores and islands.");
-        else ImGui::TextWrapped("A central land area with sloping shores and water around it.");
-        if(ImGui::CollapsingHeader("Starting heights and material")){
+        if(new_terrain_settings_.type==T::Land)ImGui::TextWrapped(tr("Dry land starts above surface level, leaving room to carve lakes and rivers."));
+        else if(new_terrain_settings_.type==T::ShallowWater)ImGui::TextWrapped(tr("A flat shallow bed with a visible surface. Raise terrain to create dry ground."));
+        else if(new_terrain_settings_.type==T::DeepWater)ImGui::TextWrapped(tr("A submerged flat bed. Raise terrain to create shores and islands."));
+        else ImGui::TextWrapped(tr("A central land area with sloping shores and water around it."));
+        if(ImGui::CollapsingHeader(tr_label("Starting heights and material"))){
             if(new_terrain_settings_.type==T::Land||new_terrain_settings_.type==T::Island)
-                ImGui::DragFloat("Land height",&new_terrain_settings_.land_height,0.05F,-128,128);
-            ImGui::DragFloat("Surface level",&new_terrain_settings_.surface_level,0.05F,-128,128);
+                ImGui::DragFloat(tr_label("Land height"),&new_terrain_settings_.land_height,0.05F,-128,128);
+            ImGui::DragFloat(tr_label("Surface level"),&new_terrain_settings_.surface_level,0.05F,-128,128);
             if(new_terrain_settings_.type!=T::Land)
-                ImGui::DragFloat("Water depth",&new_terrain_settings_.water_depth,0.01F,0.02F,new_terrain_settings_.type==T::ShallowWater?0.1F:64.0F);
-            ImGui::SliderInt("Initial material",&new_initial_material_,0,25,"Layer %d");
-            ImGui::TextWrapped("A surface appears where its level is above the terrain bed. Height zero is valid.");
+                ImGui::DragFloat(tr_label("Water depth"),&new_terrain_settings_.water_depth,0.01F,0.02F,new_terrain_settings_.type==T::ShallowWater?0.1F:64.0F);
+            ImGui::SliderInt(tr_label("Initial material"),&new_initial_material_,0,25,tr("Layer %d"));
+            ImGui::TextWrapped(tr("A surface appears where its level is above the terrain bed. Height zero is valid."));
         }
     }else{
         ImGui::TextWrapped(use_source_size
-            ? "Template mode imports the entire selected stock FLD at its original dimensions and clears the LEV placements."
-            : "Template mode keeps the selected terrain centered, center-cropping smaller maps or extending nearest-edge heights, materials, water and flags into added terrain. Placements are cleared.");
+            ? tr("Template mode imports the entire selected stock FLD at its original dimensions and clears the LEV placements.")
+            : tr("Template mode keeps the selected terrain centered, center-cropping smaller maps or extending nearest-edge heights, materials, water and flags into added terrain. Placements are cleared."));
     }
-    if(!new_map_error_.empty())ImGui::TextWrapped("Create failed: %s",new_map_error_.c_str());
+    if(!new_map_error_.empty())ImGui::TextWrapped(tr("Create failed: %s"),new_map_error_.c_str());
     // Keep validation independent of BeginDisabled/EndDisabled availability in
     // the game's ImGui SDK and in the minimal compilation stubs.
-    if(ImGui::Button("Create",{ui_px(150.0F),0.0F})){
-        if(new_dimensions_ok&&!names.empty()){
+    if(ImGui::Button(tr_label("Create"),{ui_px(150.0F),0.0F})){
+        if(new_dimensions_ok&&!groups.empty()){
             if(create_new_map())ImGui::CloseCurrentPopup();
         }else{
-            new_map_error_=names.empty()?"No stock compatibility shell is available":
-                "Choose legal game-compatible map dimensions";
+            new_map_error_=groups.empty()?tr("No stock compatibility shell is available"):
+                tr("Choose legal game-compatible map dimensions");
         }
     }
-    ImGui::SameLine();if(ImGui::Button("Cancel",{ui_px(150.0F),0.0F}))ImGui::CloseCurrentPopup();
+    ImGui::SameLine();if(ImGui::Button(tr_label("Cancel"),{ui_px(150.0F),0.0F}))ImGui::CloseCurrentPopup();
     ImGui::EndPopup();
 }
 
@@ -3355,15 +3544,15 @@ void EditorApp::draw_load_map_dialog(){
         refresh_custom_maps();
         // Preserve an error from File > Open map > Custom maps. The normal
         // Load command clears a previous error before reaching this point.
-        ImGui::OpenPopup("Load map or project");show_load_dialog_=false;
+        ImGui::OpenPopup(tr_label("Load map or project"));show_load_dialog_=false;
     }
-    if(!ImGui::BeginPopupModal("Load map or project",nullptr,ImGuiWindowFlags_AlwaysAutoResize))return;
-    ImGui::TextWrapped("Select a map below, or enter the full path of a .thmap, .pck or .lev file.");
-    ImGui::SetNextItemWidth(ui_px(620.0F));ImGui::InputText("File path",load_map_path_,sizeof(load_map_path_));
-    ImGui::TextDisabled("Scanned: maps beside the editor, game/maps and game/ThandorMapEditor/maps (including subfolders)");
-    if(ImGui::Button("Refresh file list"))refresh_custom_maps();
+    if(!ImGui::BeginPopupModal(tr_label("Load map or project"),nullptr,ImGuiWindowFlags_AlwaysAutoResize))return;
+    ImGui::TextWrapped(tr("Select a map below, or enter the full path of a .thmap, .pck or .lev file."));
+    ImGui::SetNextItemWidth(ui_px(620.0F));ImGui::InputText(tr_label("File path"),load_map_path_,sizeof(load_map_path_));
+    ImGui::TextDisabled(tr("Scanned: maps beside the editor, game/maps and game/ThandorMapEditor/maps (including subfolders)"));
+    if(ImGui::Button(tr_label("Refresh file list")))refresh_custom_maps();
     ImGui::BeginChild("##custom-map-files",ImVec2(ui_px(630.0F),ui_px(200.0F)),true);
-    if(custom_maps_.empty())ImGui::TextDisabled("No loose .lev or .thmap files found.");
+    if(custom_maps_.empty())ImGui::TextDisabled(tr("No loose .lev or .thmap files found."));
     for(const auto& entry:custom_maps_){
         const bool selected=std::filesystem::path(load_map_path_)==entry.path;
         if(ImGui::Selectable(entry.label.c_str(),selected)){
@@ -3375,10 +3564,10 @@ void EditorApp::draw_load_map_dialog(){
         if(ImGui::IsItemHovered())show_item_tooltip(entry.path.string(),540.0F);
     }
     ImGui::EndChild();
-    if(!load_map_error_.empty())ImGui::TextWrapped("Load failed: %s",load_map_error_.c_str());
-    if(ImGui::Button("Load selected file",{ui_px(160.0F),0.0F}) && load_map_from_path(load_map_path_))
+    if(!load_map_error_.empty())ImGui::TextWrapped(tr("Load failed: %s"),load_map_error_.c_str());
+    if(ImGui::Button(tr_label("Load selected file"),{ui_px(160.0F),0.0F}) && load_map_from_path(load_map_path_))
         ImGui::CloseCurrentPopup();
-    ImGui::SameLine();if(ImGui::Button("Cancel",{ui_px(150.0F),0.0F}))ImGui::CloseCurrentPopup();
+    ImGui::SameLine();if(ImGui::Button(tr_label("Cancel"),{ui_px(150.0F),0.0F}))ImGui::CloseCurrentPopup();
     ImGui::EndPopup();
 }
 
@@ -3389,19 +3578,19 @@ void EditorApp::draw_save_map_dialog(){
             const auto path=project_maps_directory()/(document_->map_name()+".thmap");
             std::snprintf(save_project_path_,sizeof(save_project_path_),"%s",path.string().c_str());
         }
-        ImGui::OpenPopup("Save full map project");show_save_dialog_=false;
+        ImGui::OpenPopup(tr_label("Save full map project"));show_save_dialog_=false;
     }
-    if(!ImGui::BeginPopupModal("Save full map project",nullptr,ImGuiWindowFlags_AlwaysAutoResize))return;
-    ImGui::SetNextItemWidth(ui_px(620.0F));if(ImGui::InputText("Project path",save_project_path_,sizeof(save_project_path_)))save_map_error_.clear();
-    ImGui::TextWrapped("The project stores LEV, FLD, names, and imported terrain textures. Install playable map exports the playable map; Update game resources exports custom textures and text.");
-    if(!save_map_error_.empty())ImGui::TextWrapped("Save failed: %s",save_map_error_.c_str());
-    if(ImGui::Button("Save",{ui_px(150.0F),0.0F})&&save_project(save_project_path_))ImGui::CloseCurrentPopup();
-    ImGui::SameLine();if(ImGui::Button("Cancel",{ui_px(150.0F),0.0F}))ImGui::CloseCurrentPopup();
+    if(!ImGui::BeginPopupModal(tr_label("Save full map project"),nullptr,ImGuiWindowFlags_AlwaysAutoResize))return;
+    ImGui::SetNextItemWidth(ui_px(620.0F));if(ImGui::InputText(tr_label("Project path"),save_project_path_,sizeof(save_project_path_)))save_map_error_.clear();
+    ImGui::TextWrapped(tr("A .thmap is a ZIP with map.ini, level data, and editable TGA images for the ground textures used here."));
+    if(!save_map_error_.empty())ImGui::TextWrapped(tr("Save failed: %s"),save_map_error_.c_str());
+    if(ImGui::Button(tr_label("Save"),{ui_px(150.0F),0.0F})&&save_project(save_project_path_))ImGui::CloseCurrentPopup();
+    ImGui::SameLine();if(ImGui::Button(tr_label("Cancel"),{ui_px(150.0F),0.0F}))ImGui::CloseCurrentPopup();
     ImGui::EndPopup();
 }
 
 void EditorApp::draw_material_palette(bool use_asset_filter){
-    if(material_images_.empty()){ImGui::TextDisabled("No terrain material images loaded.");return;}
+    if(material_images_.empty()){ImGui::TextDisabled(tr("No terrain material images loaded."));return;}
     const int columns=std::max(1,static_cast<int>((ImGui::GetContentRegionAvail().x+ui_px(6.0F))/ui_px(72.0F)));
     const float spacing=ImGui::GetStyle().ItemSpacing.x;
     const float width=(ImGui::GetContentRegionAvail().x-spacing*static_cast<float>(columns-1))/columns;
@@ -3430,15 +3619,15 @@ void EditorApp::draw_material_palette(bool use_asset_filter){
         draw->AddText({begin.x+3.0F,begin.y+tile+2.0F},IM_COL32_WHITE,label.c_str());
         if(ImGui::IsItemClicked()){selected_material_=static_cast<uint8_t>(material);choose_workspace_tool(Tool::Texture,1);}
         if(ImGui::IsItemHovered())show_item_tooltip(label+" — "+material_names_[material]+
-            "\nClick to select, then paint with the Texture tool.");
+            tr("\nClick to select, then paint with the Texture tool."));
         ImGui::PopID();
     }
 }
 
 void EditorApp::draw_selected_object_editor(){
-    ImGui::SeparatorText("Selected object");
+    ImGui::SeparatorText(tr("Selected object"));
     if(!selected_placement_||*selected_placement_>=document_->level().placements().size()){
-        selected_edit_index_.reset();ImGui::TextDisabled("No placed object selected.");return;
+        selected_edit_index_.reset();ImGui::TextDisabled(tr("No placed object selected."));return;
     }
     const std::size_t index=*selected_placement_;
     auto placements=document_->level().placements();
@@ -3456,8 +3645,8 @@ void EditorApp::draw_selected_object_editor(){
     }
     if(const auto* preset=catalog_.army_preset(placement.army_asset_id))
         draw_selected_object_preview(*preset,placement.faction_index);
-    ImGui::InputText("Display name",selected_display_name_,sizeof(selected_display_name_));
-    ImGui::InputScalar("Asset ID",ImGuiDataType_U32,&selected_edit_asset_id_);
+    ImGui::InputText(tr_label("Display name"),selected_display_name_,sizeof(selected_display_name_));
+    ImGui::InputScalar(tr_label("Asset ID"),ImGuiDataType_U32,&selected_edit_asset_id_);
     const uint32_t selected_object_faction=static_cast<uint32_t>(std::clamp(selected_edit_faction_,0,7));
     const uint32_t selected_object_family=graphics_family_for_faction(selected_object_faction);
     const std::string object_faction_preview=selected_object_faction==0U?"Neutral / default":
@@ -3465,7 +3654,7 @@ void EditorApp::draw_selected_object_editor(){
     if(selected_object_faction!=0U)
         ImGui::PushStyleColor(ImGuiCol_Text,graphics_family_ui_text_color(selected_object_family));
     ImGui::SetNextItemWidth(std::max(ui_px(90.0F),ImGui::GetContentRegionAvail().x-ui_px(145.0F)));
-    const bool object_faction_combo_open=ImGui::BeginCombo("Faction",object_faction_preview.c_str());
+    const bool object_faction_combo_open=ImGui::BeginCombo(tr_label("Faction"),object_faction_preview.c_str());
     if(selected_object_faction!=0U)ImGui::PopStyleColor();
     if(object_faction_combo_open){
         for(uint32_t faction=0U;faction<=7U;++faction){
@@ -3480,22 +3669,22 @@ void EditorApp::draw_selected_object_editor(){
         }
         ImGui::EndCombo();
     }
-    ImGui::SeparatorText("Transform");
-    ImGui::DragFloat3("Position XYZ",selected_edit_position_.data(),0.05F);
-    ImGui::DragFloat("Yaw degrees",&selected_edit_yaw_degrees_,0.5F,-3600.0F,3600.0F);
-    if(ImGui::IsItemHovered())show_item_tooltip("Z edits the terrain anchor. Stock LEV stores X, Y and yaw.");
-    if(ImGui::Button("Apply selected object values",{-1.0F,0.0F})){
+    ImGui::SeparatorText(tr("Transform"));
+    ImGui::DragFloat3(tr_label("Position XYZ"),selected_edit_position_.data(),0.05F);
+    ImGui::DragFloat(tr_label("Yaw degrees"),&selected_edit_yaw_degrees_,0.5F,-3600.0F,3600.0F);
+    if(ImGui::IsItemHovered())show_item_tooltip(tr("Z edits the terrain anchor. Stock LEV stores X, Y and yaw."));
+    if(ImGui::Button(tr_label("Apply selected object values"),{-1.0F,0.0F})){
         try{
             const auto* preset=catalog_.army_preset(selected_edit_asset_id_);
-            if(preset==nullptr)throw std::runtime_error("asset ID is not present in the ARM registry");
+            if(preset==nullptr)throw std::runtime_error(tr("asset ID is not present in the ARM registry"));
             if(preset->has_placement_occupancy_class){
                 auto candidate=placement;
                 candidate.army_asset_id=selected_edit_asset_id_;
                 candidate.set_render_position_q12(thandor::float_to_q12(selected_edit_position_[0]),
                     thandor::float_to_q12(selected_edit_position_[1]));
                 if(!placement_has_required_resource_support(*preset,candidate)){
-                    const char* support=preset->placement_occupancy_class==0U?"Xenite field (FLD 0x0800)":
-                        (preset->placement_occupancy_class==1U?"Tritium field (FLD 0x1000)":"required resource field");
+                    const char* support=preset->placement_occupancy_class==0U?tr("Xenite field (FLD 0x0800)"):
+                        (preset->placement_occupancy_class==1U?tr("Tritium field (FLD 0x1000)"):tr("required resource field"));
                     throw std::runtime_error(std::string("runtime class 14 extractor requires ")+support+
                         " at the edited position");
                 }
@@ -3514,23 +3703,23 @@ void EditorApp::draw_selected_object_editor(){
             }
             selected_asset_id_=placement.army_asset_id;selected_faction_=placement.faction_index;selected_orientation_=placement.orientation_turn16;
             document_->mark_dirty();rebuild_mesh();selected_edit_index_.reset();
-            status_="Updated selected object name, faction, position, terrain Z anchor, and yaw.";
+            status_=tr("Updated selected object name, faction, position, terrain Z anchor, and yaw.");
         }catch(const std::exception& e){status_=e.what();}
     }
     const auto* preset=catalog_.army_preset(placement.army_asset_id);
-    if(ImGui::CollapsingHeader("Research and damage")){
+    if(ImGui::CollapsingHeader(tr_label("Research and damage"))){
 
     if(preset!=nullptr){
         if(preset->has_placement_occupancy_class){
             const bool support_active=placement_has_required_resource_support(*preset,placement);
-            const char* support=preset->placement_occupancy_class==0U?"Xenite":
-                (preset->placement_occupancy_class==1U?"Tritium":"resource support");
+            const char* support=preset->placement_occupancy_class==0U?tr("Xenite"):
+                (preset->placement_occupancy_class==1U?tr("Tritium"):tr("resource support"));
             if(support_active)
                 ImGui::TextColored(ImVec4(0.38F,0.88F,0.48F,1.0F),
-                    "Resource field: %s",support);
+                    tr("Resource field: %s"),support);
             else
                 ImGui::TextColored(ImVec4(1.0F,0.42F,0.32F,1.0F),
-                    "Missing resource field: %s",support);
+                    tr("Missing resource field: %s"),support);
 
         }
         draw_faction_research_mask_editor(std::min(placement.faction_index,7U),"selected-object-research");
@@ -3540,7 +3729,7 @@ void EditorApp::draw_selected_object_editor(){
         });
         if(tag_it!=tags.end()){
             int integrity=static_cast<int>(tag_it->preview_integrity_percent);
-            if(ImGui::SliderInt("Integrity / damage preview %",&integrity,0,100)){
+            if(ImGui::SliderInt(tr_label("Integrity / damage preview %"),&integrity,0,100)){
                 checkpoint();
                 tag_it->preview_integrity_percent=static_cast<uint32_t>(std::clamp(integrity,0,100));
                 document_->mark_dirty();animate_timed_effects_=true;
@@ -3559,7 +3748,7 @@ void EditorApp::draw_selected_object_editor(){
                         break;
                     }
                 }
-                ImGui::SeparatorText("Building destruction preview");
+                ImGui::SeparatorText(tr("Building destruction preview"));
 
                 if(const auto destruction=building_destruction_states_.find(index);
                    destruction!=building_destruction_states_.end()){
@@ -3570,43 +3759,43 @@ void EditorApp::draw_selected_object_editor(){
                         ?current_presentation_tick_-destruction->second.start_tick:0U;
                     if(lifetime!=0U&&age<lifetime){
                         const float progress=std::clamp(static_cast<float>(age)/lifetime,0.0F,1.0F);
-                        ImGui::ProgressBar(progress,{-1.0F,5.0F},"Destruction");
-                        ImGui::TextDisabled("%u / %u ticks",
+                        ImGui::ProgressBar(progress,{-1.0F,5.0F},tr("Destruction"));
+                        ImGui::TextDisabled(tr("%u / %u ticks"),
                             age,lifetime);
                     }else{
-                        ImGui::TextDisabled("Destruction complete.");
+                        ImGui::TextDisabled(tr("Destruction complete."));
                     }
-                    if(ImGui::Button("Restore destroyed building",{-1.0F,0.0F})){
+                    if(ImGui::Button(tr_label("Restore destroyed building"),{-1.0F,0.0F})){
                         building_destruction_states_.erase(index);
                         tag_it->preview_integrity_percent=100U;
                         document_->mark_dirty();
                         simulation_static_replacement_dirty_=true;
                         last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
-                        status_="Restored building preview and cleared transient destruction state.";
+                        status_=tr("Restored building preview and cleared transient destruction state.");
                     }
                 }else if(destruction_effect_id!=0U&&
                          catalog_.effect_definition(destruction_effect_id)!=nullptr){
-                    if(ImGui::Button("Preview destruction",{-1.0F,0.0F})){
+                    if(ImGui::Button(tr_label("Preview destruction"),{-1.0F,0.0F})){
                         building_destruction_states_[index]={current_presentation_tick_,destruction_effect_id};
                         tag_it->preview_integrity_percent=0U;
                         document_->mark_dirty();
                         animate_timed_effects_=true;
                         simulation_static_replacement_dirty_=true;
                         last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
-                        status_="Destruction preview started.";
+                        status_=tr("Destruction preview started.");
                     }
                 }else{
-                    ImGui::TextDisabled("No destruction preview available.");
+                    ImGui::TextDisabled(tr("No destruction preview available."));
                 }
             }
         }
     }
     }
-    if(ImGui::Button("Center camera on selected",{-1.0F,0.0F})){
+    if(ImGui::Button(tr_label("Center camera on selected"),{-1.0F,0.0F})){
         camera_.target={placement.render_x(),placement.render_y(),terrain_height_near(placement.render_x(),placement.render_y())};
     }
-    if(ImGui::CollapsingHeader("AI / gameplay"))draw_ingame_selection_panel();
-    if(ImGui::Button("Delete selected",{-1.0F,0.0F}))delete_selected_placement();
+    if(ImGui::CollapsingHeader(tr_label("AI / gameplay")))draw_ingame_selection_panel();
+    if(ImGui::Button(tr_label("Delete selected"),{-1.0F,0.0F}))delete_selected_placement();
 }
 
 void EditorApp::draw_ingame_selection_panel(){
@@ -3615,46 +3804,46 @@ void EditorApp::draw_ingame_selection_panel(){
     const auto& placement=document_->level().placements()[index];
     const auto* preset=catalog_.army_preset(placement.army_asset_id);
     if(!preset)return;
-    ImGui::SeparatorText("In-game selection / simulation");
+    ImGui::SeparatorText(tr("In-game selection / simulation"));
     ImGui::PushStyleColor(ImGuiCol_ChildBg,IM_COL32(22,28,34,245));
     ImGui::PushStyleColor(ImGuiCol_Border,IM_COL32(112,132,142,255));
     ImGui::BeginChild("ingame-selection-panel",{0.0F,0.0F},ImGuiChildFlags_Border|ImGuiChildFlags_AutoResizeY);
-    ImGui::TextColored(ImVec4(0.82F,0.91F,0.94F,1.0F),"%s",preset->display_name.c_str());
+    ImGui::TextColored(ImVec4(0.82F,0.91F,0.94F,1.0F),"%s",asset_display_name(*preset).c_str());
     ImGui::SameLine();ImGui::TextDisabled("F%u · %s",placement.faction_index,
         thandor::placement_browser_kind_name(preset->browser_kind));
-    ImGui::TextDisabled("Preview production, movement, and combat for this object.");
-    ImGui::TextWrapped("Viewport commands: right-click terrain to drive a movable unit; right-click terrain with an armed immobile unit/building to set an attack point; right-click a different-faction placement to attack and follow it. Right-drag still pans the camera.");
+    ImGui::TextDisabled(tr("Preview production, movement, and combat for this object."));
+    ImGui::TextWrapped(tr("Viewport commands: right-click terrain to drive a movable unit; right-click terrain with an armed immobile unit/building to set an attack point; right-click a different-faction placement to attack and follow it. Right-drag still pans the camera."));
 
     if(simulation_lab_active()){
-        ImGui::TextWrapped("Use the Simulation Lab run controls while an experiment is loaded. Clear the experiment to use manual object simulation.");
+        ImGui::TextWrapped(tr("Use the Simulation Lab run controls while an experiment is loaded. Clear the experiment to use manual object simulation."));
         ImGui::EndChild();ImGui::PopStyleColor(2);return;
     }
-    if(ImGui::Checkbox("Simulation mode · exact 20 Hz",&simulation_mode_)){
+    if(ImGui::Checkbox(tr_label("Simulation mode · exact 20 Hz"),&simulation_mode_)){
         if(simulation_mode_){animate_buildings_=true;animate_units_=true;}
         else reset_simulation(true);
         last_simulation_tick_=current_presentation_tick_;
         last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
     }
-    ImGui::Checkbox("Selected armed placement targets exclusively",&simulation_selected_only_);
-    ImGui::Checkbox("Show ranges and orders",&simulation_show_ranges_);
+    ImGui::Checkbox(tr_label("Selected armed placement targets exclusively"),&simulation_selected_only_);
+    ImGui::Checkbox(tr_label("Show ranges and orders"),&simulation_show_ranges_);
 
     const auto weapon_profiles=placement_weapon_profiles(*preset,index);
     auto found=simulation_actor_states_.find(index);
     if(found!=simulation_actor_states_.end()){
         const auto& actor=found->second;
         const float movement=actor.move_target?1.0F:0.0F;
-        ImGui::ProgressBar(movement,{-1.0F,5.0F},actor.move_target?"MOVING":"IDLE");
-        ImGui::Text("World %.2f / %.2f / %.2f · body %.1f deg",actor.position.x,actor.position.y,
+        ImGui::ProgressBar(movement,{-1.0F,5.0F},actor.move_target?tr("MOVING"):tr("IDLE"));
+        ImGui::Text(tr("World %.2f / %.2f / %.2f · body %.1f deg"),actor.position.x,actor.position.y,
             actor.position.z,static_cast<float>(actor.body_yaw_turn16)*(360.0F/65536.0F));
     }
 
     if(preset->runtime_model_class_id==13U){
-        ImGui::SeparatorText("Factory production");
+        ImGui::SeparatorText(tr("Factory production"));
         ensure_simulation_economy_initialized();
         const uint32_t faction=placement.faction_index;
 
         if(faction<simulation_faction_xenite_q4_.size())
-            ImGui::Text("Transient faction Xenite: %u Q4 · queue: %zu",
+            ImGui::Text(tr("Transient faction Xenite: %u Q4 · queue: %zu"),
                 simulation_faction_xenite_q4_[faction],simulation_secondary_production_queues_[faction].size());
         std::vector<const thandor::ArmyAssetPreset*> compatible;
         std::unordered_set<uint32_t> seen;
@@ -3669,7 +3858,7 @@ void EditorApp::draw_ingame_selection_panel(){
         if(selected_candidate==0U&&!compatible.empty())selected_candidate=compatible.front()->registry_id;
         const auto* selected_production_preset=catalog_.army_preset(selected_candidate);
         const char* preview=selected_production_preset?selected_production_preset->display_name.c_str():"No compatible unit";
-        if(ImGui::BeginCombo("Production unit",preview)){
+        if(ImGui::BeginCombo(tr_label("Production unit"),preview)){
             for(const auto* candidate:compatible){
                 const bool selected=candidate->registry_id==selected_candidate;
                 std::string label=candidate->display_name+"##factory-"+std::to_string(candidate->registry_id);
@@ -3681,18 +3870,18 @@ void EditorApp::draw_ingame_selection_panel(){
         selected_production_preset=catalog_.army_preset(selected_candidate);
         const bool can_queue=selected_production_preset!=nullptr&&faction>0U&&
             faction<simulation_secondary_production_queues_.size();
-        if(can_queue&&ImGui::Button("Queue selected unit for faction",{-1.0F,0.0F})){
+        if(can_queue&&ImGui::Button(tr_label("Queue selected unit for faction"),{-1.0F,0.0F})){
             simulation_secondary_production_queues_[faction].push_back(selected_candidate);
             simulation_mode_=true;animate_buildings_=true;animate_units_=true;
             // Static texture-array membership must include a transient unit before it can spawn.
             simulation_static_replacement_dirty_=true;
-            status_="Queued "+selected_production_preset->display_name+
-                " in the recovered faction secondary production queue.";
+            status_=tr("Queued ")+selected_production_preset->display_name+
+                tr(" in the recovered faction secondary production queue.");
         }else if(!can_queue){
-            ImGui::TextDisabled("No compatible production unit is available for this factory mask.");
+            ImGui::TextDisabled(tr("No compatible production unit is available for this factory mask."));
         }
         if(selected_production_preset){
-            ImGui::TextDisabled("cost %u Q4 · build %u ticks (%.2f s) · active Energy %llu Q4",
+            ImGui::TextDisabled(tr("cost %u Q4 · build %u ticks (%.2f s) · active Energy %llu Q4"),
                 selected_production_preset->retail_xenite_cost_q4,
                 selected_production_preset->retail_build_time_q5,
                 static_cast<double>(selected_production_preset->retail_build_time_q5)/
@@ -3718,29 +3907,29 @@ void EditorApp::draw_ingame_selection_panel(){
         }
         const bool custom_drive_target=simulation_production_rally_points_.contains(index);
         if(const auto drive_target=simulation_class13_effective_drive_target(index,*preset)){
-            ImGui::Text("Drive target: %.2f / %.2f / %.2f · %s",drive_target->x,drive_target->y,
-                drive_target->z,custom_drive_target?"custom":"default");
+            ImGui::Text(tr("Drive target: %.2f / %.2f / %.2f · %s"),drive_target->x,drive_target->y,
+                drive_target->z,custom_drive_target?tr("custom"):tr("default"));
         }else{
-            ImGui::TextDisabled("No default exit point available.");
+            ImGui::TextDisabled(tr("No default exit point available."));
         }
-        if(custom_drive_target&&ImGui::Button("Reset drive target to factory default",{-1.0F,0.0F})){
+        if(custom_drive_target&&ImGui::Button(tr_label("Reset drive target to factory default"),{-1.0F,0.0F})){
             simulation_production_rally_points_.erase(index);
             selected_placement_.reset();selected_simulation_lab_entity_.reset();
             last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
-            status_="Factory drive target reset to model lookup class 5 / index 1; custom EGATH0 marker cleared and selection reset.";
+            status_=tr("Factory drive target reset to model lookup class 5 / index 1; custom EGATH0 marker cleared and selection reset.");
         }
 
     }
 
     if(preset->runtime_model_class_id==22U){
-        ImGui::SeparatorText("Airport linked-child storage · runtime class 22");
+        ImGui::SeparatorText(tr("Airport linked-child storage · runtime class 22"));
         ensure_simulation_economy_initialized();
         const uint32_t faction=placement.faction_index;
         const uint32_t capacity=std::min<uint32_t>(preset->runtime_class_specific_c4_raw,
             static_cast<uint32_t>(thandor::kSimulationClass22StoredSlotCount));
 
         if(faction<simulation_faction_xenite_q4_.size())
-            ImGui::Text("Transient faction Xenite: %u Q4 · shared secondary queue: %zu",
+            ImGui::Text(tr("Transient faction Xenite: %u Q4 · shared secondary queue: %zu"),
                 simulation_faction_xenite_q4_[faction],simulation_secondary_production_queues_[faction].size());
         std::vector<const thandor::ArmyAssetPreset*> compatible;
         std::unordered_set<uint32_t> seen;
@@ -3754,7 +3943,7 @@ void EditorApp::draw_ingame_selection_panel(){
         if(selected_candidate==0U&&!compatible.empty())selected_candidate=compatible.front()->registry_id;
         const auto* selected_storage_preset=catalog_.army_preset(selected_candidate);
         const char* preview=selected_storage_preset?selected_storage_preset->display_name.c_str():"No compatible secondary asset";
-        if(ImGui::BeginCombo("Stored secondary asset",preview)){
+        if(ImGui::BeginCombo(tr_label("Stored secondary asset"),preview)){
             for(const auto* candidate:compatible){
                 const bool selected=candidate->registry_id==selected_candidate;
                 std::string label=candidate->display_name+"##airport-store-"+std::to_string(candidate->registry_id);
@@ -3766,16 +3955,16 @@ void EditorApp::draw_ingame_selection_panel(){
         selected_storage_preset=catalog_.army_preset(selected_candidate);
         const bool can_queue=selected_storage_preset!=nullptr&&capacity!=0U&&faction>0U&&
             faction<simulation_secondary_production_queues_.size();
-        if(can_queue&&ImGui::Button("Queue selected secondary asset for Airport storage",{-1.0F,0.0F})){
+        if(can_queue&&ImGui::Button(tr_label("Queue selected secondary asset for Airport storage"),{-1.0F,0.0F})){
             simulation_secondary_production_queues_[faction].push_back(selected_candidate);
             simulation_mode_=true;animate_buildings_=true;animate_units_=true;
-            status_="Queued "+selected_storage_preset->display_name+
-                " in the recovered faction secondary production queue for class-22 storage.";
+            status_=tr("Queued ")+selected_storage_preset->display_name+
+                tr(" in the recovered faction secondary production queue for class-22 storage.");
         }else if(!can_queue){
-            ImGui::TextDisabled("No compatible storable secondary asset is available, or this Airport has zero slots.");
+            ImGui::TextDisabled(tr("No compatible storable secondary asset is available, or this Airport has zero slots."));
         }
         if(selected_storage_preset){
-            ImGui::TextDisabled("cost %u Q4 · build %u ticks (%.2f s) · active Energy %llu Q4",
+            ImGui::TextDisabled(tr("cost %u Q4 · build %u ticks (%.2f s) · active Energy %llu Q4"),
                 selected_storage_preset->retail_xenite_cost_q4,
                 selected_storage_preset->retail_build_time_q5,
                 static_cast<double>(selected_storage_preset->retail_build_time_q5)/
@@ -3785,12 +3974,12 @@ void EditorApp::draw_ingame_selection_panel(){
         if(const auto airport=simulation_airport_states_.find(index);
            airport!=simulation_airport_states_.end()){
             const auto& state=airport->second;
-            ImGui::Text("Stored linked assets: %u / %u · available: %u",state.stored_slot_count,
+            ImGui::Text(tr("Stored linked assets: %u / %u · available: %u"),state.stored_slot_count,
                 state.storage_capacity,state.available_stored_count);
             if(state.build_phase==thandor::SimulationClass22BuildPhase::Building){
                 const float progress=state.build_duration_ticks==0U?1.0F:
                     std::clamp(static_cast<float>(state.build_elapsed_ticks)/state.build_duration_ticks,0.0F,1.0F);
-                ImGui::ProgressBar(progress,{-1.0F,5.0F},"building stored asset");
+                ImGui::ProgressBar(progress,{-1.0F,5.0F},tr("building stored asset"));
 
             }
             std::string slots;
@@ -3801,15 +3990,15 @@ void EditorApp::draw_ingame_selection_panel(){
                 const auto* stored=catalog_.army_preset(id);
                 slots += std::to_string(slot)+":"+(stored?stored->display_name:std::to_string(id));
             }
-            if(!slots.empty())ImGui::TextWrapped("Persistent slots: %s",slots.c_str());
+            if(!slots.empty())ImGui::TextWrapped(tr("Persistent slots: %s"),slots.c_str());
         }
-        ImGui::SeparatorText("Linked class-21 sortie");
+        ImGui::SeparatorText(tr("Linked class-21 sortie"));
         auto& selected_lane=simulation_airport_launch_lane_selection_[index];
         selected_lane=std::min(selected_lane,2U);
-        const char* lane_names[]={"Lane 0 · ARM 240 · Crow","Lane 1 · ARM 242 · Hawk",
-            "Lane 2 · ARM 244 · Eagle"};
+        const char* lane_names[]={tr("Lane 0 · ARM 240 · Crow"),tr("Lane 1 · ARM 242 · Hawk"),
+            tr("Lane 2 · ARM 244 · Eagle")};
         int lane_value=static_cast<int>(selected_lane);
-        if(ImGui::Combo("Stored launch lane",&lane_value,lane_names,3))
+        if(ImGui::Combo(tr_label("Stored launch lane"),&lane_value,lane_names,3))
             selected_lane=static_cast<uint32_t>(std::clamp(lane_value,0,2));
         const uint32_t launch_asset=thandor::kSimulationClass22LinkedArmyAssetIds[selected_lane];
         uint32_t persistent_count=0U,free_count=0U;
@@ -3821,21 +4010,21 @@ void EditorApp::draw_ingame_selection_panel(){
                 if((state.occupied_slot_mask&(1U<<slot))==0U)++free_count;
             }
         }
-        ImGui::TextDisabled("persistent %u · currently free %u · stored slot is reusable after return",
+        ImGui::TextDisabled(tr("persistent %u · currently free %u · stored slot is reusable after return"),
             persistent_count,free_count);
         auto& heading_degrees=simulation_airport_mission_heading_degrees_[index];
         if(simulation_target_point_&&heading_degrees==0.0F){
             heading_degrees=std::atan2(simulation_target_point_->y-placement.render_y(),
                 simulation_target_point_->x-placement.render_x())*(180.0F/std::numbers::pi_v<float>);
         }
-        ImGui::DragFloat("Mission pass heading (deg)",&heading_degrees,0.5F,-3600.0F,3600.0F);
+        ImGui::DragFloat(tr_label("Mission pass heading (deg)"),&heading_degrees,0.5F,-3600.0F,3600.0F);
         if(simulation_target_point_)
-            ImGui::TextDisabled("Mission point: %.2f, %.2f",
+            ImGui::TextDisabled(tr("Mission point: %.2f, %.2f"),
                 simulation_target_point_->x,simulation_target_point_->y);
         else
-            ImGui::TextDisabled("Choose a target point first.");
+            ImGui::TextDisabled(tr("Choose a target point first."));
         const bool launch_ready=simulation_target_point_.has_value()&&free_count>0U;
-        if(launch_ready&&ImGui::Button("Launch sortie",{-1.0F,0.0F})){
+        if(launch_ready&&ImGui::Button(tr_label("Launch sortie"),{-1.0F,0.0F})){
             auto& state=simulation_airport_states_[index];
             const uint32_t heading=thandor::radians_to_turn16(heading_degrees*
                 (std::numbers::pi_v<float>/180.0F));
@@ -3846,16 +4035,16 @@ void EditorApp::draw_ingame_selection_panel(){
                 command.value_a,command.value_b,command.value_c);
             simulation_mode_=true;animate_buildings_=true;animate_units_=true;
             simulation_static_replacement_dirty_=true;
-            status_="Queued class-22 lane "+std::to_string(selected_lane)+
-                " linked-child sortie without consuming its persistent stored ARM id.";
+            status_=tr("Queued class-22 lane ")+std::to_string(selected_lane)+
+                tr(" linked-child sortie without consuming its persistent stored ARM id.");
         }else if(!launch_ready){
-            ImGui::TextDisabled("Launch requires a free matching 240/242/244 stored slot and a Simulation target point.");
+            ImGui::TextDisabled(tr("Launch requires a free matching 240/242/244 stored slot and a Simulation target point."));
         }
 
     }
 
     if(!weapon_profiles.empty()){
-        ImGui::SeparatorText("Weapons");
+        ImGui::SeparatorText(tr("Weapons"));
 
         for(std::size_t weapon_index=0;weapon_index<weapon_profiles.size();++weapon_index){
             const auto& weapon=weapon_profiles[weapon_index];
@@ -3869,28 +4058,28 @@ void EditorApp::draw_ingame_selection_panel(){
                 }
                 if(!weapon_title.empty())break;
             }
-            ImGui::TextUnformatted(weapon_title.empty()?"Weapon":weapon_title.c_str());
+            ImGui::TextUnformatted(weapon_title.empty()?tr("Weapon"):weapon_title.c_str());
             ImGui::PushID(static_cast<int>(weapon_index));
 
-            ImGui::TextDisabled("Range %.2f · Reload %.2f s",
+            ImGui::TextDisabled(tr("Range %.2f · Reload %.2f s"),
                 thandor::q12_to_float(weapon.maximum_range_q12),
                 static_cast<float>(weapon.reload_ticks)/thandor::kSimulationTicksPerSecond);
             if(found!=simulation_actor_states_.end()&&weapon_index<found->second.weapons.size()){
                 const auto& state=found->second.weapons[weapon_index];
                 const float ready=weapon.reload_ticks==0U?1.0F:
                     1.0F-std::min(1.0F,static_cast<float>(state.cooldown_ticks)/weapon.reload_ticks);
-                const char* lock=state.target_aligned&&state.line_of_fire_clear?"LOCKED":
-                    state.target_in_range?(state.line_of_fire_clear?"AIMING":"BLOCKED"):"OUT OF RANGE";
+                const char* lock=state.target_aligned&&state.line_of_fire_clear?tr("LOCKED"):
+                    state.target_in_range?(state.line_of_fire_clear?tr("AIMING"):tr("BLOCKED")):tr("OUT OF RANGE");
                 ImGui::ProgressBar(ready,{-1.0F,5.0F},lock);
             }
             ImGui::PopID();
         }
-        if(ImGui::Button("Choose attack point on terrain",{-1.0F,0.0F})){
+        if(ImGui::Button(tr_label("Choose attack point on terrain"),{-1.0F,0.0F})){
             tool_=Tool::SimulationTarget;simulation_mode_=true;animate_buildings_=true;animate_units_=true;
-            status_="Click terrain to assign a point target to the selected armed placement.";
+            status_=tr("Click terrain to assign a point target to the selected armed placement.");
         }
         if(preset->browser_kind==thandor::PlacementBrowserKind::Building&&
-           ImGui::Button("Bake whole placement facing toward target",{-1.0F,0.0F}))
+           ImGui::Button(tr_label("Bake whole placement facing toward target"),{-1.0F,0.0F}))
             bake_selected_target_facing();
 
     }
@@ -3900,33 +4089,33 @@ void EditorApp::draw_ingame_selection_panel(){
        target->second<document_->level().placements().size()){
         const auto& target_placement=document_->level().placements()[target->second];
         const auto* target_preset=catalog_.army_preset(target_placement.army_asset_id);
-        ImGui::TextColored(ImVec4(1.0F,0.48F,0.38F,1.0F),"Attack entity: %s · F%u",
-            target_preset?target_preset->display_name.c_str():"unresolved",target_placement.faction_index);
+        ImGui::TextColored(ImVec4(1.0F,0.48F,0.38F,1.0F),tr("Attack entity: %s · F%u"),
+            target_preset?target_preset->display_name.c_str():tr("unresolved"),target_placement.faction_index);
     }else if(const auto target=simulation_attack_point_targets_.find(index);
              target!=simulation_attack_point_targets_.end()){
-        ImGui::TextColored(ImVec4(1.0F,0.58F,0.32F,1.0F),"Attack point: %.2f / %.2f / %.2f",
+        ImGui::TextColored(ImVec4(1.0F,0.58F,0.32F,1.0F),tr("Attack point: %.2f / %.2f / %.2f"),
             target->second.x,target->second.y,target->second.z);
     }
 
     if(preset->browser_kind==thandor::PlacementBrowserKind::Unit&&
        preset->simulation_motion_profile.movable()){
-        ImGui::SeparatorText("Movement");
+        ImGui::SeparatorText(tr("Movement"));
 
-        ImGui::Checkbox("Show route / 4x pathing cells",&v519_path_diagnostics_);
-        if(ImGui::Button("Drive selected unit to terrain point",{-1.0F,0.0F})){
+        ImGui::Checkbox(tr_label("Show route / 4x pathing cells"),&v519_path_diagnostics_);
+        if(ImGui::Button(tr_label("Drive selected unit to terrain point"),{-1.0F,0.0F})){
             activate_fog_on_driving_order(placement.faction_index);
             tool_=Tool::SimulationMove;simulation_mode_=true;animate_buildings_=true;animate_units_=true;
-            status_="Click terrain to issue a movement destination to the selected unit.";
+            status_=tr("Click terrain to issue a movement destination to the selected unit.");
         }
-        if(ImGui::Button("Stop selected unit",{-1.0F,0.0F})){
+        if(ImGui::Button(tr_label("Stop selected unit"),{-1.0F,0.0F})){
             auto& actor=simulation_state_for(index);
             actor.move_target.reset();actor.move_waypoint.reset();
         }
-        ImGui::TextWrapped("Movement is a preview. Use Finish driving to store this unit's current position in the map.");
-        if(ImGui::Button("Finish driving at current map position",{-1.0F,0.0F}))
+        ImGui::TextWrapped(tr("Movement is a preview. Use Finish driving to store this unit's current position in the map."));
+        if(ImGui::Button(tr_label("Finish driving at current map position"),{-1.0F,0.0F}))
             commit_selected_simulation_position();
     }
-    if(ImGui::Button("Reset selected transient simulation",{-1.0F,0.0F})){
+    if(ImGui::Button(tr_label("Reset selected transient simulation"),{-1.0F,0.0F})){
         simulation_attack_placement_targets_.erase(index);
         simulation_attack_point_targets_.erase(index);
         if(simulation_actor_states_.erase(index)!=0U){
@@ -3939,7 +4128,7 @@ void EditorApp::draw_ingame_selection_panel(){
             simulation_projectiles_.end());
         last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
     }
-    if(ImGui::Button("Clear selected movement / attack order",{-1.0F,0.0F}))
+    if(ImGui::Button(tr_label("Clear selected movement / attack order"),{-1.0F,0.0F}))
         clear_selected_simulation_order();
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
@@ -4009,7 +4198,7 @@ void EditorApp::update_active_gizmo(PreviewVec2 mouse){
                 gizmo_drag_.mouse_previous=mouse;
                 document_->mark_dirty();
                 rebuild_mesh();
-                status_="Moved selected object on terrain Z; the four supporting FLD vertices were translated.";
+                status_=tr("Moved selected object on terrain Z; the four supporting FLD vertices were translated.");
             }
         }
         return;
@@ -4026,7 +4215,7 @@ void EditorApp::update_active_gizmo(PreviewVec2 mouse){
         document_->mark_dirty();
         rebuild_objects();
         status_=gizmo_drag_.handle==GizmoHandle::RotateZ?
-            "Rotated selected placement yaw.":"Moved selected placement on a world axis.";
+            tr("Rotated selected placement yaw."):tr("Moved selected placement on a world axis.");
     }
 }
 
@@ -4111,13 +4300,13 @@ void EditorApp::draw_drag_drop_preview(){
         draw->AddText({screen_x+18.0F,screen_y-20.0F},IM_COL32_WHITE,preset->display_name.c_str());
         char heading_text[96];
         std::snprintf(heading_text,sizeof(heading_text),
-            "heading 0x%04X%s",selected_orientation_&0xFFFFU,
+            tr("heading 0x%04X%s"),selected_orientation_&0xFFFFU,
             placement_rotation_capture_active_?" · rotating · release to place":" · hold LMB + move horizontally");
         draw->AddText({screen_x+18.0F,screen_y-4.0F},color,heading_text);
         if(!valid&&preset->has_placement_occupancy_class){
-            const char* reason=preset->placement_occupancy_class==0U?"requires Xenite support":
-                (preset->placement_occupancy_class==1U?"requires Tritium support":
-                 "requires matching resource support");
+            const char* reason=preset->placement_occupancy_class==0U?tr("requires Xenite support"):
+                (preset->placement_occupancy_class==1U?tr("requires Tritium support"):
+                 tr("requires matching resource support"));
             draw->AddText({screen_x+18.0F,screen_y+12.0F},color,reason);
         }
     }
@@ -4173,7 +4362,7 @@ void EditorApp::update_canvas_interaction(){
     const bool ctrl=io.KeyCtrl;
     if(ctrl&&!io.WantTextInput&&ImGui::IsKeyPressed(ImGuiKey_N,false))show_new_dialog_=true;
     if(ctrl&&!io.WantTextInput&&ImGui::IsKeyPressed(ImGuiKey_O,false)){load_map_error_.clear();show_load_dialog_=true;}
-    if(ctrl&&!io.WantTextInput&&ImGui::IsKeyPressed(ImGuiKey_Z,false)){if(generator_preview_){discard_terrain_generator_preview();generator_message_="Preview discarded.";}else if(io.KeyShift)redo();else undo();}
+    if(ctrl&&!io.WantTextInput&&ImGui::IsKeyPressed(ImGuiKey_Z,false)){if(generator_preview_){discard_terrain_generator_preview();generator_message_=tr("Preview discarded.");}else if(io.KeyShift)redo();else undo();}
     if(ctrl&&!io.WantTextInput&&ImGui::IsKeyPressed(ImGuiKey_Y,false))redo();
     if(ctrl&&!io.WantTextInput&&ImGui::IsKeyPressed(ImGuiKey_E,false))export_game_level_package();
     if(ctrl&&ImGui::IsKeyPressed(ImGuiKey_S,false)&&!io.WantTextInput){
@@ -4336,7 +4525,7 @@ void EditorApp::update_canvas_interaction(){
             if(building&&placement_rotation_capture_active_)drag_preview_cell_=placement_rotation_cell_;
             if(placement_cell_valid(drag.registry_id,drag_preview_cell_))
                 add_asset_placement(drag_preview_cell_->first,drag_preview_cell_->second,drag.registry_id);
-            else status_="Placement release is not a valid build target; nothing was placed.";
+            else status_=tr("Placement release is not a valid build target; nothing was placed.");
             drag_preview_asset_id_.reset();
             drag_preview_cell_.reset();
             placement_rotation_capture_active_=false;
@@ -4362,10 +4551,10 @@ void EditorApp::update_canvas_interaction(){
             if(placement_cell_valid(selected_asset_id_,drag_preview_cell_,false)){
                 placement_rotation_capture_active_=true;
                 placement_rotation_pointer_anchor_={io.MousePos.x,io.MousePos.y};placement_rotation_cell_=drag_preview_cell_;
-                status_="Building placement captured; hold left and move horizontally to rotate, then release to place.";
+                status_=tr("Building placement captured; hold left and move horizontally to rotate, then release to place.");
             }else{
                 placement_rotation_capture_active_=false;
-                status_="Building placement requires a valid build target before rotation capture begins.";
+                status_=tr("Building placement requires a valid build target before rotation capture begins.");
             }
             return;
         }
@@ -4377,7 +4566,7 @@ void EditorApp::update_canvas_interaction(){
             const auto release_cell=placement_rotation_cell_;
             if(placement_cell_valid(selected_asset_id_,release_cell))
                 add_asset_placement(release_cell->first,release_cell->second,selected_asset_id_);
-            else status_="Building release position is not a valid build target; nothing was placed.";
+            else status_=tr("Building release position is not a valid build target; nothing was placed.");
             placement_rotation_capture_active_=false;
             drag_preview_asset_id_.reset();
             drag_preview_cell_.reset();
@@ -4499,7 +4688,7 @@ void EditorApp::update_canvas_interaction(){
        ImGui::IsMouseClicked(ImGuiMouseButton_Left)){
         const auto ray=canvas_view_ray(io.MousePos.x,io.MousePos.y);
         const auto hit=pick_terrain_cell(document_->field(),ray);
-        if(!hit){status_="Simulation order missed the terrain.";return;}
+        if(!hit){status_=tr("Simulation order missed the terrain.");return;}
         if(tool_==Tool::SimulationTarget){
             bool assigned_selected=false;
             if(selected_placement_&&*selected_placement_<document_->level().placements().size()){
@@ -4518,16 +4707,16 @@ void EditorApp::update_canvas_interaction(){
             if(!assigned_selected)simulation_target_point_=hit->position;
             simulation_mode_=true;animate_buildings_=true;animate_units_=true;
             status_=assigned_selected?
-                "Selected armed placement received a point-target order.":
-                "Global simulation target placed for eligible armed actors.";
+                tr("Selected armed placement received a point-target order."):
+                tr("Global simulation target placed for eligible armed actors.");
         }else{
             if(!selected_placement_||*selected_placement_>=document_->level().placements().size()){
-                status_="Select a movable unit before issuing a drive order.";return;
+                status_=tr("Select a movable unit before issuing a drive order.");return;
             }
             const auto& placement=document_->level().placements()[*selected_placement_];
             const auto* preset=catalog_.army_preset(placement.army_asset_id);
             if(!preset||!preset->simulation_motion_profile.movable()){
-                status_="The selected placement has no recovered movement-speed profile.";return;
+                status_=tr("The selected placement has no recovered movement-speed profile.");return;
             }
             checkpoint();
             auto& actor=simulation_state_for(*selected_placement_);
@@ -4535,7 +4724,7 @@ void EditorApp::update_canvas_interaction(){
             actor.move_waypoint.reset();
             activate_fog_on_driving_order(placement.faction_index);
             simulation_mode_=true;animate_buildings_=true;animate_units_=true;
-            status_="Selected unit is driving; its LEV position now follows every 20 Hz movement step.";
+            status_=tr("Selected unit is driving; its LEV position now follows every 20 Hz movement step.");
         }
         last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
         tool_=Tool::Select;
@@ -4555,14 +4744,14 @@ void EditorApp::update_canvas_interaction(){
             ensure_water_selection_size();
             const std::size_t index=static_cast<std::size_t>(y)*document_->field().width()+x;
             if(index>=water_selection_mask_.size()||water_selection_mask_[index]==0U){
-                status_="Pick the initial level from inside the temporary cyan water selection.";
+                status_=tr("Pick the initial level from inside the temporary cyan water selection.");
                 return;
             }
             water_reference_cell_=std::pair<uint32_t,uint32_t>{x,y};
             water_height_=document_->field().at(x,y).terrain_height();
             water_selection_stage_=WaterSelectionStage::AdjustLevel;
             apply_flat_water_selection(true);
-            status_="Initial flat water level sampled from selected terrain. Use the wheel or Up/Down buttons to adjust it.";
+            status_=tr("Initial flat water level sampled from selected terrain. Use the wheel or Up/Down buttons to adjust it.");
             return;
         }
         if(tool_==Tool::Resource)add_placement(x,y,thandor::PlacementRole::Resource);
@@ -4780,8 +4969,8 @@ void EditorApp::issue_context_order_at_pointer(float mouse_x,float mouse_y){
             const bool recovery_target=*hovered_placement_<document_->level().placements().size()&&
                 document_->level().placements()[*hovered_placement_].faction_index==placement.faction_index&&
                 placement_has_recovery_weapon(selected_index);
-            status_=std::string(recovery_target?"Recovery target assigned to ":"Attack target assigned to ")+
-                (target_preset?target_preset->display_name:std::string("placement ")+std::to_string(*hovered_placement_))+".";
+            status_=std::string(recovery_target?tr("Recovery target assigned to "):tr("Attack target assigned to "))+
+                (target_preset?target_preset->display_name:std::string(tr("placement "))+std::to_string(*hovered_placement_))+".";
             break;
         }
         case thandor::ContextOrderKind::MoveToTerrain:{
@@ -4794,7 +4983,7 @@ void EditorApp::issue_context_order_at_pointer(float mouse_x,float mouse_y){
             simulation_attack_point_targets_.erase(selected_index);
             activate_fog_on_driving_order(placement.faction_index);
             simulation_mode_=true;animate_buildings_=true;animate_units_=true;
-            status_="Selected unit received a game-style drive destination.";
+            status_=tr("Selected unit received a game-style drive destination.");
             break;
         }
         case thandor::ContextOrderKind::AttackTerrainPoint:{
@@ -4806,7 +4995,7 @@ void EditorApp::issue_context_order_at_pointer(float mouse_x,float mouse_y){
             simulation_mode_=true;animate_buildings_=true;animate_units_=true;
             if(preset->browser_kind==thandor::PlacementBrowserKind::Building)animate_buildings_=true;
             if(preset->browser_kind==thandor::PlacementBrowserKind::Unit)animate_units_=true;
-            status_="Selected armed placement received a point-target order.";
+            status_=tr("Selected armed placement received a point-target order.");
             break;
         }
         case thandor::ContextOrderKind::SetProductionRallyPoint:{
@@ -4815,11 +5004,11 @@ void EditorApp::issue_context_order_at_pointer(float mouse_x,float mouse_y){
             // Retail single-factory position command stores a custom class-13 movement target,
             // sets runtime bit 0x800 for the EGATH0 marker, then clears the active selection.
             selected_placement_.reset();selected_simulation_lab_entity_.reset();
-            status_="Factory exit point updated.";
+            status_=tr("Factory exit point updated.");
             break;
         }
         case thandor::ContextOrderKind::None:
-            status_="No valid contextual order under the pointer.";
+            status_=tr("No valid contextual order under the pointer.");
             return;
     }
     last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
@@ -4834,7 +5023,7 @@ void EditorApp::clear_selected_simulation_order(){
     if(const auto found=simulation_actor_states_.find(index);found!=simulation_actor_states_.end()){
         found->second.move_target.reset();found->second.move_waypoint.reset();
     }
-    status_="Cleared the selected placement's transient movement/attack order.";
+    status_=tr("Cleared the selected placement's transient movement/attack order.");
     last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
 }
 
@@ -4844,7 +5033,7 @@ float EditorApp::terrain_height_near(float world_x,float world_y) const{
 
 void EditorApp::report_asset_failure(const std::string& path,const std::string& message){
     if(!asset_load_failures_.try_emplace(path,message).second)return;
-    status_="Unavailable asset: "+path+" ("+message+")";
+    status_=tr("Unavailable asset: ")+path+" ("+message+")";
     editor_performance_log_.error("ASSET_FALLBACK path="+path+" reason="+message);
 }
 std::shared_ptr<EditorApp::ArmyTextureFamily> EditorApp::load_texture_family(
@@ -4942,7 +5131,7 @@ AssetPreviewMesh& EditorApp::asset_preview(const thandor::ArmyAssetPreset& prese
         auto found=asset_preview_texture_cache_.find(key);
         if(found==asset_preview_texture_cache_.end()){
             if(subresource>=family.graphics.subresources().size())
-                throw std::runtime_error("asset-card SPR selects missing army GFX subresource");
+                throw std::runtime_error(tr("asset-card SPR selects missing army GFX subresource"));
             const auto& metadata=family.graphics.subresources()[subresource];
             thandor::RgbaImage decoded;
             if(use_player_override&&metadata.pixel_width==64U&&metadata.pixel_height==64U)
@@ -4989,7 +5178,7 @@ AssetPreviewMesh& EditorApp::asset_preview(const thandor::ArmyAssetPreset& prese
                 const auto& parent=instances[node.parent_index];
                 const auto* attachment=parent.sprite->child_attachment(node.child_slot);
                 if(attachment==nullptr)
-                    throw std::runtime_error("MDL child slot has no matching SPR attachment transform");
+                    throw std::runtime_error(tr("MDL child slot has no matching SPR attachment transform"));
                 auto local=fixed_model_rotation_basis(node.local_rotation_angle2,
                     node.local_rotation_angle1,node.local_rotation_angle0);
                 local.translation=attachment->local_translation;
@@ -5025,13 +5214,13 @@ AssetPreviewMesh& EditorApp::asset_preview(const thandor::ArmyAssetPreset& prese
         const auto& instance=instances[instance_index];
         const auto& sprite=*instance.sprite;
         const auto& mesh=sprite.mesh();
-        if(mesh.indices.size()%3U!=0U)throw std::runtime_error("SPR preview mesh is not triangle aligned");
+        if(mesh.indices.size()%3U!=0U)throw std::runtime_error(tr("SPR preview mesh is not triangle aligned"));
         for(std::size_t triangle=0;triangle<mesh.indices.size();triangle+=3U){
             const uint32_t ia=mesh.indices[triangle];
             const uint32_t ib=mesh.indices[triangle+1U];
             const uint32_t ic=mesh.indices[triangle+2U];
             if(ia>=mesh.vertices.size()||ib>=mesh.vertices.size()||ic>=mesh.vertices.size())
-                throw std::runtime_error("asset-card SPR index exceeds vertex stream");
+                throw std::runtime_error(tr("asset-card SPR index exceeds vertex stream"));
             const std::array<const thandor::SpriteMeshVertex*,3> corners{
                 &mesh.vertices[ia],&mesh.vertices[ib],&mesh.vertices[ic]};
             ++preview.source_triangle_count;
@@ -5063,7 +5252,7 @@ AssetPreviewMesh& EditorApp::asset_preview(const thandor::ArmyAssetPreset& prese
             }
 
             if(subresource>=family.graphics.subresources().size())
-                throw std::runtime_error("asset-card SPR selects missing army GFX subresource");
+                throw std::runtime_error(tr("asset-card SPR selects missing army GFX subresource"));
             ++preview.textured_source_triangle_count;
             const auto& metadata=family.graphics.subresources()[subresource];
             texture_image(subresource);
@@ -5519,13 +5708,13 @@ void EditorApp::append_simulation_lab_diagnostics(bool force){
 
 void EditorApp::start_simulation_lab(){
     selected_simulation_lab_entity_.reset();
-    if(!document_){status_="Load a map before starting Simulation Lab.";return;}
+    if(!document_){status_=tr("Load a map before starting Simulation Lab.");return;}
     if(!ai_knowledge_){
-        status_=ai_knowledge_load_error_.empty()?"engine/ki.dat is unavailable.":ai_knowledge_load_error_;
+        status_=ai_knowledge_load_error_.empty()?tr("engine/ki.dat is unavailable."):ai_knowledge_load_error_;
         return;
     }
     const auto semantics=thandor::known_ai_knowledge_semantics();
-    if(semantics.empty()){status_="No GZF-verified KI parameters are available.";return;}
+    if(semantics.empty()){status_=tr("No GZF-verified KI parameters are available.");return;}
     simulation_lab_semantic_row_=std::clamp(simulation_lab_semantic_row_,0,
         static_cast<int>(semantics.size())-1);
     simulation_lab_config_.parameter_index=semantics[static_cast<std::size_t>(simulation_lab_semantic_row_)].index;
@@ -5775,7 +5964,7 @@ void EditorApp::start_simulation_lab(){
         seeds.push_back(std::move(seed));
     }
     if(seeds.empty()){
-        status_="Simulation Lab retail startup requires at least one faction runtime; an empty-base faction needs its class-18 Player / AI start vehicle placed in the LEV.";
+        status_=tr("Simulation Lab retail startup requires at least one faction runtime; an empty-base faction needs its class-18 Player / AI start vehicle placed in the LEV.");
         return;
     }
     // V562 snapshots the ARM production records required by classes 11/13/22. The worker remains
@@ -6106,12 +6295,13 @@ void EditorApp::start_simulation_lab(){
     sync_selected_simulation_lab_run();
     simulation_static_replacement_dirty_=true;
     last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
-    status_="Started "+std::to_string(simulation_lab_runs().size())+" simulation runs.";
+    status_=tr("Started ")+std::to_string(simulation_lab_runs().size())+tr(" simulation runs.");
     begin_simulation_lab_diagnostics();
     finish_startup_stage(EditorPerfStage::LabStartFinalize);
 }
 
 void EditorApp::clear_simulation_lab(){
+    clear_jandrenator_scene();
     selected_simulation_lab_entity_.reset();
     end_simulation_lab_diagnostics("clear");
     const bool had_replacements=!simulation_actor_states_.empty()||
@@ -6447,6 +6637,8 @@ void EditorApp::sync_selected_simulation_lab_run(){
                 simulation_lab_selected_run_,0,static_cast<int>(selected_runs.size())-1))];
             for(const auto& effect:selected.environmental_effects)
                 simulation_lab_resident_effect_ids_.insert(effect.effect_id);
+            for(const auto& visual:selected.native_visuals)
+                if(!visual.shot)simulation_lab_resident_effect_ids_.insert(visual.definition_id);
         }
     }
     live_effect_ids.assign(simulation_lab_resident_effect_ids_.begin(),simulation_lab_resident_effect_ids_.end());
@@ -6507,14 +6699,16 @@ void EditorApp::sync_selected_simulation_lab_run(){
 }
 
 bool EditorApp::simulation_lab_active() const noexcept{
-    return simulation_lab_snapshot_&&simulation_lab_snapshot_->active();
+    return jandrenator_scene_ || (simulation_lab_snapshot_&&simulation_lab_snapshot_->active());
 }
 
 bool EditorApp::simulation_lab_finished() const noexcept{
+    if (jandrenator_scene_) return !jandrenator_batch_.running();
     return simulation_lab_snapshot_&&simulation_lab_snapshot_->finished();
 }
 
 std::span<const thandor::SimulationLabRun> EditorApp::simulation_lab_runs() const noexcept{
+    if (jandrenator_scene_) return {jandrenator_scene_.get(), 1};
     return simulation_lab_snapshot_?simulation_lab_snapshot_->runs():std::span<const thandor::SimulationLabRun>{};
 }
 
@@ -6596,7 +6790,7 @@ bool EditorApp::poll_simulation_lab_snapshot(){
     sync_selected_simulation_lab_run();
     if(simulation_lab_finished()&&simulation_lab_running_){
         simulation_lab_running_=false;
-        status_="Simulation Lab experiment finished.";
+        status_=tr("Simulation Lab experiment finished.");
     }
     return true;
 }
@@ -6605,7 +6799,7 @@ void EditorApp::update_simulation_lab(double now_seconds){
     if(const auto worker_error=simulation_lab_worker_.error();worker_error){
         simulation_lab_running_=false;
         simulation_lab_paused_=true;
-        status_="Simulation Lab worker stopped: "+*worker_error;
+        status_=tr("Simulation Lab worker stopped: ")+*worker_error;
         if(!simulation_lab_worker_error_logged_&&simulation_lab_diagnostic_writer_!=nullptr){
             simulation_lab_diagnostic_writer_->error(*worker_error);
             simulation_lab_worker_error_logged_=true;
@@ -6661,28 +6855,28 @@ void EditorApp::apply_ai_profile(){
 }
 
 void EditorApp::draw_ai_profile_controls(){
-    ImGui::SeparatorText("Original KI values");
-    ImGui::TextUnformatted("Profile for the next experiment");ImGui::SetNextItemWidth(-1.F);
-    if(ImGui::BeginCombo("##KI profile",ai_profiles_.use_custom?"Custom (ki.dat_custom.ini)":"Default (ki.dat.ini)")){
-        if(ImGui::Selectable("Default (ki.dat.ini)",!ai_profiles_.use_custom)){
+    ImGui::SeparatorText(tr("Original KI values"));
+    ImGui::TextUnformatted(tr("Profile for the next experiment"));ImGui::SetNextItemWidth(-1.F);
+    if(ImGui::BeginCombo("##KI profile",ai_profiles_.use_custom?tr("Custom (ki.dat_custom.ini)"):tr("Default (ki.dat.ini)"))){
+        if(ImGui::Selectable(tr_label("Default (ki.dat.ini)"),!ai_profiles_.use_custom)){
             try{ai_profiles_.select(false);apply_ai_profile();}catch(const std::exception& e){ai_profiles_.message=e.what();}
         }
         if(ai_profiles_.custom_available){
-            if(ImGui::Selectable("Custom (ki.dat_custom.ini)",ai_profiles_.use_custom)){
+            if(ImGui::Selectable(tr_label("Custom (ki.dat_custom.ini)"),ai_profiles_.use_custom)){
                 try{ai_profiles_.select(true);apply_ai_profile();}catch(const std::exception& e){ai_profiles_.message=e.what();}
             }
-        }else ImGui::TextDisabled("Save an edited value to create a custom profile.");
+        }else ImGui::TextDisabled(tr("Save an edited value to create a custom profile."));
         ImGui::EndCombo();
     }
-    if(ImGui::Button("Reload KI profile files")){
+    if(ImGui::Button(tr_label("Reload KI profile files"))){
         try{
             const auto game=ai_profiles_.game;const auto root=ai_profiles_.directory;const bool custom=ai_profiles_.use_custom;
             ai_profiles_.initialize(game,root,custom);apply_ai_profile();
         }catch(const std::exception& e){ai_profiles_.message=e.what();}
     }
-    if(simulation_lab_active())ImGui::TextWrapped("Running experiments keep their starting values. Restart the experiment to use a changed profile.");
+    if(simulation_lab_active())ImGui::TextWrapped(tr("Running experiments keep their starting values. Restart the experiment to use a changed profile."));
     if(!ai_profiles_.message.empty())ImGui::TextWrapped("%s",ai_profiles_.message.c_str());
-    if(ImGui::CollapsingHeader("Edit KI profile")){
+    if(ImGui::CollapsingHeader(tr_label("Edit KI profile"))){
         const auto* selected=thandor::find_ai_knowledge_semantic(ai_profile_parameter_index_);
         char preview[256];std::snprintf(preview,sizeof(preview),"%s [0x%02X]",selected?std::string(selected->label).c_str():"Unmapped original parameter",ai_profile_parameter_index_);
         ImGui::SetNextItemWidth(-1.F);
@@ -6698,43 +6892,322 @@ void EditorApp::draw_ai_profile_controls(){
             ai_profile_draft_index_=ai_profile_parameter_index_;
             ai_profile_draft_value_=static_cast<int32_t>(ai_profiles_.active()[ai_profile_parameter_index_]);
         }
-        ImGui::TextUnformatted("Original integer value");ImGui::SetNextItemWidth(-1.F);
+        ImGui::TextUnformatted(tr("Original integer value"));ImGui::SetNextItemWidth(-1.F);
         ImGui::InputInt("##KI profile raw value",&ai_profile_draft_value_);
         if(ai_profile_parameter_index_==0x31||ai_profile_parameter_index_==0x32||ai_profile_parameter_index_==0x34||
            ai_profile_parameter_index_==0x35||ai_profile_parameter_index_==0x36||ai_profile_parameter_index_==0x38)
-            ImGui::TextWrapped("This original special-site calculation reads the value from its site entry rather than KI.DAT. Editing this preserved KI slot does not change that calculation.");
+            ImGui::TextWrapped(tr("This original special-site calculation reads the value from its site entry rather than KI.DAT. Editing this preserved KI slot does not change that calculation."));
         if(selected){
-            if(selected->domain==thandor::AiKnowledgeValueDomain::Q12Distance)ImGui::Text("Distance: %.3f world units",double(ai_profile_draft_value_)/4096.);
-            else if(selected->domain==thandor::AiKnowledgeValueDomain::Q4Amount)ImGui::Text("Resources: %.3f",double(ai_profile_draft_value_)/16.);
+            if(selected->domain==thandor::AiKnowledgeValueDomain::Q12Distance)ImGui::Text(tr("Distance: %.3f world units"),double(ai_profile_draft_value_)/4096.);
+            else if(selected->domain==thandor::AiKnowledgeValueDomain::Q4Amount)ImGui::Text(tr("Resources: %.3f"),double(ai_profile_draft_value_)/16.);
         }
-        if(ImGui::Button("Save value to custom KI profile")){
+        if(ImGui::Button(tr_label("Save value to custom KI profile"))){
             try{auto edited=ai_profiles_.active();edited[ai_profile_parameter_index_]=static_cast<uint32_t>(ai_profile_draft_value_);ai_profiles_.save_custom(edited);apply_ai_profile();}
             catch(const std::exception& e){ai_profiles_.message=e.what();}
         }
-        ImGui::TextWrapped("Default values are kept in ki.dat.ini; saved edits go to ki.dat_custom.ini. Files are beside the editor or external AppImage. Experiment sweeps below override one parameter for that experiment only.");
-        ImGui::TextWrapped("Folder: %s",ai_profiles_.directory.string().c_str());
+        ImGui::TextWrapped(tr("Default values are kept in ki.dat.ini; saved edits go to ki.dat_custom.ini. Files are beside the editor or external AppImage. Experiment sweeps below override one parameter for that experiment only."));
+        ImGui::TextWrapped(tr("Folder: %s"),ai_profiles_.directory.string().c_str());
     }
-    if(ImGui::CollapsingHeader("AI planning lists")){
+    if(ImGui::CollapsingHeader(tr_label("AI planning lists"))){
         for(const auto& workspace:thandor::original_ai_workspace_descriptions()){
             ImGui::TextWrapped("%.*s",int(workspace.name.size()),workspace.name.data());
-            show_item_tooltip(std::string(workspace.purpose)+" (native list "+std::to_string(workspace.index)+")");
+            show_item_tooltip(std::string(workspace.purpose)+tr(" (native list ")+std::to_string(workspace.index)+")");
+        }
+    }
+}
+
+void EditorApp::clear_jandrenator_scene() {
+    jandrenator_batch_.cancel();
+    jandrenator_show_batch_ = false;
+    jandrenator_loaded_run_ = -1;
+    if (jandrenator_scene_) {
+        jandrenator_scene_.reset();
+        if (simulation_lab_auto_fog_preview_ && fog_preview_mode_ == 2) fog_preview_mode_ = 0;
+        simulation_lab_auto_fog_preview_ = false;
+        fog_preview_history_lab_run_ = -1;
+        simulation_lab_suppressed_placements_.clear();
+        simulation_static_replacement_dirty_ = true;
+        simulation_lab_snapshot_dirty_ = false;
+        dynamic_model_cache_.valid = false;
+        selected_simulation_lab_entity_.reset();
+    }
+}
+
+void EditorApp::update_jandrenator_scene(double now) {
+    if (!document_ || !jandrenator_show_batch_ || now < jandrenator_next_scene_poll_) return;
+    jandrenator_next_scene_poll_ = now + 0.05;
+    const auto directory = jandrenator_batch_.output() / ("run-" + std::to_string(jandrenator_view_run_ + 1));
+    const auto path = directory / "progress_scene";
+    std::error_code error;
+    const auto modified = std::filesystem::last_write_time(path, error);
+    const bool same_run = jandrenator_scene_ && jandrenator_view_run_ == jandrenator_loaded_run_;
+    if (error || (same_run && modified == jandrenator_scene_modified_)) return;
+    auto scene = read_jandrenator_scene(path);
+    if (!scene) return;
+    jandrenator_scene_modified_ = modified;
+    if (same_run && scene->tick == jandrenator_scene_->tick) return;
+    if (selected_simulation_lab_entity_) {
+        const auto index = selected_simulation_lab_entity_->second;
+        if (same_run && index < jandrenator_scene_->entities.size()) {
+            const auto& old = jandrenator_scene_->entities[index];
+            const auto match = std::find_if(scene->entities.begin(), scene->entities.end(), [&](const auto& entity) {
+                return entity.native_army_pool_slot == old.native_army_pool_slot &&
+                       entity.army_asset_id == old.army_asset_id && entity.faction_index == old.faction_index;
+            });
+            if (match != scene->entities.end()) {
+                selected_simulation_lab_entity_->second = std::distance(scene->entities.begin(), match);
+            } else selected_simulation_lab_entity_.reset();
+        } else selected_simulation_lab_entity_.reset();
+    }
+    const auto placements = document_->level().placements();
+    for (std::size_t i = 0; i < placements.size(); ++i) {
+        if (placements[i].faction_index == 0) continue;
+        auto& removed = scene->entities.emplace_back();
+        removed.source_placement_index = i;
+        removed.runtime_removed = true;
+    }
+    if (!same_run) fog_preview_history_lab_run_ = -1;
+    if (jandrenator_loaded_run_ < 0 && fog_preview_mode_ == 0 && !scene->current_visibility_occupancy.empty()) {
+        simulation_lab_auto_fog_preview_ = true;
+        fog_preview_mode_ = 2;
+    }
+    jandrenator_loaded_run_ = jandrenator_view_run_;
+    jandrenator_scene_ = std::move(scene);
+    simulation_lab_selected_run_ = 0;
+    simulation_lab_snapshot_dirty_ = true;
+    sync_selected_simulation_lab_run();
+}
+
+void EditorApp::draw_simulation_lab_experiment_settings() {
+    int run_count=static_cast<int>(simulation_lab_config_.run_count);
+    ImGui::TextUnformatted(tr("Concurrent games"));
+    ImGui::SetNextItemWidth(-1.0F);
+    if(ImGui::SliderInt("##Concurrent games",&run_count,1,32))
+        simulation_lab_config_.run_count=static_cast<uint32_t>(std::clamp(run_count,1,32));
+    int thread_limit=static_cast<int>(simulation_lab_config_.worker_thread_limit);
+    ImGui::TextUnformatted(tr("Threads (0 = automatic)"));
+    ImGui::SetNextItemWidth(-1.0F);
+    if(ImGui::SliderInt("##Threads (0 = automatic)",&thread_limit,0,32))
+        simulation_lab_config_.worker_thread_limit=static_cast<uint32_t>(std::clamp(thread_limit,0,32));
+
+    int tick_duration_ms=static_cast<int>(simulation_lab_tick_duration_ms_);
+    ImGui::TextUnformatted(tr("Tick interval (ms)"));
+    ImGui::SetNextItemWidth(-1.0F);
+    if(ImGui::InputInt("##Tick interval (ms)",&tick_duration_ms,1,10)){
+        simulation_lab_tick_duration_ms_=static_cast<uint32_t>(std::clamp(tick_duration_ms,1,5000));
+        simulation_lab_tick_accumulator_ms_=0.0;
+        simulation_lab_last_schedule_time_seconds_=ImGui::GetTime();
+        simulation_lab_schedule_initialized_=true;
+    }
+
+    // Retail simulation remains 20 ticks/second; wall cadence controls execution speed only.
+    float duration_minutes=static_cast<float>(simulation_lab_config_.duration_ticks)/1200.0F;
+    ImGui::TextUnformatted(tr("Duration (simulated minutes)"));
+    ImGui::SetNextItemWidth(-1.0F);
+    if(ImGui::SliderFloat("##Duration (simulated minutes)",&duration_minutes,0.1F,90.0F,"%.1f min"))
+        simulation_lab_config_.duration_ticks=static_cast<uint32_t>(std::lround(
+            std::clamp(duration_minutes,0.1F,90.0F)*1200.0F));
+    if(ImGui::Button(tr_label("Long progression preset"))){
+        simulation_lab_config_.duration_ticks=36000U;
+        simulation_lab_tick_duration_ms_=1U;
+        simulation_lab_tick_accumulator_ms_=0.0;
+        simulation_lab_last_schedule_time_seconds_=ImGui::GetTime();
+        simulation_lab_schedule_initialized_=true;
+    }
+    if(ImGui::IsItemHovered())show_item_tooltip(
+        tr("30 simulated minutes with a 1 ms wall interval. Actual speed depends on worker load."));
+
+    ImGui::Checkbox(tr_label("Vary RNG seed per run"),&simulation_lab_config_.vary_seed_per_run);
+    ImGui::TextUnformatted(tr("Base seed"));
+    ImGui::SetNextItemWidth(-1.0F);
+    ImGui::InputScalar("##Base seed",ImGuiDataType_U32,&simulation_lab_config_.base_seed);
+    if(ImGui::Button(tr_label("Draw stock host seed"))){
+        auto primary_state=simulation_lab_config_.base_seed;
+        simulation_lab_config_.base_seed=thandor::retail_random_next(primary_state);
+    }
+    if(ImGui::IsItemHovered())show_item_tooltip(
+        tr("Use the base seed as the primary RNG state and draw a session seed the same way a stock host does."));
+}
+
+void EditorApp::refresh_jandrenator_run_views(double now) {
+    if (now < jandrenator_next_refresh_) return;
+    const auto& output = jandrenator_batch_.output();
+    jandrenator_next_refresh_ = now + 0.25;
+    jandrenator_batch_result_.clear();
+    std::getline(std::ifstream(output / "result"), jandrenator_batch_result_);
+    jandrenator_run_views_.resize(jandrenator_batch_.runs());
+    for (std::size_t i = 0; i < jandrenator_run_views_.size(); ++i) {
+        const auto run = output / ("run-" + std::to_string(i + 1));
+        auto& view = jandrenator_run_views_[i];
+        view = {};
+        std::getline(std::ifstream(run / "result"), view.result);
+        std::ifstream progress(run / "progress");
+        const bool started = static_cast<bool>(progress >> view.tick);
+        view.viewport_label = "Run " + std::to_string(i + 1) + "\n";
+        if (!view.result.empty()) view.viewport_label += view.result;
+        else if (started) view.viewport_label += std::to_string(view.tick) + " ticks";
+        else view.viewport_label += "Waiting for first frame";
+        view.viewport_label += "###simlab_run";
+        std::array<unsigned, 6> faction{};
+        while (progress >> faction[0] >> faction[1] >> faction[2] >>
+               faction[3] >> faction[4] >> faction[5]) {
+            view.factions.push_back(faction);
+        }
+    }
+}
+
+void EditorApp::draw_jandrenator_controls() {
+    if (ImGui::Button(jandrenator_show_batch_ ? tr_label("Restart experiment") : tr_label("Start experiment"), {-1.0F, 0.0F})) {
+        try {
+            const auto directory = application_directory();
+            save_jandrenator_settings(directory, jandrenator_settings_);
+            clear_jandrenator_scene();
+            const auto& config = simulation_lab_config_;
+            const auto workers = thandor::simulation_lab_worker_thread_count(
+                config.run_count, config.worker_thread_limit, std::thread::hardware_concurrency());
+            jandrenator_batch_.start(*document_, catalog_.game_root(),
+                                    directory / "exclude/jandrenator-runs", jandrenator_settings_,
+                                    config.run_count, config.duration_ticks, config.base_seed, config.vary_seed_per_run,
+                                    jandrenator_opponent_percent_, workers, simulation_lab_tick_duration_ms_,
+                                    static_cast<unsigned>(jandrenator_idle_minutes_));
+            jandrenator_show_batch_ = true;
+            jandrenator_view_run_ = 0;
+            jandrenator_next_scene_poll_ = 0.0;
+            jandrenator_next_refresh_ = 0.0;
+            refresh_jandrenator_run_views(ImGui::GetTime());
+            simulation_mode_ = false;
+            jandrenator_message_.clear();
+        } catch (const std::exception& error) {
+            jandrenator_message_ = error.what();
+        }
+    }
+    if (jandrenator_show_batch_) {
+        if (jandrenator_batch_.running()) {
+            if (ImGui::Button(jandrenator_batch_.paused() ? tr_label("Resume") : tr_label("Pause"))) {
+                try {
+                    jandrenator_batch_.set_paused(!jandrenator_batch_.paused());
+                } catch (const std::exception& error) {
+                    jandrenator_message_ = error.what();
+                }
+            }
+            ImGui::SameLine();
+        }
+        if (ImGui::Button(tr_label("Clear"))) clear_jandrenator_scene();
+    }
+    if (jandrenator_show_batch_) {
+        ImGui::SeparatorText(tr("Live viewport"));
+        ImGui::Text(tr("Run %d"), jandrenator_view_run_ + 1);
+        if (jandrenator_scene_) {
+            const auto tick = jandrenator_scene_->tick;
+            const auto duration = jandrenator_batch_.ticks();
+            const auto progress = duration ? std::min(1.0F, static_cast<float>(tick) / duration) : 0.0F;
+            const auto label = std::to_string(tick) + " / " + std::to_string(duration) + " ticks";
+            ImGui::ProgressBar(progress, {-1.0F, 0.0F}, label.c_str());
+            if (jandrenator_scene_->current_visibility_occupancy.empty()) {
+                ImGui::TextWrapped(tr("This run did not publish visibility data."));
+            } else {
+                const auto& visuals = jandrenator_scene_->native_visuals;
+                const auto shots = std::count_if(visuals.begin(), visuals.end(), [](const auto& visual) { return visual.shot; });
+                ImGui::Text(tr("%zu projectiles · %zu effects"), static_cast<std::size_t>(shots), visuals.size() - shots);
+            }
+        } else ImGui::TextDisabled(tr("Waiting for run %d to publish its first frame"), jandrenator_view_run_ + 1);
+    }
+    if (ImGui::CollapsingHeader(tr_label("Experiment settings"), ImGuiTreeNodeFlags_DefaultOpen)) {
+        draw_simulation_lab_experiment_settings();
+        if (ImGui::InputInt(tr_label("Idle limit (minutes)"), &jandrenator_idle_minutes_))
+            jandrenator_idle_minutes_ = std::clamp(jandrenator_idle_minutes_, 0, 90);
+        show_item_tooltip(tr("Finish a run after this many simulated minutes without gameplay progress. Set 0 to disable the idle limit."));
+    }
+    ImGui::SeparatorText(tr("Jandrenator settings"));
+    std::array levels{
+        tr("0  Original difficulty"),
+        tr("1  Original with 20-minute grace, air units, coils and more research"),
+        tr("2  Easy (60-minute grace, 5 peace-time turrets)"),
+        tr("3  Normal (60-minute grace, 7 turrets, radar scouts and reserve mine)"),
+        tr("4  Hard (60-minute grace, 9 turrets, reserve HQ and power)"),
+        tr("5  Very hard (30-minute grace, 11 turrets, heavy factory)"),
+        tr("6  Extreme (30-minute grace, 13 turrets, 180% extraction and stronger armor)"),
+        tr("7  Hell (10-minute grace, 15 turrets, double extraction and armor)")
+    };
+    ImGui::SliderInt(tr_label("Jandrenator difficulty"), &jandrenator_settings_.level, 0, 7);
+    ImGui::TextWrapped("%s", levels[jandrenator_settings_.level]);
+    ImGui::SliderInt(tr_label("Opponent strength"), &jandrenator_opponent_percent_, 80, 120, "%d%%");
+    show_item_tooltip(tr("Original mission briefing slider. It sets the base AI extraction scale. Difficulty levels 2–7 also apply the Test15 tier multiplier."));
+    if (ImGui::InputInt(tr_label("Grace period (minutes)"), &jandrenator_settings_.grace_minutes)) {
+        jandrenator_settings_.grace_minutes = std::clamp(jandrenator_settings_.grace_minutes, -1, 600);
+    }
+    show_item_tooltip(tr("-1 uses the difficulty's grace period. 0 disables it. Defense stays active, and hostile action can end grace early."));
+    for (const auto& option : jandrenator_toggles) {
+        ImGui::Checkbox(option.label, &(jandrenator_settings_.*option.value));
+        show_item_tooltip(option.description);
+    }
+    if (ImGui::Button(tr_label("Save Jandrenator settings"))) {
+        try {
+            save_jandrenator_settings(application_directory(), jandrenator_settings_);
+            jandrenator_message_ = tr("Saved advanced_ai_jandrenator.ini.");
+        } catch (const std::exception& error) {
+            jandrenator_message_ = error.what();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(tr_label("Reload Jandrenator settings"))) {
+        try {
+            jandrenator_settings_ = load_jandrenator_settings(application_directory());
+            jandrenator_message_.clear();
+        } catch (const std::exception& error) {
+            jandrenator_message_ = error.what();
+        }
+    }
+
+    if (!jandrenator_message_.empty()) ImGui::TextWrapped("%s", jandrenator_message_.c_str());
+    const auto& output = jandrenator_batch_.output();
+    if (output.empty() || !jandrenator_show_batch_) return;
+    ImGui::TextWrapped(tr("Output: %s"), output.string().c_str());
+    if (!jandrenator_batch_result_.empty()) ImGui::TextWrapped("%s", jandrenator_batch_result_.c_str());
+    for (std::size_t i = 0; i < jandrenator_run_views_.size(); ++i) {
+        const auto& run = jandrenator_run_views_[i];
+        const auto label = "Run " + std::to_string(i + 1) + " | " + std::to_string(run.tick) + "/" +
+                           std::to_string(jandrenator_batch_.ticks()) + " ticks " + run.result + "###native-run-" +
+                           std::to_string(i);
+        if (ImGui::TreeNode(label.c_str())) {
+            for (const auto& [faction, lifecycle, buildings, units, xenite, tritium] : run.factions) {
+                ImGui::Text(tr("Faction %u   Buildings %u   Units %u   Xenite %.1f   Tritium %.1f"),
+                            faction, buildings, units, double(xenite) / 16.0, double(tritium) / 16.0);
+            }
+            ImGui::TreePop();
         }
     }
 }
 
 void EditorApp::draw_simulation_lab_panel(){
-    if(!document_){ImGui::TextDisabled("Load a map to run experiments.");return;}
-    const auto semantics=thandor::known_ai_knowledge_semantics();
-    if(!ai_knowledge_){
-        ImGui::TextWrapped("KI.DAT unavailable: %s",ai_knowledge_load_error_.c_str());
+    if(!document_){ImGui::TextDisabled(tr("Load a map to run experiments."));return;}
+#ifdef THANDOR_EDITOR_JANDRENATOR
+    const bool changed_engine = ImGui::Checkbox(tr_label("Jandrenator AI (Test15)"), &jandrenator_selected_);
+    if (changed_engine) clear_simulation_lab();
+    if (changed_engine && jandrenator_selected_) {
+        try {
+            jandrenator_settings_ = load_jandrenator_settings(application_directory());
+            jandrenator_message_.clear();
+        } catch (const std::exception& error) {
+            jandrenator_message_ = error.what();
+        }
+    }
+    if (jandrenator_selected_) {
+        draw_jandrenator_controls();
         return;
     }
-    if(semantics.empty()){ImGui::TextDisabled("No KI parameters available.");return;}
+#endif
+    const auto semantics=thandor::known_ai_knowledge_semantics();
+    if(!ai_knowledge_){
+        ImGui::TextWrapped(tr("KI.DAT unavailable: %s"),ai_knowledge_load_error_.c_str());
+        return;
+    }
+    if(semantics.empty()){ImGui::TextDisabled(tr("No KI parameters available."));return;}
 
     draw_ai_profile_controls();
-    if(ImGui::Button(simulation_lab_active()?"Restart experiment":"Start experiment",{-1.0F,0.0F}))start_simulation_lab();
+    if(ImGui::Button(simulation_lab_active()?tr_label("Restart experiment"):tr_label("Start experiment"),{-1.0F,0.0F}))start_simulation_lab();
     if(simulation_lab_active()){
-        if(ImGui::Button(simulation_lab_paused_?"Resume":"Pause")){
+        if(ImGui::Button(simulation_lab_paused_?tr_label("Resume"):tr_label("Pause"))){
             simulation_lab_paused_=!simulation_lab_paused_;
             simulation_lab_worker_.set_paused(simulation_lab_paused_);
             simulation_lab_running_=!simulation_lab_finished();
@@ -6743,9 +7216,9 @@ void EditorApp::draw_simulation_lab_panel(){
             simulation_lab_schedule_initialized_=true;
         }
         ImGui::SameLine();
-        if(ImGui::Button("Clear"))clear_simulation_lab();
+        if(ImGui::Button(tr_label("Clear")))clear_simulation_lab();
     }
-    if(ImGui::Checkbox("Show other runs",&simulation_lab_show_all_runs_)){
+    if(ImGui::Checkbox(tr_label("Show other runs"),&simulation_lab_show_all_runs_)){
         // Defer the dynamic replacement composition until the next Update stage;
         // synchronous rebuilding here also leaves a dirty flag for a redundant
         // rebuild on the following frame (an avoidable UI stall).
@@ -6753,10 +7226,10 @@ void EditorApp::draw_simulation_lab_panel(){
         last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
     }
     bool logging=logging_enabled_;
-    if(ImGui::Checkbox("Create diagnostic logs",&logging))set_logging_enabled(logging);
+    if(ImGui::Checkbox(tr_label("Create diagnostic logs"),&logging))set_logging_enabled(logging);
     if(ImGui::IsItemHovered()){
         if(logging_enabled_&&!simulation_lab_diagnostic_path_.empty())show_item_tooltip(simulation_lab_diagnostic_path_);
-        else show_item_tooltip("Enable or stop editor performance and Simulation Lab log files. Saved for the next session.");
+        else show_item_tooltip(tr("Enable or stop editor performance and Simulation Lab log files. Saved for the next session."));
     }
 
     if(simulation_lab_active()){
@@ -6768,12 +7241,12 @@ void EditorApp::draw_simulation_lab_panel(){
         std::clamp(static_cast<float>(simulation_lab_ui_maximum_tick_)/simulation_lab_config_.duration_ticks,0.0F,1.0F);
     ImGui::ProgressBar(progress,{-1.0F,0.0F},simulation_lab_progress_text_.c_str());
 
-    ImGui::SeparatorText("Runs");
-    if(ImGui::BeginTable("simulation_lab_runs",4,
+    ImGui::SeparatorText(tr("Runs"));
+    if(ImGui::BeginTable(tr_label("simulation_lab_runs"),4,
         ImGuiTableFlags_Borders|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,
         ImVec2(0.0F,std::min(ui_px(330.0F),ui_px(80.0F)+static_cast<float>(runs.size())*ui_px(24.0F))))){
-        ImGui::TableSetupColumn("Run");ImGui::TableSetupColumn("KI value");
-        ImGui::TableSetupColumn("Tick");ImGui::TableSetupColumn("Built");
+        ImGui::TableSetupColumn(tr("Run"));ImGui::TableSetupColumn(tr("KI value"));
+        ImGui::TableSetupColumn(tr("Tick"));ImGui::TableSetupColumn(tr("Built"));
         ImGui::TableHeadersRow();
         for(std::size_t row=0;row<runs.size();++row){
             const auto& text=simulation_lab_ui_text_[row];
@@ -6789,51 +7262,32 @@ void EditorApp::draw_simulation_lab_panel(){
     }
     if(!runs.empty()){
         const auto& run=runs[static_cast<std::size_t>(simulation_lab_selected_run_)];
-        ImGui::SeparatorText("Selected run");
-        ImGui::TextUnformatted(simulation_lab_finished()?"Finished":simulation_lab_paused_?"Paused":"Running");
+        ImGui::SeparatorText(tr("Selected run"));
+        ImGui::TextUnformatted(simulation_lab_finished()?tr("Finished"):simulation_lab_paused_?tr("Paused"):tr("Running"));
         ImGui::TextUnformatted(simulation_lab_objects_text_.c_str());
         ImGui::TextUnformatted(simulation_lab_results_text_.c_str());
-        if(ImGui::TreeNode("Faction results")){
+        if(ImGui::TreeNode(tr_label("Faction results"))){
             for(std::size_t faction=1;faction<run.faction_economy.size();++faction){
                 if(run.active_faction_count!=0U && faction>run.active_faction_count)break;
                 const uint32_t family=graphics_family_for_faction(static_cast<uint32_t>(faction));
-                ImGui::TextColored(graphics_family_ui_text_color(family),"%s · Faction %zu",
+                ImGui::TextColored(graphics_family_ui_text_color(family),tr("%s · Faction %zu"),
                     thandor::graphics_family_single_player_faction_name(family),faction);
                 const auto& economy=run.faction_economy[faction];
-                ImGui::Text("Xenite %.1f   Tritium %.1f   Points %d",
+                ImGui::Text(tr("Xenite %.1f   Tritium %.1f   Points %d"),
                     economy.xenite_current_q4/16.0,economy.tritium_current_q4/16.0,run.faction_score[faction].points);
             }
             ImGui::TreePop();
         }
     }
     }
-    if(ImGui::CollapsingHeader("Experiment settings",ImGuiTreeNodeFlags_DefaultOpen)){
-    ImGui::SeparatorText("Experiment");
-    int run_count=static_cast<int>(simulation_lab_config_.run_count);
-    ImGui::TextUnformatted("Concurrent games");
-    ImGui::SetNextItemWidth(-1.0F);
-    if(ImGui::SliderInt("##Concurrent games",&run_count,1,32))
-        simulation_lab_config_.run_count=static_cast<uint32_t>(std::clamp(run_count,1,32));
-    int thread_limit=static_cast<int>(simulation_lab_config_.worker_thread_limit);
-    ImGui::TextUnformatted("Threads (0 = automatic)");
-    ImGui::SetNextItemWidth(-1.0F);
-    if(ImGui::SliderInt("##Threads (0 = automatic)",&thread_limit,0,32))
-        simulation_lab_config_.worker_thread_limit=static_cast<uint32_t>(std::clamp(thread_limit,0,32));
+    if(ImGui::CollapsingHeader(tr_label("Experiment settings"),ImGuiTreeNodeFlags_DefaultOpen)){
+    ImGui::SeparatorText(tr("Experiment"));
+    draw_simulation_lab_experiment_settings();
 
-    int tick_duration_ms=static_cast<int>(simulation_lab_tick_duration_ms_);
-    ImGui::TextUnformatted("Tick interval (ms)");
-    ImGui::SetNextItemWidth(-1.0F);
-    if(ImGui::InputInt("##Tick interval (ms)",&tick_duration_ms,1,10)){
-        simulation_lab_tick_duration_ms_=static_cast<uint32_t>(std::clamp(tick_duration_ms,1,5000));
-        simulation_lab_tick_accumulator_ms_=0.0;
-        simulation_lab_last_schedule_time_seconds_=ImGui::GetTime();
-        simulation_lab_schedule_initialized_=true;
-    }
-
-    ImGui::Checkbox("Simulate every active faction as AI",
+    ImGui::Checkbox(tr_label("Simulate every active faction as AI"),
         &simulation_lab_simulate_all_active_factions_as_ai_);
     if(!simulation_lab_simulate_all_active_factions_as_ai_){
-        ImGui::TextUnformatted("Human faction bit mask");
+        ImGui::TextUnformatted(tr("Human faction bit mask"));
         ImGui::SetNextItemWidth(-1.0F);
         ImGui::InputScalar("##Human faction bit mask",ImGuiDataType_U32,
             &simulation_lab_human_faction_mask_);
@@ -6841,21 +7295,26 @@ void EditorApp::draw_simulation_lab_panel(){
     }else{
 
     }
-    ImGui::TextUnformatted("Game speed (256 = 1x)");
+    int opponent_percent = static_cast<int>((std::clamp(simulation_lab_game_speed_q8_, 204U, 308U) * 100 + 128) / 256);
+    if (ImGui::SliderInt(tr_label("Opponent strength"), &opponent_percent, 80, 120, "%d%%")) {
+        simulation_lab_game_speed_q8_ = (static_cast<uint32_t>(opponent_percent) * 0x28F5CU) >> 16;
+    }
+    show_item_tooltip(tr("Original mission briefing slider. It sets the AI extraction scale. The raw Q8 input below is available for exact replays."));
+    ImGui::TextUnformatted(tr("Game speed (256 = 1x)"));
     ImGui::SetNextItemWidth(-1.0F);
     ImGui::InputScalar("##Game speed (256 = 1x)",ImGuiDataType_U32,&simulation_lab_game_speed_q8_);
     simulation_lab_game_speed_q8_=std::max(1U,simulation_lab_game_speed_q8_);
 
-    ImGui::Checkbox("Override storage capacity",
+    ImGui::Checkbox(tr_label("Override storage capacity"),
         &simulation_lab_storage_limit_overrides_enabled_);
     if(simulation_lab_storage_limit_overrides_enabled_){
         int xenite_capacity=static_cast<int>(simulation_lab_xenite_storage_limit_q4_);
         int tritium_capacity=static_cast<int>(simulation_lab_tritium_storage_limit_q4_);
-        ImGui::TextUnformatted("Xenite storage capacity Q4");
+        ImGui::TextUnformatted(tr("Xenite storage capacity Q4"));
         ImGui::SetNextItemWidth(-1.0F);
         if(ImGui::InputInt("##Xenite storage capacity Q4",&xenite_capacity,16,160))
             simulation_lab_xenite_storage_limit_q4_=static_cast<uint32_t>(std::max(0,xenite_capacity));
-        ImGui::TextUnformatted("Tritium storage capacity Q4");
+        ImGui::TextUnformatted(tr("Tritium storage capacity Q4"));
         ImGui::SetNextItemWidth(-1.0F);
         if(ImGui::InputInt("##Tritium storage capacity Q4",&tritium_capacity,16,160))
             simulation_lab_tritium_storage_limit_q4_=static_cast<uint32_t>(std::max(0,tritium_capacity));
@@ -6863,7 +7322,7 @@ void EditorApp::draw_simulation_lab_panel(){
 
     }
 
-    if(ImGui::CollapsingHeader("Starting inventory")){
+    if(ImGui::CollapsingHeader(tr_label("Starting inventory"))){
 
         for(std::uint32_t faction=1U;faction<simulation_lab_config_.primary_queue_overrides.size();++faction){
             auto& override=simulation_lab_config_.primary_queue_overrides[faction];
@@ -6876,29 +7335,29 @@ void EditorApp::draw_simulation_lab_panel(){
             if(override.enabled){
                 int count=static_cast<int>(std::min<std::uint32_t>(override.count,
                     static_cast<std::uint32_t>(override.army_asset_ids.size())));
-                ImGui::TextUnformatted("Item count");
+                ImGui::TextUnformatted(tr("Item count"));
                 ImGui::SetNextItemWidth(-1.0F);
                 if(ImGui::InputInt("##Item count",&count,1,4))
                     override.count=static_cast<std::uint32_t>(std::clamp(count,0,
                         static_cast<int>(override.army_asset_ids.size())));
                 const std::size_t visible_count=std::min<std::size_t>(override.count,override.army_asset_ids.size());
                 if(visible_count!=0U){
-                    const bool child_visible=ImGui::BeginChild("PrimaryArmList",ImVec2(0.0F,
+                    const bool child_visible=ImGui::BeginChild(tr_label("PrimaryArmList"),ImVec2(0.0F,
                         std::min(ui_px(220.0F),ui_px(32.0F)*static_cast<float>(visible_count)+8.0F)),true);
                     if(child_visible){
                         for(std::size_t index=0;index<visible_count;++index){
                             ImGui::PushID(static_cast<int>(index));
                             ImGui::SetNextItemWidth(ui_px(110.0F));
-                            ImGui::TextUnformatted("ARM");
+                            ImGui::TextUnformatted(tr("ARM"));
                             ImGui::SetNextItemWidth(-1.0F);
                             ImGui::InputScalar("##ARM",ImGuiDataType_U32,&override.army_asset_ids[index]);
                             if(const auto* preset=catalog_.army_preset(override.army_asset_ids[index])){
                                 ImGui::SameLine();
                                 const std::string& label=!preset->display_name.empty()?preset->display_name:preset->short_name;
-                                ImGui::TextDisabled("%s",label.empty()?"resolved":label.c_str());
+                                ImGui::TextDisabled("%s",label.empty()?tr("resolved"):label.c_str());
                             }else{
                                 ImGui::SameLine();
-                                ImGui::TextDisabled("unresolved");
+                                ImGui::TextDisabled(tr("unresolved"));
                             }
                             ImGui::PopID();
                         }
@@ -6910,47 +7369,19 @@ void EditorApp::draw_simulation_lab_panel(){
         }
     }
 
-    // Retail simulation remains 20 ticks/second; wall cadence controls execution speed only.
-    float duration_minutes=static_cast<float>(simulation_lab_config_.duration_ticks)/1200.0F;
-    ImGui::TextUnformatted("Duration (simulated minutes)");
-    ImGui::SetNextItemWidth(-1.0F);
-    if(ImGui::SliderFloat("##Duration (simulated minutes)",&duration_minutes,0.1F,90.0F,"%.1f min"))
-        simulation_lab_config_.duration_ticks=static_cast<uint32_t>(std::lround(
-            std::clamp(duration_minutes,0.1F,90.0F)*1200.0F));
-    if(ImGui::Button("Long progression preset")){
-        simulation_lab_config_.duration_ticks=36000U;
-        simulation_lab_tick_duration_ms_=1U;
-        simulation_lab_tick_accumulator_ms_=0.0;
-        simulation_lab_last_schedule_time_seconds_=ImGui::GetTime();
-        simulation_lab_schedule_initialized_=true;
-    }
-    if(ImGui::IsItemHovered())show_item_tooltip(
-        "30 simulated minutes with a 1 ms wall interval. Actual speed depends on worker load.");
-
-    ImGui::Checkbox("Vary RNG seed per run",&simulation_lab_config_.vary_seed_per_run);
-    ImGui::TextUnformatted("Base seed");
-    ImGui::SetNextItemWidth(-1.0F);
-    ImGui::InputScalar("##Base seed",ImGuiDataType_U32,&simulation_lab_config_.base_seed);
-    if(ImGui::Button("Draw stock host seed")){
-        auto primary_state=simulation_lab_config_.base_seed;
-        simulation_lab_config_.base_seed=thandor::retail_random_next(primary_state);
-    }
-    if(ImGui::IsItemHovered())show_item_tooltip(
-        "Use the base seed as the primary RNG state and draw a session seed the same way a stock host does.");
-
     simulation_lab_semantic_row_=std::clamp(simulation_lab_semantic_row_,0,
         static_cast<int>(semantics.size())-1);
     const auto& selected_semantic=semantics[static_cast<std::size_t>(simulation_lab_semantic_row_)];
     char parameter_preview[256];
-    std::snprintf(parameter_preview,sizeof(parameter_preview),"KI[0x%02X] %.*s",selected_semantic.index,
+    std::snprintf(parameter_preview,sizeof(parameter_preview),tr("KI[0x%02X] %.*s"),selected_semantic.index,
         static_cast<int>(selected_semantic.label.size()),selected_semantic.label.data());
-    ImGui::TextUnformatted("AI parameter");
+    ImGui::TextUnformatted(tr("AI parameter"));
     ImGui::SetNextItemWidth(-1.0F);
     if(ImGui::BeginCombo("##AI parameter",parameter_preview)){
         for(std::size_t row=0;row<semantics.size();++row){
             const auto& semantic=semantics[row];
             char label[256]{};
-            std::snprintf(label,sizeof(label),"KI[0x%02X] %.*s",semantic.index,
+            std::snprintf(label,sizeof(label),tr("KI[0x%02X] %.*s"),semantic.index,
                 static_cast<int>(semantic.label.size()),semantic.label.data());
             const bool selected=static_cast<int>(row)==simulation_lab_semantic_row_;
             if(ImGui::Selectable(label,selected)){
@@ -6973,25 +7404,25 @@ void EditorApp::draw_simulation_lab_panel(){
     simulation_lab_config_.parameter_index=
         semantics[static_cast<std::size_t>(simulation_lab_semantic_row_)].index;
     int sweep_mode=static_cast<int>(simulation_lab_config_.sweep_mode);
-    const char* sweep_modes[]={"Fixed","Linear min -> max","Min / middle / max groups"};
-    ImGui::TextUnformatted("Sweep");
+    const char* sweep_modes[]={tr("Fixed"),tr("Linear min -> max"),tr("Min / middle / max groups")};
+    ImGui::TextUnformatted(tr("Sweep"));
     ImGui::SetNextItemWidth(-1.0F);
     if(ImGui::Combo("##Sweep",&sweep_mode,sweep_modes,3))
         simulation_lab_config_.sweep_mode=static_cast<thandor::SimulationLabSweepMode>(sweep_mode);
     if(simulation_lab_config_.sweep_mode==thandor::SimulationLabSweepMode::Fixed){
-        ImGui::TextUnformatted("Experiment override (original integer units)");
+        ImGui::TextUnformatted(tr("Experiment override (original integer units)"));
         ImGui::SetNextItemWidth(-1.0F);
         ImGui::InputInt("##Value",&simulation_lab_config_.fixed_value);
-        if(ImGui::Button("Use selected KI profile value"))simulation_lab_config_.fixed_value=ai_knowledge_->signed_raw(simulation_lab_config_.parameter_index);
+        if(ImGui::Button(tr_label("Use selected KI profile value")))simulation_lab_config_.fixed_value=ai_knowledge_->signed_raw(simulation_lab_config_.parameter_index);
     }else{
-        ImGui::TextUnformatted("Minimum");
+        ImGui::TextUnformatted(tr("Minimum"));
         ImGui::SetNextItemWidth(-1.0F);
         ImGui::InputInt("##Minimum",&simulation_lab_config_.minimum_value);
-        ImGui::TextUnformatted("Maximum");
+        ImGui::TextUnformatted(tr("Maximum"));
         ImGui::SetNextItemWidth(-1.0F);
         ImGui::InputInt("##Maximum",&simulation_lab_config_.maximum_value);
     }
-    if(ImGui::TreeNode("Preview sweep values")){
+    if(ImGui::TreeNode(tr_label("Preview sweep values"))){
     const auto preview_values=thandor::simulation_lab_sweep_values(simulation_lab_config_);
     if(!preview_values.empty()){
         std::string preview="Values: ";
@@ -7020,7 +7451,7 @@ void EditorApp::draw_retail_selection_frame(float left,float top,float right,flo
         try{retail_selection_frame_assets_=thandor::RetailSelectionFrameAssets::parse(
             catalog_.load("gfx/panel/select.dat"),
             thandor::GfxAsset::parse(catalog_.load("gfx/panel/select.gfx")));}
-        catch(const std::exception& error){status_=std::string("Selection frame assets unavailable: ")+error.what();}
+        catch(const std::exception& error){status_=std::string(tr("Selection frame assets unavailable: "))+error.what();}
     }
     auto* draw=ImGui::GetForegroundDrawList();
     const auto canvas=workspace_layout().canvas;
@@ -7101,6 +7532,21 @@ bool EditorApp::factory_placement_exit_clear(const thandor::ArmyAssetPreset& pre
 }
 
 bool EditorApp::select_simulation_lab_run(std::size_t index){
+    if (jandrenator_show_batch_) {
+        if (index >= jandrenator_batch_.runs() || index == static_cast<std::size_t>(jandrenator_view_run_))
+            return false;
+        jandrenator_view_run_ = static_cast<int>(index);
+        jandrenator_next_scene_poll_ = 0.0;
+        jandrenator_scene_.reset();
+        simulation_lab_suppressed_placements_.clear();
+        simulation_static_replacement_dirty_ = true;
+        dynamic_model_cache_.valid = false;
+        selected_simulation_lab_entity_.reset();
+        selected_placement_.reset();
+        update_jandrenator_scene(ImGui::GetTime());
+        status_=tr("Selected run ")+std::to_string(index+1)+".";
+        return true;
+    }
     if(!simulation_lab_active())return false;
     const auto runs=simulation_lab_runs();
     if(index>=runs.size()||index==static_cast<std::size_t>(simulation_lab_selected_run_))return false;
@@ -7119,21 +7565,24 @@ bool EditorApp::select_simulation_lab_run(std::size_t index){
     sync_selected_simulation_lab_run();
     simulation_static_replacement_dirty_=true;
     last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
-    status_="Selected run "+std::to_string(index+1)+".";
+    status_=tr("Selected run ")+std::to_string(index+1)+".";
     return true;
 }
 
 void EditorApp::draw_simulation_lab_run_switcher(){
     simulation_lab_run_selector_hovered_=false;
-    if(!document_||!simulation_lab_active())return;
-    const auto runs=simulation_lab_ui_runs();
-    if(runs.empty())return;
+    if(!document_)return;
+    const bool native_batch=jandrenator_show_batch_;
+    if(!native_batch&&!simulation_lab_active())return;
+    const std::size_t run_count=native_batch?jandrenator_run_views_.size():simulation_lab_ui_text_.size();
+    if(run_count==0U)return;
+    const int selected_run=native_batch?jandrenator_view_run_:simulation_lab_selected_run_;
     const auto canvas=workspace_layout().canvas;
     if(canvas.width<ui_px(205.F)||canvas.height<ui_px(110.F))return;
     // One real 3D viewport, instant selected-world switching. This overlay is
     // interactive even when the Lab inspector is hidden, unlike ghost geometry.
     const float width=std::min(ui_px(224.F),canvas.width-ui_px(24.F));
-    const float height=std::min(canvas.height-ui_px(24.F),ui_px(44.F)+ui_px(44.F)*static_cast<float>(runs.size()));
+    const float height=std::min(canvas.height-ui_px(24.F),ui_px(44.F)+ui_px(44.F)*static_cast<float>(run_count));
     const float x=canvas.x+ui_px(12.F),y=canvas.y+ui_px(12.F);
     ImGui::SetNextWindowPos({x,y},ImGuiCond_Always);
     ImGui::SetNextWindowSize({width,height},ImGuiCond_Always);
@@ -7141,11 +7590,13 @@ void EditorApp::draw_simulation_lab_run_switcher(){
     constexpr ImGuiWindowFlags flags=ImGuiWindowFlags_NoMove|
         ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_NoSavedSettings|
         ImGuiWindowFlags_NoFocusOnAppearing;
-    if(ImGui::Begin("Simulation runs##SimLabViewportRuns",nullptr,flags)){
-        for(std::size_t index=0;index<runs.size();++index){
-            const bool selected=index==static_cast<std::size_t>(simulation_lab_selected_run_);
+    if(ImGui::Begin(tr_label("Simulation runs##SimLabViewportRuns"),nullptr,flags)){
+        for(std::size_t index=0;index<run_count;++index){
+            const bool selected=index==static_cast<std::size_t>(selected_run);
             ImGui::PushID(static_cast<int>(index));
-            if(ImGui::Selectable(simulation_lab_ui_text_[index].viewport_label.c_str(),selected))
+            const auto& label=native_batch?jandrenator_run_views_[index].viewport_label:
+                simulation_lab_ui_text_[index].viewport_label;
+            if(ImGui::Selectable(label.c_str(),selected))
                 select_simulation_lab_run(index);
             ImGui::PopID();
         }
@@ -7259,7 +7710,7 @@ void EditorApp::draw_simulation_lab_overlay(){
         float sx,sy,depth;
         if(!project_to_canvas(label_position,vp,sx,sy,depth))continue;
         char label[64]{};
-        std::snprintf(label,sizeof(label),"R%zu  KI=%d",run_index+1,run.swept_value);
+        std::snprintf(label,sizeof(label),tr("R%zu  KI=%d"),run_index+1,run.swept_value);
         const bool selected=static_cast<int>(run_index)==simulation_lab_selected_run_;
         draw->AddText({sx+5.0F,sy-8.0F},selected?IM_COL32(255,255,255,255):IM_COL32(190,205,220,210),label);
     }
@@ -7287,7 +7738,7 @@ void EditorApp::clear_water_selection(){
     water_selection_stage_=WaterSelectionStage::SelectArea;
     water_selection_checkpointed_=false;
     stroke_active_=false;
-    status_="Temporary water selection cleared.";
+    status_=tr("Temporary water selection cleared.");
 }
 
 void EditorApp::paint_water_selection(uint32_t center_x,uint32_t center_y,bool enabled){
@@ -7310,13 +7761,13 @@ void EditorApp::paint_water_selection(uint32_t center_x,uint32_t center_y,bool e
 void EditorApp::apply_flat_water_selection(bool enabled,bool checkpoint_if_needed){
     if(!document_)return;
     ensure_water_selection_size();
-    if(water_selection_count()==0U){status_="Water selection is empty.";return;}
+    if(water_selection_count()==0U){status_=tr("Water selection is empty.");return;}
     if(checkpoint_if_needed&&!water_selection_checkpointed_){checkpoint();water_selection_checkpointed_=true;}
     const auto changed=document_->field().set_water_selection(water_selection_mask_,water_height_,enabled);
     if(changed!=0U){document_->mark_dirty();rebuild_mesh();}
     draw_water_=true;
-    status_=(enabled?"Applied one flat water surface to ":"Erased water from ")+
-        std::to_string(water_selection_count())+" selected cells ("+std::to_string(changed)+" changed).";
+    status_=(enabled?tr("Applied one flat water surface to "):tr("Erased water from "))+
+        std::to_string(water_selection_count())+tr(" selected cells (")+std::to_string(changed)+tr(" changed).");
 }
 
 void EditorApp::adjust_water_selection_level(float delta){
@@ -7449,7 +7900,7 @@ void EditorApp::load_map(std::size_t group_index){
         reset_simulation(false);simulation_static_replacement_dirty_=false;
         water_selection_mask_.clear();water_reference_cell_.reset();water_selection_stage_=WaterSelectionStage::SelectArea;water_selection_checkpointed_=false;
         asset_preview_cache_.clear();asset_preview_texture_cache_.clear();refresh_scenario_text_buffers();load_materials();rebuild_mesh();center_camera();
-        status_="Loaded "+catalog_.map_groups()[group_index].display_name+"; terrain layers "+std::to_string(loaded_material_count_)+"/26"+(terrain_texture_layout_?"; terrain DAT loaded":"; terrain DAT fallback");
+        status_=tr("Loaded ")+catalog_.map_groups()[group_index].display_name+tr("; terrain layers ")+std::to_string(loaded_material_count_)+"/26"+(terrain_texture_layout_?tr("; terrain DAT loaded"):tr("; terrain DAT fallback"));
     }catch(const std::exception& e){status_=e.what();}
 }
 
@@ -7461,15 +7912,15 @@ bool EditorApp::load_map_from_path(const std::filesystem::path& path){
     std::string stage="resolving the map path";
     bool installed_document=false;
     try{
-        if(path.empty())throw std::runtime_error("Select a .thmap or .lev file below, or enter its complete path");
+        if(path.empty())throw std::runtime_error(tr("Select a .thmap or .lev file below, or enter its complete path"));
         const auto resolved=(path.is_relative() && !std::filesystem::exists(path))
             ?catalog_.game_root()/path:path;
         if(std::filesystem::is_directory(resolved))throw std::runtime_error(
-            "That path is a folder, not a map. Select a file from the list below.");
+            tr("That path is a folder, not a map. Select a file from the list below."));
         std::string extension=resolved.extension().string();
         std::transform(extension.begin(),extension.end(),extension.begin(),[](unsigned char c){return static_cast<char>(std::tolower(c));});
         if(extension!=".lev"&&extension!=".thmap"&&extension!=".pck")
-            throw std::runtime_error("Expected a .thmap, .pck editor project or loose .lev file");
+            throw std::runtime_error(tr("Expected a .thmap, .pck editor project or loose .lev file"));
 
         stage="reading and parsing the map project";
         auto loaded=extension==".lev"?
@@ -7557,29 +8008,29 @@ bool EditorApp::load_map_from_path(const std::filesystem::path& path){
         center_camera();
         last_opened_map_type_="file";
         last_opened_map_value_=std::filesystem::absolute(resolved).lexically_normal().string();
-        status_="Loaded "+document_->display_name()+" from "+resolved.string()+
-            " with "+std::to_string(document_->custom_asset_count())+" custom assets.";
+        status_=tr("Loaded ")+document_->display_name()+tr(" from ")+resolved.string()+
+            tr(" with ")+std::to_string(document_->custom_asset_count())+tr(" custom assets.");
         if(!preview_warning.empty())status_+=" Preview warning:"+preview_warning;
         load_map_error_.clear();
         return true;
     }catch(const std::bad_alloc&){
-        load_map_error_="Out of memory while "+stage+
-            (installed_document?". Map data was parsed, but its preview could not be completed.":
-                ". The editor retained the previously open map.");
+        load_map_error_=tr("Out of memory while ")+stage+
+            (installed_document?tr(". Map data was parsed, but its preview could not be completed."):
+                tr(". The editor retained the previously open map."));
     }catch(const std::exception& e){
         load_map_error_=stage+": "+e.what();
     }
-    status_="Load failed: "+load_map_error_;
+    status_=tr("Load failed: ")+load_map_error_;
     return false;
 }
 
 bool EditorApp::save_project(const std::filesystem::path& path){
     try{
-        if(path.empty())throw std::runtime_error("project path is empty");
+        if(path.empty())throw std::runtime_error(tr("project path is empty"));
         const auto extension=thandor::lower_ascii(path.extension().string());
-        if(extension!=".thmap"&&extension!=".pck")throw std::runtime_error("Use a .thmap project filename.");
+        if(extension!=".thmap"&&extension!=".pck")throw std::runtime_error(tr("Use a .thmap project filename."));
         if(!path.parent_path().empty())std::filesystem::create_directories(path.parent_path());
-        document_->save_project(path,campaign_editing_mission_.has_value());current_project_path_=path;document_->mark_clean();
+        document_->save_project(path,campaign_editing_mission_.has_value(),&catalog_);current_project_path_=path;document_->mark_clean();
         if(campaign_document_&&campaign_editing_mission_) {
             campaign_document_->source(*campaign_editing_mission_).map_project=std::filesystem::absolute(path);
             for(std::size_t i=0;i<campaign_document_->campaign().records().size();++i)
@@ -7590,17 +8041,17 @@ bool EditorApp::save_project(const std::filesystem::path& path){
         last_opened_map_type_="file";
         last_opened_map_value_=std::filesystem::absolute(path).lexically_normal().string();
         std::snprintf(save_project_path_,sizeof(save_project_path_),"%s",path.string().c_str());
-        status_="Saved full map project "+path.string()+" (LEV, FLD, names, and "+std::to_string(document_->custom_asset_count())+" custom assets).";
+        status_=tr("Saved full map project ")+path.string()+tr(" (LEV, FLD, names, and ")+std::to_string(document_->custom_asset_count())+tr(" custom assets).");
         save_map_error_.clear();
         return true;
-    }catch(const std::exception& e){save_map_error_=e.what();status_="Save failed: "+save_map_error_;return false;}
+    }catch(const std::exception& e){save_map_error_=e.what();status_=tr("Save failed: ")+save_map_error_;return false;}
 }
 
 void EditorApp::save_current_map(){
     try{
-        if(!document_)throw std::runtime_error("no map is open");
+        if(!document_)throw std::runtime_error(tr("no map is open"));
         if(!current_stock_group_||*current_stock_group_>=catalog_.map_groups().size())
-            throw std::runtime_error("current map is not a stock map; use Save full map project instead");
+            throw std::runtime_error(tr("current map is not a stock map; use Save full map project instead"));
         // Runtime simulation state is deliberately session-only. MapDocument owns only authored
         // LEV/FLD/text/catalog/custom-asset data, so this path never snapshots or commits actors,
         // projectiles, runtime integrity, produced units, targets, fog, or simulation transforms.
@@ -7615,7 +8066,7 @@ void EditorApp::save_current_map(){
         if(!result.backup_archives.empty())message<<"; backup created";
         message<<". Simulation state was not saved.";
         status_=message.str();
-    }catch(const std::exception& e){status_="Save current map failed: "+std::string(e.what());}
+    }catch(const std::exception& e){status_=tr("Save current map failed: ")+std::string(e.what());}
 }
 
 void EditorApp::reset_new_map_editing_view(){
@@ -7635,7 +8086,7 @@ void EditorApp::reset_new_map_editing_view(){
 bool EditorApp::create_new_map(){
     try{
         if(template_group_<0||static_cast<std::size_t>(template_group_)>=catalog_.map_groups().size())
-            throw std::runtime_error("Select a valid stock map as the new map's compatibility shell or terrain source");
+            throw std::runtime_error(tr("Select a valid stock map as the new map's compatibility shell or terrain source"));
         const auto& shell=catalog_.map_groups()[static_cast<std::size_t>(template_group_)];
         uint32_t width=static_cast<uint32_t>(std::max(new_width_,2));
         uint32_t height=static_cast<uint32_t>(std::max(new_height_,2));
@@ -7662,7 +8113,7 @@ bool EditorApp::create_new_map(){
                         created.level().paths().surface_textures=level.paths().surface_textures;found=true;break;
                     }
                 }
-                if(!found)throw std::runtime_error("The selected surface is not available in this game folder. Choose another surface or From terrain style.");
+                if(!found)throw std::runtime_error(tr("The selected surface is not available in this game folder. Choose another surface or From terrain style."));
             }
         }
         created.set_display_name(new_display_name_);
@@ -7674,18 +8125,18 @@ bool EditorApp::create_new_map(){
         water_selection_mask_.clear();water_reference_cell_.reset();water_selection_stage_=WaterSelectionStage::SelectArea;water_selection_checkpointed_=false;
         water_height_=new_empty_map_?new_terrain_settings_.surface_level:0.0F;
         asset_preview_cache_.clear();asset_preview_texture_cache_.clear();refresh_scenario_text_buffers();load_materials();rebuild_mesh();center_camera();
-        status_=new_empty_map_?"Created a new map. Fog is off and the whole map is visible.":
-            "Imported terrain from "+shell.display_name+" into a new map with cleared placements.";
+        status_=new_empty_map_?tr("Created a new map. Fog is off and the whole map is visible."):
+            tr("Imported terrain from ")+shell.display_name+tr(" into a new map with cleared placements.");
         new_map_error_.clear();
         return true;
     }catch(const std::exception& e){
         new_map_error_=e.what();
-        status_="New map creation failed: "+new_map_error_;
+        status_=tr("New map creation failed: ")+new_map_error_;
         return false;
     }
 }
 
-void EditorApp::apply_texture_family_from_map(std::size_t group_index){try{if(group_index>=catalog_.map_groups().size())throw std::out_of_range("texture source map");checkpoint();const auto source=thandor::LevelAsset::parse(catalog_.load(catalog_.map_groups()[group_index].level_path));document_->level().paths().ground_textures=source.paths().ground_textures;document_->level().paths().surface_textures=source.paths().surface_textures;document_->mark_dirty();asset_preview_cache_.clear();asset_preview_texture_cache_.clear();load_materials();rebuild_mesh();status_="Loaded terrain texture family from "+catalog_.map_groups()[group_index].display_name;}catch(const std::exception& e){status_=e.what();}}
+void EditorApp::apply_texture_family_from_map(std::size_t group_index){try{if(group_index>=catalog_.map_groups().size())throw std::out_of_range("texture source map");checkpoint();const auto source=thandor::LevelAsset::parse(catalog_.load(catalog_.map_groups()[group_index].level_path));document_->level().paths().ground_textures=source.paths().ground_textures;document_->level().paths().surface_textures=source.paths().surface_textures;document_->mark_dirty();asset_preview_cache_.clear();asset_preview_texture_cache_.clear();load_materials();rebuild_mesh();status_=tr("Loaded terrain texture family from ")+catalog_.map_groups()[group_index].display_name;}catch(const std::exception& e){status_=e.what();}}
 
 void EditorApp::load_materials(){
     auto performance_timer=editor_performance_log_.measure(EditorPerfStage::MaterialLoad);
@@ -7702,7 +8153,7 @@ void EditorApp::load_materials(){
     if(!document_)return;
 
     const std::string base=terrain_base_path(document_->level().paths().ground_textures);
-    if(base.empty())throw std::runtime_error("LEV ground texture path is empty");
+    if(base.empty())throw std::runtime_error(tr("LEV ground texture path is empty"));
     try{
         terrain_texture_layout_=thandor::TerrainTextureLayout::parse(document_->load_asset(catalog_,base+".dat"));
     }catch(const std::exception&){
@@ -7717,7 +8168,7 @@ void EditorApp::load_materials(){
         material_names_.push_back(sources[material].empty()?path:sources[material]);
         try{
             const auto gfx=thandor::GfxAsset::parse(document_->load_asset(catalog_,path));
-            if(gfx.subresources().empty())throw std::runtime_error("empty terrain GFX");
+            if(gfx.subresources().empty())throw std::runtime_error(tr("empty terrain GFX"));
             material_images_.push_back(gfx.decode(thandor::GraphicsSubresourceIndex{0U},false));
             ++loaded_material_count_;
         }catch(const std::exception&){
@@ -7755,7 +8206,7 @@ void EditorApp::load_materials(){
                         static_cast<std::size_t>(target_width)*target_height*4U);
                     if(image.width==0U||image.height==0U||
                        static_cast<uint64_t>(image.width)*image.height*4U!=image.pixels.size())
-                        throw std::runtime_error("surface layer has invalid RGBA dimensions");
+                        throw std::runtime_error(tr("surface layer has invalid RGBA dimensions"));
                     for(uint32_t y=0;y<target_height;++y){
                         const uint32_t source_y=static_cast<uint32_t>(
                             (static_cast<uint64_t>(y)*image.height)/target_height);
@@ -7776,9 +8227,9 @@ void EditorApp::load_materials(){
             loaded_surface_material_count_=surface_material_images_.size();
             for(const auto& record:surface_texture_layout_->records()){
                 if(record.material_index>=surface_material_images_.size())
-                    throw std::runtime_error("surface DAT texture index exceeds surface GFX layers");
+                    throw std::runtime_error(tr("surface DAT texture index exceeds surface GFX layers"));
                 if(record.palette_index>=surface_palette_argb_.size())
-                    throw std::runtime_error("surface DAT palette index exceeds surface PAL entries");
+                    throw std::runtime_error(tr("surface DAT palette index exceeds surface PAL entries"));
             }
         }catch(const std::exception&){
             surface_texture_layout_.reset();
@@ -7832,9 +8283,7 @@ void EditorApp::rebuild_objects(){
     discarded_alternate_lod_triangle_count_=0;
     untextured_triangle_count_=0;
     neutral_source_color_triangle_count_=0;
-    terrain_overlay_safe_cell_count_=0;
-    terrain_overlay_caution_cell_count_=0;
-    terrain_overlay_blocked_cell_count_=0;
+    terrain_overlay_cell_counts_={};
     recursive_model_node_count_=0;
     animated_model_node_count_=0;
     visible_animated_building_count_=0;
@@ -8095,7 +8544,7 @@ void EditorApp::rebuild_objects(){
                     needs_untextured=true;continue;
                 }
                 if(vertex.texture_subresource>=family.graphics.subresources().size())
-                    throw std::runtime_error("Simulation Lab construction SPR selects missing army GFX subresource");
+                    throw std::runtime_error(tr("Simulation Lab construction SPR selects missing army GFX subresource"));
                 (void)texture_layer(texture_runtime_faction,texture_graphics_family,vertex.texture_subresource);
             }
         }
@@ -8198,7 +8647,7 @@ void EditorApp::rebuild_objects(){
     };
     const thandor::GeneratedShadowSettings generated_shadow_settings=kEditorGeneratedShadowSettings;
     if(!thandor::retail_generated_shadow_settings_valid(generated_shadow_settings))
-        throw std::runtime_error("invalid default generated-shadow settings");
+        throw std::runtime_error(tr("invalid default generated-shadow settings"));
     const uint32_t shadow_tile_dimension=generated_shadow_settings.grid_half_size;
     const uint32_t shadow_atlas_dimension=generated_shadow_settings.texture_dimension;
     const uint32_t shadow_tiles_per_axis=shadow_atlas_dimension/shadow_tile_dimension;
@@ -8211,10 +8660,10 @@ void EditorApp::rebuild_objects(){
                                               shadow_tile_dimension*4U;
         if(mask.width!=shadow_tile_dimension||mask.height!=shadow_tile_dimension||
            mask.pixels.size()!=expected_mask_bytes)
-            throw std::runtime_error("generated shadow mask does not match the retail caster-tile dimension");
+            throw std::runtime_error(tr("generated shadow mask does not match the retail caster-tile dimension"));
         if(next_shadow_atlas_tile>=shadow_tiles_per_layer){
             if(texture_layers.size()>=kMaximumTextureLayers)
-                throw std::runtime_error("generated shadows exhausted the selected Vulkan device image-array limit of "+
+                throw std::runtime_error(tr("generated shadows exhausted the selected Vulkan device image-array limit of ")+
                     std::to_string(kMaximumTextureLayers)+" layers");
             current_shadow_atlas_layer=static_cast<uint32_t>(texture_layers.size());
             texture_layers.push_back(thandor::RgbaImage{shadow_atlas_dimension,shadow_atlas_dimension,
@@ -8338,7 +8787,7 @@ void EditorApp::rebuild_objects(){
                         const auto& parent=instances[node.parent_index];
                         const auto* attachment=parent.sprite->child_attachment(node.child_slot);
                         if(attachment==nullptr)
-                            throw std::runtime_error("MDL child slot has no matching SPR attachment transform");
+                            throw std::runtime_error(tr("MDL child slot has no matching SPR attachment transform"));
                         uint32_t animated_angle2=node.local_rotation_angle2;
                         const auto& animation_owner=hierarchy[node.parent_index];
                         const bool direct_animated_parent=
@@ -8492,9 +8941,9 @@ void EditorApp::rebuild_objects(){
                 const auto* water_definition=node.simulation.timed_water_effect_id==0U?nullptr:
                     catalog_.effect_definition(node.simulation.timed_water_effect_id);
                 if(node.simulation.timed_effect_id!=0U&&land_definition==nullptr)
-                    throw std::runtime_error("MDL timed land effect is missing from the EFF registry");
+                    throw std::runtime_error(tr("MDL timed land effect is missing from the EFF registry"));
                 if(node.simulation.timed_water_effect_id!=0U&&water_definition==nullptr)
-                    throw std::runtime_error("MDL timed water effect is missing from the EFF registry");
+                    throw std::runtime_error(tr("MDL timed water effect is missing from the EFF registry"));
                 if(land_definition)preload_effect_textures(land_definition->definition_id);
                 if(water_definition&&(!land_definition||water_definition->definition_id!=land_definition->definition_id))
                     preload_effect_textures(water_definition->definition_id);
@@ -8567,7 +9016,7 @@ void EditorApp::rebuild_objects(){
                    node.simulation.damage_effect_health_threshold_percent<=0)continue;
                 const auto* damage_definition=catalog_.effect_definition(node.simulation.damage_effect_id);
                 if(damage_definition==nullptr)
-                    throw std::runtime_error("MDL damage-state effect is missing from the EFF registry");
+                    throw std::runtime_error(tr("MDL damage-state effect is missing from the EFF registry"));
                 preload_effect_textures(damage_definition->definition_id);
                 DamageEffectControllerPreview damage;
                 damage.effect_id=damage_definition->definition_id;
@@ -8603,7 +9052,7 @@ void EditorApp::rebuild_objects(){
                 const auto& sprite=*instance.sprite;
                 const auto& mesh=sprite.mesh();
                 if(mesh.indices.size()%3U!=0U)
-                    throw std::runtime_error("SPR preview mesh is not triangle aligned");
+                    throw std::runtime_error(tr("SPR preview mesh is not triangle aligned"));
                 selected_lod_triangle_count_+=mesh.indices.size()/3U;
                 discarded_alternate_lod_triangle_count_+=sprite.alternate_lod_triangle_count();
 
@@ -8612,13 +9061,13 @@ void EditorApp::rebuild_objects(){
                     const uint32_t ib=mesh.indices[triangle+1U];
                     const uint32_t ic=mesh.indices[triangle+2U];
                     if(ia>=mesh.vertices.size()||ib>=mesh.vertices.size()||ic>=mesh.vertices.size())
-                        throw std::runtime_error("SPR preview index exceeds vertex stream");
+                        throw std::runtime_error(tr("SPR preview index exceeds vertex stream"));
                     const std::array<const thandor::SpriteMeshVertex*,3> corners{
                         &mesh.vertices[ia],&mesh.vertices[ib],&mesh.vertices[ic]};
                     const uint32_t triangle_subresource=corners[0]->texture_subresource;
                     if(corners[1]->texture_subresource!=triangle_subresource||
                        corners[2]->texture_subresource!=triangle_subresource)
-                        throw std::runtime_error("SPR triangle mixes texture subresources");
+                        throw std::runtime_error(tr("SPR triangle mixes texture subresources"));
                     const bool resource_particle_triangle=resource_kind!=thandor::ResourceEnergyKind::None&&
                         triangle_subresource==resource_particle;
                     const bool resource_body_triangle=resource_kind!=thandor::ResourceEnergyKind::None&&
@@ -8627,7 +9076,7 @@ void EditorApp::rebuild_objects(){
                     const uint32_t triangle_render_flags=corners[0]->render_flags;
                     if(corners[1]->render_flags!=triangle_render_flags||
                        corners[2]->render_flags!=triangle_render_flags)
-                        throw std::runtime_error("SPR triangle mixes render flags");
+                        throw std::runtime_error(tr("SPR triangle mixes render flags"));
                     const auto resource_role=resource_body_triangle?ResourcePrimitiveRole::DenseBody:
                         (resource_particle_triangle?ResourcePrimitiveRole::LuminousParticle:
                          ResourcePrimitiveRole::None);
@@ -8635,7 +9084,7 @@ void EditorApp::rebuild_objects(){
                         triangle_render_flags,!untextured,resource_role);
                     if(!primitive.supported){++unsupported_primitive_selector_count_;continue;}
                     if(vertices.size()+3U>kMaximumVertices||indices.size()+3U>kMaximumIndices)
-                        throw std::runtime_error("object preview geometry limit exceeded");
+                        throw std::runtime_error(tr("object preview geometry limit exceeded"));
                     const uint32_t base=static_cast<uint32_t>(vertices.size());
                     if(untextured)++untextured_triangle_count_;
                     if(neutral_source_color)++neutral_source_color_triangle_count_;
@@ -8646,7 +9095,7 @@ void EditorApp::rebuild_objects(){
                             layer=untextured_layer();
                         }else{
                             if(source->texture_subresource>=family.graphics.subresources().size())
-                                throw std::runtime_error("SPR texture subresource exceeds faction GFX set");
+                                throw std::runtime_error(tr("SPR texture subresource exceeds faction GFX set"));
                             const auto& subresource=family.graphics.subresources()[source->texture_subresource];
                             layer=texture_layer(preview_runtime_faction,preview_graphics_family,source->texture_subresource);
                             uv=thandor::normalize_sprite_texture_uv(source->texture_u,source->texture_v,
@@ -8703,20 +9152,20 @@ void EditorApp::rebuild_objects(){
                    sprite.has_generated_shadow_mesh()){
                     const auto& shadow_mesh=sprite.generated_shadow_mesh();
                     if(shadow_mesh.indices.size()%3U!=0U)
-                        throw std::runtime_error("SPR generated-shadow mesh is not triangle aligned");
+                        throw std::runtime_error(tr("SPR generated-shadow mesh is not triangle aligned"));
                     for(std::size_t triangle=0;triangle<shadow_mesh.indices.size();triangle+=3U){
                         const uint32_t ia=shadow_mesh.indices[triangle];
                         const uint32_t ib=shadow_mesh.indices[triangle+1U];
                         const uint32_t ic=shadow_mesh.indices[triangle+2U];
                         if(ia>=shadow_mesh.vertices.size()||ib>=shadow_mesh.vertices.size()||
                            ic>=shadow_mesh.vertices.size())
-                            throw std::runtime_error("SPR generated-shadow index exceeds vertex stream");
+                            throw std::runtime_error(tr("SPR generated-shadow index exceeds vertex stream"));
                         const auto& a=shadow_mesh.vertices[ia];
                         const auto& b=shadow_mesh.vertices[ib];
                         const auto& c=shadow_mesh.vertices[ic];
                         if(a.mesh_record_flags!=b.mesh_record_flags||
                            a.mesh_record_flags!=c.mesh_record_flags)
-                            throw std::runtime_error("SPR generated-shadow triangle mixes record flags");
+                            throw std::runtime_error(tr("SPR generated-shadow triangle mixes record flags"));
                         generated_shadow_triangles.push_back(thandor::GeneratedShadowTriangle{{
                             transform_point(instance.transform,a.position),
                             transform_point(instance.transform,b.position),
@@ -8766,7 +9215,7 @@ void EditorApp::rebuild_objects(){
                     }else{
                         if(shadow_vertices.size()+prepared.vertices.size()>kMaximumVertices||
                            shadow_indices.size()+prepared.indices.size()>kMaximumIndices)
-                            throw std::runtime_error("generated shadow receiver geometry limit exceeded");
+                            throw std::runtime_error(tr("generated shadow receiver geometry limit exceeded"));
                         const uint32_t base=static_cast<uint32_t>(shadow_vertices.size());
                         shadow_vertices.insert(shadow_vertices.end(),prepared.vertices.begin(),prepared.vertices.end());
                         for(const uint32_t index:prepared.indices)
@@ -8799,49 +9248,71 @@ void EditorApp::rebuild_objects(){
     damage_effect_controllers_=std::move(pending_damage_effects);
     for(auto& bounds:placement_pick_bounds_)bounds.pad(0.20F);
 
-    if(terrain_compatibility_overlay_!=0){
-        const auto* profile=terrain_overlay_profile();
+    const auto terrain_layer_count=static_cast<float>(std::count(terrain_ground_overlays_.begin(),terrain_ground_overlays_.end(),true));
+    unsigned terrain_layer_index=0;
+    for(std::size_t mode=0;mode<terrain_ground_overlays_.size();++mode){
+        if(!terrain_ground_overlays_[mode])continue;
+        const float left=static_cast<float>(terrain_layer_index)/terrain_layer_count;
+        const float right=static_cast<float>(++terrain_layer_index)/terrain_layer_count;
+        const auto* profile=terrain_overlay_profile(static_cast<TerrainOverlayMode>(mode));
+        auto& counts=terrain_overlay_cell_counts_[mode];
         const auto& field=document_->field();
         const uint32_t layer=untextured_layer();
-        const auto append_overlay_vertex=[&](uint32_t x,uint32_t y,uint32_t packed_color){
-            const auto& cell=field.at(x,y);
-            vertices.push_back(ObjectVertex{{thandor::q12_to_float(cell.world_x_q12),
-                thandor::q12_to_float(cell.world_y_q12),cell.terrain_height()+0.08F},
+        const auto append_overlay_vertex=[&](uint32_t x,uint32_t y,float across,uint32_t packed_color){
+            const auto& from=field.at(x,y);
+            const auto& to=field.at(x+1U,y);
+            vertices.push_back(ObjectVertex{{
+                std::lerp(thandor::q12_to_float(from.world_x_q12),thandor::q12_to_float(to.world_x_q12),across),
+                std::lerp(thandor::q12_to_float(from.world_y_q12),thandor::q12_to_float(to.world_y_q12),across),
+                std::lerp(from.terrain_height(),to.terrain_height(),across)+0.08F},
                 {0.0F,0.0F,1.0F},0.5F,0.5F,layer,packed_color});
         };
         for(uint32_t y=0;y+1U<field.height();++y){
             for(uint32_t x=0;x+1U<field.width();++x){
-                const auto compatibility=field.terrain_compatibility(x,y);
                 bool blocked=false;
                 bool caution=false;
-                if(terrain_compatibility_overlay_==1){
-                    blocked=profile==nullptr||!profile->has_traversal_profile||
-                        field.terrain_forbidden_for_traversal_band(
-                            x,y,profile->traversal_high_band_index);
-                    caution=!blocked&&(compatibility.water_covered||
-                        compatibility.terrain_normal_elevation_turn16<12000U||
-                        compatibility.water_normal_elevation_turn16<12000U);
-                }else if(terrain_compatibility_overlay_==2){
-                    blocked=profile==nullptr||!profile->has_placement_occupancy_class||
-                        field.terrain_rejects_placement_occupancy_class(
-                            x,y,profile->placement_occupancy_class);
-                    caution=!blocked&&(compatibility.water_covered||
-                        compatibility.terrain_normal_elevation_turn16<12000U);
+                if(mode==TerrainOverlayBuilding){
+                    blocked=profile==nullptr;
+                    if(profile){
+                        const auto& cell=field.at(x,y);
+                        const auto& motion=profile->simulation_motion_profile;
+                        const int32_t height=thandor::retail_placement_height_q12(
+                            field,{cell.world_x_q12,cell.world_y_q12},motion.placement_contact_kind);
+                        const Vec3f point{thandor::q12_to_float(cell.world_x_q12),
+                            thandor::q12_to_float(cell.world_y_q12),thandor::q12_to_float(height)};
+                        blocked=!thandor::simulation_placement_terrain_clear(
+                            field,point,height,static_cast<uint32_t>(std::max(0,motion.collision_radius_q12)),
+                            motion.placement_contact_kind);
+                    }
                 }else{
-                    blocked=compatibility.hard_boundary_or_blocker;
-                    caution=!blocked&&(compatibility.classification_bits&0x7F000000U)!=0U;
+                    const auto compatibility=field.terrain_compatibility(x,y);
+                    if(mode==TerrainOverlayVehicle){
+                        blocked=profile==nullptr||!profile->has_traversal_profile||
+                            field.terrain_forbidden_for_traversal_band(x,y,profile->traversal_high_band_index);
+                        caution=!blocked&&(compatibility.water_covered||
+                            compatibility.terrain_normal_elevation_turn16<12000U||
+                            compatibility.water_normal_elevation_turn16<12000U);
+                    }else if(mode==TerrainOverlayResources){
+                        blocked=field.terrain_rejects_placement_occupancy_class(x,y,0U)&&
+                            field.terrain_rejects_placement_occupancy_class(x,y,1U);
+                        caution=!blocked&&(compatibility.water_covered||
+                            compatibility.terrain_normal_elevation_turn16<12000U);
+                    }else{
+                        blocked=compatibility.hard_boundary_or_blocker;
+                        caution=!blocked&&(compatibility.classification_bits&0x7F000000U)!=0U;
+                    }
                 }
                 uint32_t color=0x5038C96CU;
-                if(blocked){color=0x90E54747U;++terrain_overlay_blocked_cell_count_;}
-                else if(caution){color=0x78F2B134U;++terrain_overlay_caution_cell_count_;}
-                else ++terrain_overlay_safe_cell_count_;
+                if(blocked){color=0x90E54747U;++counts[2];}
+                else if(caution){color=0x78F2B134U;++counts[1];}
+                else ++counts[0];
                 if(vertices.size()+4U>kMaximumVertices||indices.size()+6U>kMaximumIndices)
-                    throw std::runtime_error("terrain compatibility overlay geometry limit exceeded");
+                    throw std::runtime_error(tr("terrain compatibility overlay geometry limit exceeded"));
                 const uint32_t base=static_cast<uint32_t>(vertices.size());
-                append_overlay_vertex(x,y,color);
-                append_overlay_vertex(x+1U,y,color);
-                append_overlay_vertex(x+1U,y+1U,color);
-                append_overlay_vertex(x,y+1U,color);
+                append_overlay_vertex(x,y,left,color);
+                append_overlay_vertex(x,y,right,color);
+                append_overlay_vertex(x,y+1U,right,color);
+                append_overlay_vertex(x,y+1U,left,color);
                 uint32_t first=static_cast<uint32_t>(indices.size());
                 indices.insert(indices.end(),{base,base+1U,base+2U});
                 append_draw_run(PrimitiveBlendPreset::AlphaNoDepthWrite,true,first);
@@ -8850,6 +9321,318 @@ void EditorApp::rebuild_objects(){
                 append_draw_run(PrimitiveBlendPreset::AlphaNoDepthWrite,true,first);
             }
         }
+    }
+
+    const bool site_overlay=terrain_overlay_has_defence_sites()||terrain_overlay_has_planning_sites();
+    const bool alternate_only=terrain_overlay_only_alternate_routes();
+    const bool draw_base_routes=terrain_overlay_has_base_routes();
+    const bool draw_resource_routes=terrain_overlay_has_resource_routes();
+    const bool draw_routes=draw_base_routes||draw_resource_routes||alternate_only;
+    if(draw_routes||site_overlay){
+        const auto routes=plan_terrain_access_routes();
+        const auto cells=document_->field().cells();
+        const uint32_t layer=untextured_layer();
+        const auto color_for=[](thandor::AccessRouteCell kind){
+            return kind==thandor::AccessRouteCell::Main?0xB02BCED8U:0xB0F2B134U;
+        };
+        const auto point=[&](std::size_t index)->Vec3f{
+            return {thandor::q12_to_float(cells[index].world_x_q12),
+                thandor::q12_to_float(cells[index].world_y_q12),0.0F};
+        };
+        const auto mix=[](Vec3f a,Vec3f b,float t)->Vec3f{
+            return {std::lerp(a.x,b.x,t),std::lerp(a.y,b.y,t),0.0F};
+        };
+        constexpr float half_width=0.18F;
+        const auto normal=[](Vec3f a,Vec3f b)->Vec3f{
+            const float dx=b.x-a.x,dy=b.y-a.y;
+            const float length=std::hypot(dx,dy);
+            return length>0.F?Vec3f{-dy*half_width/length,dx*half_width/length,0.F}:Vec3f{};
+        };
+        const auto append_vertex=[&](Vec3f position,uint32_t color){
+            position.z=terrain_height_near(position.x,position.y)+0.1F;
+            vertices.push_back(ObjectVertex{position,{0.F,0.F,1.F},0.5F,0.5F,layer,color});
+        };
+        const auto append_ribbon=[&](Vec3f a,Vec3f b,Vec3f a_normal,Vec3f b_normal,uint32_t color){
+            if(vertices.size()+4U>kMaximumVertices||indices.size()+6U>kMaximumIndices)
+                throw std::runtime_error(tr("access route overlay geometry limit exceeded"));
+            const auto base=static_cast<uint32_t>(vertices.size());
+            const auto first=static_cast<uint32_t>(indices.size());
+            append_vertex(add(a,a_normal),color);
+            append_vertex({a.x-a_normal.x,a.y-a_normal.y,0.F},color);
+            append_vertex(add(b,b_normal),color);
+            append_vertex({b.x-b_normal.x,b.y-b_normal.y,0.F},color);
+            indices.insert(indices.end(),{base,base+1U,base+2U,base+2U,base+1U,base+3U});
+            append_draw_run(PrimitiveBlendPreset::AlphaNoDepthWrite,true,first);
+            append_draw_run(PrimitiveBlendPreset::AlphaNoDepthWrite,true,first+3U);
+        };
+        const auto draw_sites=[&]{
+            const auto draw_line=[&](Vec3f a,Vec3f b,float width,uint32_t color){
+                const auto offset=normal(a,b);
+                const Vec3f scaled{offset.x*width/half_width,offset.y*width/half_width,0.F};
+                append_ribbon(a,b,scaled,scaled,color);
+            };
+            const auto marker=[&](std::size_t cell,int sides,float radius,float angle,uint32_t color){
+                const auto center=point(cell);
+                const auto vertex=[&](int i){
+                    const float turn=angle+6.2831853F*static_cast<float>(i)/static_cast<float>(sides);
+                    return add(center,{radius*std::cos(turn),radius*std::sin(turn),0.F});
+                };
+                for(int i=0;i<sides;++i)draw_line(vertex(i),vertex(i+1),0.065F,color);
+            };
+            if(terrain_wall_sites_)for(const auto& row:routes.wall_sites){
+                for(std::size_t i=1;i<row.cells.size();++i)
+                    draw_line(point(row.cells[i-1]),point(row.cells[i]),0.05F,0xB0FFC54AU);
+                for(const auto cell:row.cells)marker(cell,4,0.31F,0.785398F,0xFFFFC54AU);
+            }
+            if(terrain_turret_sites_)for(const auto cell:routes.defence_sites)marker(cell,3,0.47F,1.570796F,0xFFFF735EU);
+            if(terrain_rally_points_)for(const auto cell:routes.rally_sites)marker(cell,4,0.43F,0.F,0xFF59DBFFU);
+            const auto factions=terrain_route_resource_faction_>0 ? 1U<<(terrain_route_resource_faction_-1) : 0xFFU;
+            if(terrain_radar_sites_)for(const auto& site:routes.radar_sites)
+                if(site.factions&factions)marker(site.cell,8,0.57F,0.F,0xFFCE85FFU);
+            if(terrain_pioneer_sites_)for(const auto& site:routes.pioneer_sites)
+                if(site.factions&factions)marker(site.cell,4,0.40F,0.F,0xFF8DEB85U);
+            if(terrain_alternate_bases_)for(const auto& site:routes.alternate_bases)
+                if(site.factions&factions){
+                    marker(site.cell,4,0.95F,0.785398F,0xFFE6E6FFU);
+                    marker(site.cell,4,0.50F,0.785398F,0xFFE6E6FFU);
+                }
+        };
+        if(draw_routes){
+        const auto other_end=[](const thandor::AccessRouteEdge& edge,std::size_t cell){
+            return edge.first==cell?edge.second:edge.first;
+        };
+        const auto world_point=[](thandor::MovementPoint point)->Vec3f{
+            return {thandor::q12_to_float(point.x),thandor::q12_to_float(point.y),0.F};
+        };
+        const auto append_straight=[&](Vec3f a,Vec3f b,thandor::AccessRouteCell kind){
+            const auto offset=normal(a,b);
+            append_ribbon(a,b,offset,offset,color_for(kind));
+        };
+        const auto route_normal=[&](Vec3f a,Vec3f b,float width){
+            const auto offset=normal(a,b);
+            return Vec3f{offset.x*width/half_width,offset.y*width/half_width,0.F};
+        };
+        const auto append_bend=[&](Vec3f a,Vec3f center,Vec3f b,float width,uint32_t color,bool dashed=false){
+            const auto to_fixed=[](Vec3f position){
+                return thandor::MovementPoint{thandor::float_to_q12(position.x),thandor::float_to_q12(position.y)};
+            };
+            constexpr int steps=thandor::access_route_curve_steps;
+            std::array<Vec3f,steps+1> samples;
+            const auto start=to_fixed(a),corner=to_fixed(center),end=to_fixed(b);
+            for(int i=0;i<=steps;++i)
+                samples[i]=world_point(thandor::access_route_curve_point(start,corner,end,double(i)/steps));
+            const auto at_normal=[&](int i){
+                if(i==0)return route_normal(a,center,width);
+                if(i==steps)return route_normal(center,b,width);
+                return route_normal(samples[i-1],samples[i+1],width);
+            };
+            for(int i=dashed?1:0;i<(dashed?steps-1:steps);++i){
+                append_ribbon(samples[i],samples[i+1],at_normal(i),at_normal(i+1),color);
+            }
+        };
+        const auto visible_factions=terrain_route_resource_faction_>0
+            ? (1U<<(terrain_route_resource_faction_-1)) : 0xFFU;
+        const auto resource_color=[&](unsigned mask,bool alternate){
+            if(std::popcount(mask)>1)return alternate?0xC0EAEAEAU:0xF0FFFFFFU;
+            const auto family=graphics_family_for_faction(std::countr_zero(mask)+1U);
+            const auto tint=graphics_family_ui_text_color(family);
+            return (alternate?0xD0000000U:0xF0000000U) |
+                (static_cast<uint32_t>(tint.x*255.F)<<16U) |
+                (static_cast<uint32_t>(tint.y*255.F)<<8U) | static_cast<uint32_t>(tint.z*255.F);
+        };
+        if(terrain_route_show_cells_){
+            std::vector<uint32_t> marks(cells.size());
+            std::vector<unsigned> primary_masks(cells.size()),alternate_masks(cells.size());
+            for(const auto& edge:routes.resource_edges){
+                if(draw_resource_routes){
+                    primary_masks[edge.first]|=edge.factions&visible_factions;
+                    primary_masks[edge.second]|=edge.factions&visible_factions;
+                }
+                alternate_masks[edge.first]|=edge.alternate_factions&visible_factions;
+                alternate_masks[edge.second]|=edge.alternate_factions&visible_factions;
+            }
+            for(std::size_t cell=0;cell<marks.size();++cell){
+                const auto mask=primary_masks[cell];
+                const auto alternate=alternate_masks[cell];
+                if(mask||alternate){
+                    const auto color=(resource_color(mask?mask:alternate,!mask)&0x00FFFFFFU)|(mask?0x75000000U:0x4D000000U);
+                    marks[cell]=color;
+                }
+            }
+            for(const auto& edge:routes.alternate_base_edges)
+                marks[edge.first]=marks[edge.second]=0x506CE9F5U;
+            if(draw_base_routes){
+                for(const auto& edge:routes.edges){
+                    const auto color=(color_for(edge.kind)&0x00FFFFFFU)|0x85000000U;
+                    marks[edge.first]=marks[edge.second]=color;
+                }
+                for(std::size_t cell=0;cell<marks.size();++cell)
+                    if(routes.cells[cell]==thandor::AccessRouteCell::Main)marks[cell]=0x852BCED8U;
+                for(const auto& lead:routes.leads)
+                    marks[lead.cell]=(color_for(lead.kind)&0x00FFFFFFU)|0x85000000U;
+            }
+            constexpr std::array<Vec3f,6> hex{{{0.F,-0.24F,0.F},{0.208F,-0.12F,0.F},{0.208F,0.12F,0.F},
+                {0.F,0.24F,0.F},{-0.208F,0.12F,0.F},{-0.208F,-0.12F,0.F}}};
+            for(std::size_t cell=0;cell<marks.size();++cell){
+                if(marks[cell]==0)continue;
+                if(vertices.size()+7U>kMaximumVertices||indices.size()+18U>kMaximumIndices)
+                    throw std::runtime_error(tr("access route overlay geometry limit exceeded"));
+                const auto center=point(cell);
+                const auto base=static_cast<uint32_t>(vertices.size());
+                append_vertex(center,marks[cell]);
+                for(const auto corner:hex)append_vertex(add(center,corner),marks[cell]);
+                for(uint32_t i=0;i<hex.size();++i){
+                    const auto first=static_cast<uint32_t>(indices.size());
+                    indices.insert(indices.end(),{base,base+1U+i,base+1U+(i+1U)%6U});
+                    append_draw_run(PrimitiveBlendPreset::AlphaNoDepthWrite,true,first);
+                }
+            }
+        }
+        if(draw_base_routes){
+            std::vector<std::vector<std::size_t>> incident(cells.size());
+            for(std::size_t i=0;i<routes.edges.size();++i){
+                incident[routes.edges[i].first].push_back(i);
+                incident[routes.edges[i].second].push_back(i);
+            }
+            for(const auto& lane:routes.production_lanes){
+                const auto end=lane.runout.value_or(lane.exit);
+                append_straight(world_point(lane.spawn),world_point(end),thandor::AccessRouteCell::Factory);
+            }
+
+        std::vector<bool> has_lead(cells.size());
+        std::vector<const thandor::AccessRouteLead*> factory_lead(cells.size());
+        for(const auto& lead:routes.leads){
+            if(!has_lead[lead.cell]&&lead.kind==thandor::AccessRouteCell::Factory)
+                factory_lead[lead.cell]=&lead;
+            else
+                factory_lead[lead.cell]=nullptr;
+            has_lead[lead.cell]=true;
+        }
+        for(const auto cell:routes.relocated_starts){
+            has_lead[cell]=true;
+            const auto center=point(cell);
+            constexpr int segments=12;
+            constexpr float radius=0.42F;
+            auto previous=add(center,{radius,0.F,0.F});
+            for(int i=1;i<=segments;++i){
+                const float angle=6.2831853F*static_cast<float>(i)/segments;
+                const auto next=add(center,{radius*std::cos(angle),radius*std::sin(angle),0.F});
+                const auto offset=normal(previous,next);
+                append_ribbon(previous,next,offset,offset,color_for(thandor::AccessRouteCell::Main));
+                previous=next;
+            }
+        }
+        const auto rounded=[&](std::size_t cell){
+            const auto& edges=incident[cell];
+            if(routes.base_corner_trim[cell]==0.F)return false;
+            if(factory_lead[cell]&&edges.size()==1U)
+                return routes.edges[edges[0]].kind==thandor::AccessRouteCell::Factory;
+            if(edges.size()!=2U||has_lead[cell])return false;
+            const auto& a=routes.edges[edges[0]];
+            const auto& b=routes.edges[edges[1]];
+            return a.kind==b.kind&&other_end(a,cell)+other_end(b,cell)!=2U*cell;
+        };
+        for(const auto& lead:routes.leads){
+            const auto endpoint=world_point(lead.endpoint);
+            const auto center=point(lead.cell);
+            append_straight(endpoint,rounded(lead.cell)?mix(center,endpoint,routes.base_corner_trim[lead.cell]):center,lead.kind);
+        }
+        for(const auto& edge:routes.edges){
+            const auto a=point(edge.first),b=point(edge.second);
+            const auto offset=normal(a,b);
+            const auto first=rounded(edge.first)?mix(a,b,routes.base_corner_trim[edge.first]):a;
+            const auto second=rounded(edge.second)?mix(b,a,routes.base_corner_trim[edge.second]):b;
+            if(std::hypot(first.x-second.x,first.y-second.y)>0.0001F)
+                append_ribbon(first,second,offset,offset,color_for(edge.kind));
+        }
+        for(std::size_t cell=0;cell<incident.size();++cell){
+            if(!rounded(cell))continue;
+            const auto& incoming=routes.edges[incident[cell][0]];
+            const auto center=point(cell);
+            const auto corner_trim=routes.base_corner_trim[cell];
+            const auto a=mix(center,point(other_end(incoming,cell)),corner_trim);
+            const auto b=mix(center,factory_lead[cell]?world_point(factory_lead[cell]->endpoint):
+                point(other_end(routes.edges[incident[cell][1]],cell)),corner_trim);
+            append_bend(a,center,b,half_width,color_for(incoming.kind));
+        }
+        }
+        const auto append_route_line=[&](Vec3f a,Vec3f b,float width,uint32_t color,bool dashed){
+            const auto offset=route_normal(a,b,width);
+            append_ribbon(dashed?mix(a,b,0.18F):a,dashed?mix(a,b,0.82F):b,offset,offset,color);
+        };
+        const auto draw_route_network=[&](const auto& edges,const std::vector<float>& trims,
+                                           const auto& visible,const auto& color_for_mask,float width,bool dashed){
+            struct Junction {
+                std::array<std::size_t,2> neighbors{};
+                unsigned count{};
+                unsigned mask{};
+            };
+            std::vector<Junction> junctions(trims.size());
+            const auto add_neighbor=[&](std::size_t cell,std::size_t neighbor,unsigned mask){
+                if(trims[cell]==0.F)return;
+                auto& junction=junctions[cell];
+                if(junction.count>=2U||(junction.count&&junction.mask!=mask)){junction.count=3;return;}
+                junction.mask=mask;
+                junction.neighbors[junction.count++]=neighbor;
+            };
+            for(const auto& edge:edges)
+                if(const auto mask=visible(edge)){
+                    add_neighbor(edge.first,edge.second,mask);
+                    add_neighbor(edge.second,edge.first,mask);
+                }
+            const auto round_at=[&](std::size_t cell){
+                const auto& junction=junctions[cell];
+                return junction.count==2U&&junction.neighbors[0]+junction.neighbors[1]!=2U*cell;
+            };
+            for(const auto& edge:edges){
+                const auto mask=visible(edge);
+                if(!mask)continue;
+                const auto a=point(edge.first),b=point(edge.second);
+                const auto start=round_at(edge.first)?mix(a,b,trims[edge.first]):a;
+                const auto end=round_at(edge.second)?mix(b,a,trims[edge.second]):b;
+                if(std::hypot(start.x-end.x,start.y-end.y)>0.0001F)
+                    append_route_line(start,end,width,color_for_mask(mask),dashed);
+            }
+            for(std::size_t cell=0;cell<junctions.size();++cell){
+                if(!round_at(cell))continue;
+                const auto& junction=junctions[cell];
+                const auto center=point(cell);
+                append_bend(mix(center,point(junction.neighbors[0]),trims[cell]),center,
+                    mix(center,point(junction.neighbors[1]),trims[cell]),width,color_for_mask(junction.mask),dashed);
+            }
+        };
+        if(!routes.alternate_base_edges.empty())
+            draw_route_network(routes.alternate_base_edges,routes.alternate_base_corner_trim,
+                [](const auto&){return 1U;},[](unsigned){return 0xE06CE9F5U;},0.11F,true);
+        constexpr float resource_width=0.075F;
+        if(!routes.resource_edges.empty()){
+            if(terrain_route_alternatives_)
+                draw_route_network(routes.resource_edges,routes.alternate_resource_corner_trim,
+                    [&](const auto& edge){return edge.alternate_factions&visible_factions;},
+                    [&](unsigned mask){return resource_color(mask,true);},0.095F,true);
+            if(draw_resource_routes)
+                draw_route_network(routes.resource_edges,routes.resource_corner_trim,
+                    [&](const auto& edge){return edge.factions&visible_factions;},
+                    [&](unsigned mask){return resource_color(mask,false);},resource_width,false);
+        }
+        for(const auto& lead:routes.resource_leads){
+            if(!(lead.faction&visible_factions)||(!draw_resource_routes&&!lead.alternate))continue;
+            append_route_line(world_point(lead.first),world_point(lead.second),resource_width,
+                resource_color(lead.faction,lead.alternate),lead.alternate);
+        }
+        if(draw_resource_routes)for(const auto& deposit:routes.resource_deposits){
+            auto center=point(deposit.cell);
+            center.x+=deposit.tritium?0.20F:-0.20F;
+            constexpr float radius=0.34F;
+            const auto color=(deposit.reachable_factions&visible_factions)==0?0xE0B3B3B3U:
+                deposit.tritium?0xFFC794FFU:0xFF96F066U;
+            constexpr std::array<Vec3f,4> corners{{{0.F,-radius,0.F},{radius,0.F,0.F},
+                {0.F,radius,0.F},{-radius,0.F,0.F}}};
+            for(std::size_t i=0;i<corners.size();++i)
+                append_route_line(add(center,corners[i]),add(center,corners[(i+1)%corners.size()]),0.065F,color,false);
+        }
+        }
+        if(site_overlay)draw_sites();
     }
     // Dynamic effect and building geometry may need the flat-palette fallback after the
     // static texture array has been uploaded. Reserve it now so the animation path never
@@ -8873,7 +9656,7 @@ void EditorApp::rebuild_objects(){
         texture_layers=std::move(ordered);
         for(auto& vertex:vertices){
             if(vertex.texture_layer>=slot_permutation.size())
-                throw std::runtime_error("static object vertex has out-of-range texture layer");
+                throw std::runtime_error(tr("static object vertex has out-of-range texture layer"));
             vertex.texture_layer=slot_permutation[vertex.texture_layer];
         }
         for(auto& [key,index]:layer_lookup){
@@ -9012,7 +9795,7 @@ bool EditorApp::bounds_visible_in_canvas(const AxisAlignedBounds& source_bounds,
 thandor::SimulationActorState& EditorApp::simulation_state_for(
     std::size_t placement_index,SimulationStateOrigin origin){
     if(!document_||placement_index>=document_->level().placements().size())
-        throw std::runtime_error("simulation placement index is out of range");
+        throw std::runtime_error(tr("simulation placement index is out of range"));
     if(const auto found=simulation_actor_states_.find(placement_index);
        found!=simulation_actor_states_.end())return found->second;
     const auto& placement=document_->level().placements()[placement_index];
@@ -9808,6 +10591,7 @@ void EditorApp::update_idle_class17_deployment(uint32_t presentation_tick){
 }
 
 void EditorApp::reset_simulation(bool keep_target){
+    clear_jandrenator_scene();
     if(simulation_lab_snapshot_||simulation_lab_worker_.snapshot()){
         simulation_lab_worker_.clear();
         simulation_lab_snapshot_.reset();
@@ -11035,8 +11819,8 @@ void EditorApp::play_runtime_spatial_sound(uint32_t sound_table_index,Vec3f worl
     const auto path=resolve_runtime_spatial_sound_path(sound_table_index);
     if(!path){
         ++audio_missing_samples_;
-        sound_playback_status_="Sound table index "+std::to_string(sound_table_index)+
-                               " has no unique LEV sound-template-matched SAM";
+        sound_playback_status_=std::string(tr("Sound table index "))+std::to_string(sound_table_index)+
+                               tr(" has no unique LEV sound-template-matched SAM");
         return;
     }
     try{
@@ -11047,10 +11831,10 @@ void EditorApp::play_runtime_spatial_sound(uint32_t sound_table_index,Vec3f worl
             found=sam_pcm_cache_.emplace(*path,std::move(decoded)).first;
         }
         if(thandor::play_pcm_one_shot(*found->second,gains.left_q15,gains.right_q15)){
-            ++audio_submitted_;sound_playback_status_="Queued positioned "+*path;
-        }else{++audio_backend_rejected_;sound_playback_status_="Audio backend unavailable for "+*path;}
+            ++audio_submitted_;sound_playback_status_=std::string(tr("Queued positioned "))+*path;
+        }else{++audio_backend_rejected_;sound_playback_status_=std::string(tr("Audio backend unavailable for "))+*path;}
     }catch(const std::exception& error){
-        sound_playback_status_="Sound decode/play failed: "+std::string(error.what());
+        sound_playback_status_=std::string(tr("Sound decode/play failed: "))+std::string(error.what());
     }
 }
 
@@ -11058,8 +11842,8 @@ void EditorApp::play_runtime_global_sound(uint32_t sound_table_index){
     if(!sound_playback_enabled_||sound_effects_gain_q15_==0U||sound_table_index==0U)return;
     const auto path=resolve_runtime_spatial_sound_path(sound_table_index);
     if(!path){
-        sound_playback_status_="Sound table index "+std::to_string(sound_table_index)+
-                               " has no unique LEV sound-template-matched SAM";
+        sound_playback_status_=std::string(tr("Sound table index "))+std::to_string(sound_table_index)+
+                               tr(" has no unique LEV sound-template-matched SAM");
         return;
     }
     try{
@@ -11072,10 +11856,10 @@ void EditorApp::play_runtime_global_sound(uint32_t sound_table_index){
         // ArmyRuntime_TryPlayMappedTerrainSoundAtWorldPoint dispatches g_SoundPlayOneShot with
         // the global SFX gain in both channels. It is deliberately not a positioned/spatial slot.
         if(thandor::play_pcm_one_shot(*found->second,sound_effects_gain_q15_,sound_effects_gain_q15_))
-            sound_playback_status_="Playing mapped terrain "+*path;
-        else sound_playback_status_="Audio backend unavailable for "+*path;
+            sound_playback_status_=std::string(tr("Playing mapped terrain "))+*path;
+        else sound_playback_status_=std::string(tr("Audio backend unavailable for "))+*path;
     }catch(const std::exception& error){
-        sound_playback_status_="Sound decode/play failed: "+std::string(error.what());
+        sound_playback_status_=std::string(tr("Sound decode/play failed: "))+std::string(error.what());
     }
 }
 
@@ -11134,8 +11918,8 @@ void EditorApp::reconcile_runtime_looping_sounds(
         const auto path=resolve_runtime_spatial_sound_path(sound_table_index);
         if(!path){
             ++audio_missing_samples_;looping_sound_start_failures_.insert(sound_table_index);
-            sound_playback_status_="Loop sound table index "+std::to_string(sound_table_index)+
-                                   " has no unique LEV sound-template-matched SAM";
+            sound_playback_status_=std::string(tr("Loop sound table index "))+std::to_string(sound_table_index)+
+                                   tr(" has no unique LEV sound-template-matched SAM");
             continue;
         }
         try{
@@ -11150,15 +11934,15 @@ void EditorApp::reconcile_runtime_looping_sounds(
             if(!voice){
                 ++audio_backend_rejected_;
                 backend_retry_after=backend_now+std::chrono::seconds(5);
-                sound_playback_status_="Audio backend unavailable for looping "+*path;
+                sound_playback_status_=std::string(tr("Audio backend unavailable for looping "))+*path;
                 continue;
             }
             active_looping_sounds_.emplace(sound_table_index,
                 ActiveLoopingSound{*path,std::move(voice)});
-            sound_playback_status_="Looping positioned "+*path;
+            sound_playback_status_=std::string(tr("Looping positioned "))+*path;
         }catch(const std::exception& error){
             looping_sound_start_failures_.insert(sound_table_index);
-            sound_playback_status_="Loop sound decode/play failed: "+std::string(error.what());
+            sound_playback_status_=std::string(tr("Loop sound decode/play failed: "))+std::string(error.what());
         }
     }
 }
@@ -11944,7 +12728,7 @@ void EditorApp::update_simulation(uint32_t presentation_tick){
 void EditorApp::commit_selected_simulation_position(){
     if(!document_||!selected_placement_)return;
     const auto found=simulation_actor_states_.find(*selected_placement_);
-    if(found==simulation_actor_states_.end()){status_="Selected unit has no simulated position.";return;}
+    if(found==simulation_actor_states_.end()){status_=tr("Selected unit has no simulated position.");return;}
     synchronize_simulated_actor_placement(*selected_placement_,found->second);
     simulation_actor_states_.erase(found);
     simulation_runtime_factions_.erase(*selected_placement_);
@@ -11953,24 +12737,24 @@ void EditorApp::commit_selected_simulation_position(){
     simulation_attack_point_targets_.erase(*selected_placement_);
     simulation_static_replacement_dirty_=true;
     last_dynamic_scene_tick_=std::numeric_limits<uint32_t>::max();
-    status_="Finished driving. The current X/Y and whole-placement yaw are already stored in the LEV record.";
+    status_=tr("Finished driving. The current X/Y and whole-placement yaw are already stored in the LEV record.");
 }
 
 void EditorApp::bake_selected_target_facing(){
     if(!document_||!selected_placement_){
-        status_="Select an armed tower/building first.";return;
+        status_=tr("Select an armed tower/building first.");return;
     }
     auto resolved_target=simulation_attack_target_point(*selected_placement_);
     if(!resolved_target&&simulation_target_point_)resolved_target=simulation_target_point_;
     if(!resolved_target){
-        status_="Assign an attack point or different-faction entity target first.";return;
+        status_=tr("Assign an attack point or different-faction entity target first.");return;
     }
     auto placements=document_->level().placements();
     if(*selected_placement_>=placements.size())return;
     auto& placement=placements[*selected_placement_];
     const auto* preset=catalog_.army_preset(placement.army_asset_id);
     if(!preset||placement_weapon_profiles(*preset,*selected_placement_).empty()){
-        status_="The selected placement has no recovered projectile weapon.";return;
+        status_=tr("The selected placement has no recovered projectile weapon.");return;
     }
     checkpoint();
     const auto& state=simulation_state_for(*selected_placement_);
@@ -11983,7 +12767,7 @@ void EditorApp::bake_selected_target_facing(){
     ++simulation_runtime_owner_revision_;
     simulation_static_replacement_dirty_=false;
     rebuild_objects();
-    status_="Baked whole-placement facing toward the target. LEV has no independent persistent turret-angle field.";
+    status_=tr("Baked whole-placement facing toward the target. LEV has no independent persistent turret-angle field.");
 }
 
 uint32_t EditorApp::fog_preview_observer_radius(
@@ -12124,7 +12908,8 @@ void EditorApp::rebuild_fog_preview_visibility(){
     fog_preview_visible_cell_count_=0U;
     fog_preview_explored_cell_count_=0U;
     fog_preview_observer_count_=0U;
-    if(!document_||fog_preview_mode_==0){
+    fog_preview_terrain_tints_.clear();
+    if(!document_||(fog_preview_mode_==0&&!fog_preview_tint_visible_terrain_)){
         fog_preview_occupancy_history_.clear();
         fog_preview_runtime_cells_.clear();
         fog_preview_history_document_=nullptr;
@@ -12151,7 +12936,7 @@ void EditorApp::rebuild_fog_preview_visibility(){
             const auto radius=thandor::simulation_lab_phase7_occlusion_preview_radius(run,entity);
             if(radius==0U)continue;
             if(fog_preview_mode_==1&&entity.faction_index!=static_cast<uint32_t>(fog_preview_faction_))continue;
-            if(fog_preview_mode_==2&&entity.faction_index>active_factions)continue;
+            if(fog_preview_mode_!=1&&entity.faction_index>active_factions)continue;
             const auto marker=thandor::retail_visibility_marker_for_model_class(entity.runtime_model_class_id);
             const auto owner=entity.faction_index;
             const uint64_t mask=run.level_runtime_enabled
@@ -12171,7 +12956,7 @@ void EditorApp::rebuild_fog_preview_visibility(){
         const auto& placement=placements[index];
         if(placement.faction_index==0U||placement.faction_index>7U)continue;
         if(fog_preview_mode_==1&&placement.faction_index!=static_cast<uint32_t>(fog_preview_faction_))continue;
-        if(fog_preview_mode_==2&&placement.faction_index>active_factions)continue;
+        if(fog_preview_mode_!=1&&placement.faction_index>active_factions)continue;
         const auto* preset=catalog_.army_preset(placement.army_asset_id);
         if(!preset||(preset->browser_kind!=thandor::PlacementBrowserKind::Unit&&
                      preset->browser_kind!=thandor::PlacementBrowserKind::Building))continue;
@@ -12373,10 +13158,31 @@ void EditorApp::rebuild_fog_preview_visibility(){
         }
     }
 
+    std::array<uint32_t,8> colours{};
+    const auto first=fog_preview_mode_==1?static_cast<uint32_t>(fog_preview_faction_):1U;
+    const auto last=fog_preview_mode_==1?first:active_factions;
+    if(fog_preview_tint_visible_terrain_){
+        fog_preview_terrain_tints_.resize(fog_preview_occupancy_history_.size());
+        for(uint32_t faction=first;faction<=last;++faction)
+            colours[faction]=thandor::graphics_family_representative_rgb24(graphics_family_for_faction(faction));
+    }
     for(std::size_t index=0;index<fog_preview_occupancy_history_.size();++index){
         const uint8_t occupancy=selected_source_byte(index);
         if(thandor::retail_fog_currently_visible(occupancy))++fog_preview_visible_cell_count_;
         if(thandor::retail_fog_explored(occupancy))++fog_preview_explored_cell_count_;
+        if(fog_preview_tint_visible_terrain_&&thandor::retail_fog_currently_visible(occupancy)){
+            uint32_t red=0,green=0,blue=0,count=0;
+            for(uint32_t faction=first;faction<=last;++faction){
+                if(!thandor::retail_fog_currently_visible(thandor::fog_occupancy_byte(
+                        fog_preview_occupancy_history_[index],faction)))continue;
+                const auto colour=colours[faction];
+                red+=(colour>>16U)&255U;
+                green+=(colour>>8U)&255U;
+                blue+=colour&255U;
+                ++count;
+            }
+            if(count)fog_preview_terrain_tints_[index]=((red/count)<<16U)|((green/count)<<8U)|(blue/count);
+        }
     }
 }
 
@@ -12394,14 +13200,14 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
         }
     }
     auto& cache=dynamic_model_cache_;
-    const std::array<uint32_t,15> cache_settings{static_cast<uint32_t>(fog_preview_mode_),
+    const std::array<uint32_t,16> cache_settings{static_cast<uint32_t>(fog_preview_mode_),
         static_cast<uint32_t>(fog_preview_faction_),fog_preview_all_explored_,animate_buildings_,
         animate_units_,animate_timed_effects_,animate_resource_fields_,projected_object_shadows_,
         simulation_lab_show_all_runs_,static_cast<uint32_t>(simulation_lab_selected_run_),
         lighting_cycle_preview_enabled_,lighting_cycle_preview_tick_,simulation_mode_,
-        show_movement_ground_marks_,simulation_runtime_owner_revision_};
+        show_movement_ground_marks_,simulation_runtime_owner_revision_,fog_preview_tint_visible_terrain_};
     const bool reuse_state=camera_only&&cache.valid&&!runtime_shadow_collector_&&document_&&
-        cache.document==document_.get()&&cache.snapshot==simulation_lab_snapshot_.get()&&
+        cache.document==document_.get()&&cache.snapshot==(jandrenator_scene_ ? static_cast<const void*>(jandrenator_scene_.get()) : simulation_lab_snapshot_.get())&&
         cache.settings==cache_settings&&cache.visual_tick==runtime_visual_tick&&
         cache.building_tick==current_building_animation_tick_;
     bool reuse_models=reuse_state;
@@ -12587,6 +13393,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
     std::optional<uint32_t> selected_lab_shot_model_tint;
     std::optional<uint32_t> selected_lab_effect_model_tint;
     bool rendering_independent_lab_effect=false;
+    const thandor::SimulationLabNativeVisual* native_visual=nullptr;
     EffectAppendFn append_effect_visual_recursive;
     LinkedShotAppendFn append_linked_shot_visual_recursive;
     std::size_t recursive_effect_spawn_count=0U;
@@ -12614,7 +13421,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
         const uint32_t lifetime=std::max(1U,thandor::effect_lifetime_ticks(definition));
         const auto& sprite=cached_sprite(definition.sprite_path);
         const auto& mesh=sprite.mesh();
-        if(mesh.indices.size()%3U!=0U)throw std::runtime_error("EFF preview mesh is not triangle aligned");
+        if(mesh.indices.size()%3U!=0U)throw std::runtime_error(tr("EFF preview mesh is not triangle aligned"));
         const Vec3f base_position=position;
         ModelHierarchyTransform base_authored;
         if(exact_runtime_angles){
@@ -12640,6 +13447,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
             base_authored.translation=saved_translation;
         }
         const auto pose_and_scale_at=[&](uint32_t pose_age){
+            if(native_visual) return std::pair{base_authored,native_visual->scale};
             const float progress=std::clamp(static_cast<float>(std::min(pose_age,lifetime))/
                 static_cast<float>(lifetime),0.0F,1.0F);
             const float start_scale=thandor::q12_to_float(definition.model_scale_x_q12);
@@ -12678,7 +13486,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
         bool emitted=false;
         const bool effect_currently_visible=fog_preview_mode_==0||
             fog_preview_point_visible(pose_and_scale_at(age_ticks).first.translation);
-        if(age_ticks<lifetime&&!mesh.indices.empty()&&(effect_currently_visible||emitting_command_overlay)){
+        if((native_visual||age_ticks<lifetime)&&!mesh.indices.empty()&&(effect_currently_visible||emitting_command_overlay)){
             const uint32_t frame=forced_frame.value_or(
                 thandor::effect_frame_index_at_age(definition,age_ticks));
             const auto [authored,scale]=pose_and_scale_at(age_ticks);
@@ -12695,19 +13503,19 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
             for(std::size_t triangle=0;triangle<mesh.indices.size();triangle+=3U){
                 const uint32_t ia=mesh.indices[triangle],ib=mesh.indices[triangle+1U],ic=mesh.indices[triangle+2U];
                 if(ia>=mesh.vertices.size()||ib>=mesh.vertices.size()||ic>=mesh.vertices.size())
-                    throw std::runtime_error("EFF preview index exceeds vertex stream");
+                    throw std::runtime_error(tr("EFF preview index exceeds vertex stream"));
                 const std::array<const thandor::SpriteMeshVertex*,3> corners{
                     &mesh.vertices[ia],&mesh.vertices[ib],&mesh.vertices[ic]};
                 const uint32_t base_subresource=corners[0]->texture_subresource;
                 const uint32_t render_flags=corners[0]->render_flags;
                 if(corners[1]->texture_subresource!=base_subresource||corners[2]->texture_subresource!=base_subresource||
                    corners[1]->render_flags!=render_flags||corners[2]->render_flags!=render_flags)
-                    throw std::runtime_error("EFF triangle mixes material state");
+                    throw std::runtime_error(tr("EFF triangle mixes material state"));
                 const bool untextured=base_subresource==std::numeric_limits<uint32_t>::max();
                 const auto primitive=classify_directdraw_direct3d_sprite_primitive(render_flags,!untextured);
                 if(!primitive.supported)continue;
                 if(next.vertices.size()+3U>kMaximumDynamicVertices||next.indices.size()+3U>kMaximumDynamicIndices)
-                    throw std::runtime_error("dynamic effect geometry limit exceeded");
+                    throw std::runtime_error(tr("dynamic effect geometry limit exceeded"));
                 const uint32_t texture_subresource=untextured?base_subresource:base_subresource+frame;
                 const uint32_t layer=untextured?untextured_layer():
                     (army_graphics?object_layer(0U,graphics_faction,texture_subresource):
@@ -12718,7 +13526,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
                     if(!untextured){
                         const auto subresources=family.graphics.subresources();
                         if(texture_subresource>=subresources.size())
-                            throw std::runtime_error("EFF frame selects missing GFX subresource");
+                            throw std::runtime_error(tr("EFF frame selects missing GFX subresource"));
                         const auto& subresource=subresources[texture_subresource];
                         uv=thandor::normalize_sprite_texture_uv(source->texture_u,source->texture_v,
                             subresource.pixel_width,subresource.pixel_height);
@@ -12774,7 +13582,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
         // Transition states 0 and 1 decrement EFF +0x10 only when the Q4 animation accumulator
         // completes a sprite frame. The terminal frame unlinks before transition dispatch, so it
         // cannot emit a linked effect. Invisible controller SPR records still execute this branch.
-        if(recursion_depth<8U){
+        if(!native_visual&&recursion_depth<8U){
             if(const auto linked_effect_tick=thandor::effect_linked_effect_spawn_tick(definition);
                linked_effect_tick.has_value()&&age_ticks>=*linked_effect_tick){
                 const uint32_t spawn_tick=*linked_effect_tick;
@@ -12972,7 +13780,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
             ++dynamic_plain_cache_hits_;
             if(cache.scene.vertices.size()>kMaximumDynamicVertices||
                cache.scene.indices.size()>kMaximumDynamicIndices)
-                throw std::runtime_error("cached simulation geometry limit exceeded");
+                throw std::runtime_error(tr("cached simulation geometry limit exceeded"));
             next.vertices=cache.scene.vertices;
             next.indices=cache.scene.indices;
             next.draw_runs=cache.scene.draw_runs;
@@ -12993,7 +13801,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
             const auto base=next.vertices.size(),first=next.indices.size();
             if(base+step.end_vertex-step.first_vertex>kMaximumDynamicVertices||
                first+step.end_index-step.first_index>kMaximumDynamicIndices)
-                throw std::runtime_error("cached simulation geometry limit exceeded");
+                throw std::runtime_error(tr("cached simulation geometry limit exceeded"));
             next.vertices.insert(next.vertices.end(),cache.scene.vertices.begin()+step.first_vertex,
                 cache.scene.vertices.begin()+step.end_vertex);
             for(std::size_t i=step.first_index;i<step.end_index;++i)
@@ -13376,7 +14184,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
                     :classify_resource_preview_primitive(flags,!untextured,resource_role);
                 if(!primitive.supported)continue;
                 if(next.vertices.size()+3U>kMaximumDynamicVertices||next.indices.size()+3U>kMaximumDynamicIndices)
-                    throw std::runtime_error("visible simulation geometry limit exceeded");
+                    throw std::runtime_error(tr("visible simulation geometry limit exceeded"));
                 const uint32_t base=static_cast<uint32_t>(next.vertices.size());
                 for(const auto* source:corners){
                     const uint32_t layer=untextured?untextured_layer():object_layer(runtime_faction,graphics_family,source->texture_subresource);
@@ -13384,7 +14192,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
                     if(!untextured){
                         const auto subresources=family.graphics.subresources();
                         if(source->texture_subresource>=subresources.size())
-                            throw std::runtime_error("dynamic actor selects missing GFX subresource");
+                            throw std::runtime_error(tr("dynamic actor selects missing GFX subresource"));
                         const auto& metadata=subresources[source->texture_subresource];
                         uv=thandor::normalize_sprite_texture_uv(source->texture_u,source->texture_v,
                             metadata.pixel_width,metadata.pixel_height);
@@ -13595,11 +14403,13 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
                     }
                 }
             }
-            if(node_active)instance.sprite=node_sprite;
+            use_native_model_pose(instance,node,instances,lab_runtime,node_active);
+            if(node_active)instance.sprite=node_sprite ? node_sprite : &cached_sprite(node.sprite_path);
             active.push_back(node_active);instances.push_back(instance);
         }
         if(receipt)receipt->active_model_nodes=static_cast<uint32_t>(std::count(active.begin(),active.end(),true));
-        apply_walker_pose_to_instances(*preset,hierarchy,instances,&actor,
+        if(!lab_runtime || lab_runtime->native_model_poses.empty())
+            apply_walker_pose_to_instances(*preset,hierarchy,instances,&actor,
             [&](float x,float y){return terrain_height_near(x,y);});
         if(runtime_shadow_collector_)collect_runtime_shadow(runtime_shadow_owner(lab_runtime,transient_serial,linked_child!=nullptr),
             *preset,instances,active,actor.position,actor.body_yaw_turn16,fog_flags);
@@ -13625,18 +14435,25 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
                 const auto primitive=classify_directdraw_direct3d_sprite_primitive(flags,!untextured);
                 if(!primitive.supported)continue;
                 if(next.vertices.size()+3U>kMaximumDynamicVertices||next.indices.size()+3U>kMaximumDynamicIndices)
-                    throw std::runtime_error("transient simulation entity geometry limit exceeded");
+                    throw std::runtime_error(tr("transient simulation entity geometry limit exceeded"));
                 const uint32_t base=static_cast<uint32_t>(next.vertices.size());
                 for(const auto* source:corners){
                     const uint32_t layer=untextured?untextured_layer():object_layer(texture_runtime_faction,texture_graphics_family,subresource);
                     thandor::SpriteTextureUv uv{};
                     if(!untextured){
                         if(subresource>=family.graphics.subresources().size())
-                            throw std::runtime_error("transient simulation entity selects missing GFX subresource");
+                            throw std::runtime_error(tr("transient simulation entity selects missing GFX subresource"));
                         const auto& metadata=family.graphics.subresources()[subresource];
                         uv=thandor::normalize_sprite_texture_uv(source->texture_u,source->texture_v,
                             metadata.pixel_width,metadata.pixel_height);
-                        if(preset->runtime_model_class_id==2U){
+                        if(instance.native_pose){
+                            const auto& pose=*instance.native_pose;
+                            const auto offset=subresource==pose.primary_texture?0U:subresource==pose.secondary_texture?2U:4U;
+                            if(offset<4U){
+                                uv.u+=thandor::normalize_model_texture_offset_u(pose.texture_offsets[offset],metadata.pixel_width,metadata.pixel_height);
+                                uv.v+=thandor::normalize_model_texture_offset_v(pose.texture_offsets[offset+1],metadata.pixel_width,metadata.pixel_height);
+                            }
+                        } else if(preset->runtime_model_class_id==2U){
                             if(subresource==preset->primary_animated_subresource)
                                 uv.u+=thandor::normalize_model_texture_offset_u(
                                     actor.primary_track_texture_offset_u,
@@ -13670,7 +14487,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
             }
         }
         result(emitted?"submitted":"empty_hierarchy",emitted);
-        if(animate_timed_effects_&&(lab_runtime!=nullptr ||
+        if(!jandrenator_scene_&&animate_timed_effects_&&(lab_runtime!=nullptr ||
            (maximum_integrity>0&&integrity>0&&integrity<maximum_integrity))){
             const int32_t integrity_percent=maximum_integrity>0
                 ?static_cast<int32_t>(std::clamp<int64_t>(
@@ -13872,7 +14689,8 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
                         }
                     }
                 }
-                if(node_active)instance.sprite=node_sprite;
+                use_native_model_pose(instance,node,instances,&entity,node_active);
+                if(node_active)instance.sprite=node_sprite ? node_sprite : &cached_sprite(node.sprite_path);
                 active.push_back(node_active);instances.push_back(instance);
             }
 
@@ -13899,31 +14717,38 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
                     const uint32_t ia=mesh.indices[triangle],ib=mesh.indices[triangle+1U],
                                    ic=mesh.indices[triangle+2U];
                     if(ia>=mesh.vertices.size()||ib>=mesh.vertices.size()||ic>=mesh.vertices.size())
-                        throw std::runtime_error("Simulation Lab construction SPR index exceeds vertex stream");
+                        throw std::runtime_error(tr("Simulation Lab construction SPR index exceeds vertex stream"));
                     const std::array<const thandor::SpriteMeshVertex*,3> corners{
                         &mesh.vertices[ia],&mesh.vertices[ib],&mesh.vertices[ic]};
                     const uint32_t subresource=corners[0]->texture_subresource;
                     const bool untextured=subresource==std::numeric_limits<uint32_t>::max();
                     if(corners[1]->texture_subresource!=subresource||corners[2]->texture_subresource!=subresource)
-                        throw std::runtime_error("Simulation Lab construction triangle mixes texture subresources");
+                        throw std::runtime_error(tr("Simulation Lab construction triangle mixes texture subresources"));
                     const uint32_t render_flags=corners[0]->render_flags;
                     const auto primitive=classify_resource_preview_primitive(
                         render_flags,!untextured,ResourcePrimitiveRole::None);
                     if(!primitive.supported)continue;
                     if(next.vertices.size()+3U>kMaximumDynamicVertices||
                        next.indices.size()+3U>kMaximumDynamicIndices)
-                        throw std::runtime_error("Simulation Lab construction geometry limit exceeded");
+                        throw std::runtime_error(tr("Simulation Lab construction geometry limit exceeded"));
                     const uint32_t base=static_cast<uint32_t>(next.vertices.size());
                     for(const auto* source:corners){
                         uint32_t layer=untextured?untextured_layer():object_layer(texture_runtime_faction,texture_graphics_family,subresource);
                         thandor::SpriteTextureUv uv{};
                         if(!untextured){
                             if(subresource>=family.graphics.subresources().size())
-                                throw std::runtime_error("Simulation Lab construction selects missing GFX subresource");
+                                throw std::runtime_error(tr("Simulation Lab construction selects missing GFX subresource"));
                             const auto& metadata=family.graphics.subresources()[subresource];
                             uv=thandor::normalize_sprite_texture_uv(source->texture_u,source->texture_v,
                                 metadata.pixel_width,metadata.pixel_height);
-                            if(instance.root&&producer&&subresource==preset->primary_animated_subresource)
+                            if(instance.native_pose){
+                                const auto& pose=*instance.native_pose;
+                                const auto offset=subresource==pose.primary_texture?0U:subresource==pose.secondary_texture?2U:4U;
+                                if(offset<4U){
+                                    uv.u+=thandor::normalize_model_texture_offset_u(pose.texture_offsets[offset],metadata.pixel_width,metadata.pixel_height);
+                                    uv.v+=thandor::normalize_model_texture_offset_v(pose.texture_offsets[offset+1],metadata.pixel_width,metadata.pixel_height);
+                                }
+                            }else if(instance.root&&producer&&subresource==preset->primary_animated_subresource)
                                 uv.v+=thandor::normalize_model_texture_offset_v(
                                     static_cast<int32_t>(entity.production_door_texture_offset_v),
                                     metadata.pixel_width,metadata.pixel_height);
@@ -13956,7 +14781,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
             // which already emits these authored MDL +0x250/+0x254 damage effects for units.
             // Select by live component integrity, not the root-only compatibility summary:
             // a damaged turret can smoke while the building root remains healthy.
-            if(emitted && animate_timed_effects_ && entity.construction_complete){
+            if(!jandrenator_scene_ && emitted && animate_timed_effects_ && entity.construction_complete){
                 for(std::size_t node_index=0;node_index<hierarchy.size();++node_index){
                     if(node_index>=active.size() || !active[node_index] ||
                        instances[node_index].sprite==nullptr)continue;
@@ -14017,7 +14842,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
         const auto append_ghost_triangle=[&](Vec3f a,Vec3f b,Vec3f c,uint32_t color){
             if(next.vertices.size()+3U>kMaximumDynamicVertices||
                next.indices.size()+3U>kMaximumDynamicIndices)
-                throw std::runtime_error("Simulation Lab ghost geometry limit exceeded");
+                throw std::runtime_error(tr("Simulation Lab ghost geometry limit exceeded"));
             const Vec3f normal=normalize(cross(sub(b,a),sub(c,a)));
             const uint32_t base=static_cast<uint32_t>(next.vertices.size());
             next.vertices.push_back(ObjectVertex{a,normal,0.0F,0.0F,ghost_layer,color,1U,0.0F,0.0F});
@@ -14179,7 +15004,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
         const uint32_t base=static_cast<uint32_t>(next.shadow_vertices.size());
         if(next.shadow_vertices.size()+shadow.receiver_vertices.size()>kMaximumDynamicVertices||
            next.shadow_indices.size()+shadow.receiver_indices.size()>kMaximumDynamicIndices)
-            throw std::runtime_error("dynamic actor shadow geometry limit exceeded");
+            throw std::runtime_error(tr("dynamic actor shadow geometry limit exceeded"));
         const auto* projected=shadow.projected_pose_cache.find(shadow_position,shadow_yaw);
         if(projected){
             ++generated_shadow_pose_cache_hits_;
@@ -14211,7 +15036,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
             const uint32_t ib=shadow.receiver_indices[index+1U];
             const uint32_t ic=shadow.receiver_indices[index+2U];
             if(ia>=projected->size()||ib>=projected->size()||ic>=projected->size())
-                throw std::runtime_error("dynamic shadow receiver index exceeds cached vertex stream");
+                throw std::runtime_error(tr("dynamic shadow receiver index exceeds cached vertex stream"));
             if(shadow_receiver_triangle_is_upright((*projected)[ia].position,
                                                   (*projected)[ib].position,
                                                   (*projected)[ic].position)) {
@@ -14225,9 +15050,9 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
     cache.scene.shadow_vertices=next.shadow_vertices;cache.scene.shadow_indices=next.shadow_indices;
     }
     cache.visual_tick=runtime_visual_tick;cache.building_tick=current_building_animation_tick_;
-    cache.document=document_.get();cache.snapshot=simulation_lab_snapshot_.get();cache.settings=cache_settings;
+    cache.document=document_.get();cache.snapshot=jandrenator_scene_ ? static_cast<const void*>(jandrenator_scene_.get()) : simulation_lab_snapshot_.get();cache.settings=cache_settings;
     const auto shadow_finished=std::chrono::steady_clock::now();
-    if(!timed_effect_controllers_.empty()&&(animate_timed_effects_||animate_resource_fields_)){
+    if(!jandrenator_scene_&&!timed_effect_controllers_.empty()&&(animate_timed_effects_||animate_resource_fields_)){
         struct ResolvedTimedEffectPose {
             Vec3f root_position{};
             ModelHierarchyTransform root_orientation{};
@@ -14428,6 +15253,40 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
         }
     }
 
+    if(jandrenator_scene_){
+        for(const auto& light:jandrenator_scene_->native_lights){
+            if(!fog_preview_point_visible(light.position))continue;
+            const auto color=thandor::unpack_argb(0xff000000U|light.rgb);
+            constexpr float cycle_ticks=16777216.F;
+            next.shading_emitters.push_back(ResourceShadingEmitter{light.position,light.radius,
+                color.r,color.g,color.b,cycle_ticks,0.F,0.F,cycle_ticks,0.F});
+        }
+        for(const auto& visual:jandrenator_scene_->native_visuals){
+            const ModelHierarchyTransform pose{visual.pose.basis,visual.pose.position};
+            const float yaw=std::atan2(pose.basis[3],pose.basis[0]);
+            native_visual=&visual;
+            rendering_independent_lab_effect=true;
+            selected_lab_effect_model_tint=visual.tint;
+            if(visual.shot){
+                if(const auto* shot=catalog_.shot_definition(visual.definition_id)){
+                    thandor::EffectDefinitionRecord flight;
+                    flight.definition_id=0x80000000U|visual.definition_id;
+                    flight.runtime_value_0c=std::max(1U,shot->projectile_lifetime_ticks);
+                    flight.frame_advance_threshold_q4=16U;
+                    flight.sprite_path=shot->sprite_path;
+                    const auto beam=shot->trajectory_mode==0?std::optional<float>{visual.beam_length}:std::nullopt;
+                    append_effect_visual_recursive(flight,pose.translation,visual.age,yaw,0U,&pose,
+                        visual.frame,graphics_family_for_faction(visual.faction),0U,beam,std::nullopt);
+                }
+            }else if(const auto* effect=catalog_.effect_definition(visual.definition_id)){
+                append_effect_visual(*effect,pose.translation,visual.age,yaw,0U,&pose,visual.frame);
+            }
+            selected_lab_effect_model_tint.reset();
+            rendering_independent_lab_effect=false;
+            native_visual=nullptr;
+        }
+    }
+
     // Retail EGATH0/EWAYP0/ETARG0 geometry; faction tint is an editor overlay choice.
     const auto command_marker_start=std::chrono::steady_clock::now();
     command_marker_diagnostics_={};
@@ -14523,7 +15382,7 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
         }
     }
 
-    if(animate_timed_effects_&&!damage_effect_controllers_.empty()){
+    if(!jandrenator_scene_&&animate_timed_effects_&&!damage_effect_controllers_.empty()){
         const auto lab_damage_runs=simulation_lab_active()?simulation_lab_runs():
             std::span<const thandor::SimulationLabRun>{};
         const thandor::SimulationLabRun* lab_damage_run=lab_damage_runs.empty()?nullptr:
@@ -14812,14 +15671,15 @@ void EditorApp::rebuild_dynamic_scene_cpu(bool camera_only){
 }
 
 void EditorApp::upload_dynamic_scene(uint32_t frame_index){
-    if(frame_index>=VulkanContext::kFramesInFlight)throw std::runtime_error("dynamic upload frame index is out of range");
+    if(frame_index>=VulkanContext::kFramesInFlight)throw std::runtime_error(tr("dynamic upload frame index is out of range"));
     if(uploaded_dynamic_scene_revisions_[frame_index]==dynamic_scene_revision_)return;
     auto performance_timer=editor_performance_log_.measure(EditorPerfStage::DynamicUpload);
     renderer_.update_dynamic_objects(frame_index,dynamic_scene_cpu_.vertices,
         dynamic_scene_cpu_.indices,dynamic_scene_cpu_.draw_runs,
         dynamic_scene_cpu_.shadow_vertices,dynamic_scene_cpu_.shadow_indices);
     renderer_.update_resource_shading(frame_index,dynamic_scene_cpu_.shading_emitters);
-    renderer_.update_fog_visibility(frame_index,fog_preview_runtime_cells_,fog_preview_mode_!=0);
+    renderer_.update_fog_visibility(frame_index,fog_preview_runtime_cells_,fog_preview_mode_!=0,
+        fog_preview_terrain_tints_);
     uploaded_dynamic_scene_revisions_[frame_index]=dynamic_scene_revision_;
 }
 
@@ -14838,8 +15698,8 @@ void EditorApp::capture_faction_camera_start(uint32_t faction_index){
     checkpoint();
     document_->level().set_faction_camera_start(faction_index,bookmark);
     document_->mark_dirty();
-    status_="Saved the current view into faction "+std::to_string(faction_index)+
-        " LEV camera record.";
+    status_=tr("Saved the current view into faction ")+std::to_string(faction_index)+
+        tr(" LEV camera record.");
 }
 
 void EditorApp::focus_faction_camera_start(uint32_t faction_index){
@@ -14867,8 +15727,8 @@ void EditorApp::focus_faction_camera_start(uint32_t faction_index){
                                2.0F*std::numbers::pi_v<float>);
     camera_.pitch=std::clamp(-pitch,Camera::kMinimumPitch,Camera::kMaximumPitch);
     const uint32_t family=graphics_family_for_faction(faction_index);
-    status_=std::string("Loaded ")+thandor::graphics_family_single_player_faction_name(family)+
-        " (faction "+std::to_string(faction_index)+") camera start from the LEV header.";
+    status_=std::string(tr("Loaded "))+thandor::graphics_family_single_player_faction_name(family)+
+        tr(" (faction ")+std::to_string(faction_index)+tr(") camera start from the LEV header.");
 }
 
 void EditorApp::aim_camera_at_faction_start_vehicle(uint32_t faction_index){
@@ -14879,22 +15739,22 @@ void EditorApp::aim_camera_at_faction_start_vehicle(uint32_t faction_index){
         const float y=placement.render_y();
         camera_.target={x,y,terrain_height_near(x,y)};
         const uint32_t family=graphics_family_for_faction(faction_index);
-        status_=std::string("Aimed the editor view at ")+
-            thandor::graphics_family_single_player_faction_name(family)+" (faction "+
-            std::to_string(faction_index)+") start vehicle. Adjust the view, then save it as the faction camera.";
+        status_=std::string(tr("Aimed the editor view at "))+
+            thandor::graphics_family_single_player_faction_name(family)+tr(" (faction ")+
+            std::to_string(faction_index)+tr(") start vehicle. Adjust the view, then save it as the faction camera.");
         return;
     }
     const uint32_t family=graphics_family_for_faction(faction_index);
-    status_=std::string(thandor::graphics_family_single_player_faction_name(family))+" (faction "+
-        std::to_string(faction_index)+") has no stock player-start vehicle (ARM 50).";
+    status_=std::string(thandor::graphics_family_single_player_faction_name(family))+tr(" (faction ")+
+        std::to_string(faction_index)+tr(") has no stock player-start vehicle (ARM 50).");
 }
 
 void EditorApp::center_camera(){if(!document_)return;const auto& f=document_->field();const auto& a=f.at(0,0);const auto& b=f.at(f.width()-1,f.height()-1);camera_.target={(thandor::q12_to_float(a.world_x_q12)+thandor::q12_to_float(b.world_x_q12))*0.5f,(thandor::q12_to_float(a.world_y_q12)+thandor::q12_to_float(b.world_y_q12))*0.5f,0};camera_.distance=std::max(15.0f,std::hypot(thandor::q12_to_float(b.world_x_q12-a.world_x_q12),thandor::q12_to_float(b.world_y_q12-a.world_y_q12))*0.9f);}
 EditorApp::Snapshot EditorApp::snapshot()const{return {document_->field().serialize(),document_->level().serialize(),std::vector<thandor::PlacementTag>(document_->placement_tags().begin(),document_->placement_tags().end()),document_->faction_technology_masks(),document_->map_name(),document_->display_name(),document_->author(),document_->default_human_faction(),document_->scenario_record_bytes(),document_->level_text_bytes()};}
 void EditorApp::restore(const Snapshot& s){reset_terrain_generator();document_->field()=thandor::FieldGrid::parse(s.field);document_->level()=thandor::LevelAsset::parse(s.level);document_->placement_tags()=s.tags;document_->faction_technology_masks()=s.faction_technology_masks;document_->set_map_name(s.map_name);document_->set_display_name(s.display_name);document_->set_author(s.author);document_->set_default_human_faction(s.default_human_faction);document_->restore_editor_metadata(s.scenario_record,s.level_text);document_->mark_dirty();selected_edit_index_.reset();faction_technology_hierarchy_cache_.clear();faction_technology_weapon_profile_cache_.clear();asset_preview_cache_.clear();reset_simulation(true);refresh_scenario_text_buffers();load_materials();rebuild_mesh();}
 void EditorApp::checkpoint(){if(!document_)return;undo_.push_back(snapshot());if(undo_.size()>64)undo_.erase(undo_.begin());redo_.clear();}
-void EditorApp::undo(){if(undo_.empty()||!document_)return;redo_.push_back(snapshot());auto s=std::move(undo_.back());undo_.pop_back();restore(s);status_="Undo";}
-void EditorApp::redo(){if(redo_.empty()||!document_)return;undo_.push_back(snapshot());auto s=std::move(redo_.back());redo_.pop_back();restore(s);status_="Redo";}
+void EditorApp::undo(){if(undo_.empty()||!document_)return;redo_.push_back(snapshot());auto s=std::move(undo_.back());undo_.pop_back();restore(s);status_=tr("Undo");}
+void EditorApp::redo(){if(redo_.empty()||!document_)return;undo_.push_back(snapshot());auto s=std::move(redo_.back());redo_.pop_back();restore(s);status_=tr("Redo");}
 thandor::PlacementRole EditorApp::placement_role_for_preset(
     const thandor::ArmyAssetPreset& preset) const noexcept {
     if(thandor::placement_is_resource(preset))return thandor::PlacementRole::Resource;
@@ -14932,9 +15792,44 @@ bool EditorApp::placement_has_required_resource_support(
         x,y,preset.placement_occupancy_class);
 }
 
-const thandor::ArmyAssetPreset* EditorApp::terrain_overlay_profile() const noexcept {
+thandor::AccessRoutes EditorApp::plan_terrain_access_routes() {
+    const bool defence_sites=terrain_overlay_has_defence_sites();
+    const bool alternate_only=terrain_overlay_only_alternate_routes();
+    const bool sites_only=(defence_sites||terrain_overlay_has_planning_sites())&&
+        !terrain_overlay_has_base_routes()&&!terrain_overlay_has_resource_routes();
+    auto routes = thandor::plan_map_access_routes(catalog_, *document_,
+        {.bases=terrain_overlay_has_base_routes()||alternate_only||sites_only,
+         .resources=terrain_overlay_has_resource_routes()||alternate_only||sites_only,
+         .alternatives=terrain_route_alternatives_,.defences=defence_sites,
+         .radar_sites=terrain_radar_sites_,.pioneer_sites=terrain_pioneer_sites_,.alternate_bases=terrain_alternate_bases_});
+    terrain_route_bases_ = routes.base_count;
+    terrain_route_connected_pairs_ = routes.connected_pairs;
+    terrain_route_networks_ = routes.base_networks;
+    terrain_route_connected_factories_ = routes.connected_factories;
+    terrain_route_factories_ = routes.factory_count;
+    terrain_route_relocated_starts_ = routes.relocated_starts.size();
+    terrain_route_factory_starts_ = routes.factory_start_count;
+    terrain_route_alternate_base_pairs_ = routes.alternate_base_pairs;
+    terrain_route_resource_deposits_ = routes.resource_deposits.size();
+    terrain_defence_wall_sites_=routes.wall_sites.size();
+    terrain_defence_sites_=routes.defence_sites.size();
+    terrain_rally_sites_=routes.rally_sites.size();
+    const auto factions=terrain_route_resource_faction_>0 ? 1U<<(terrain_route_resource_faction_-1) : 0xFFU;
+    const auto visible=[&](const auto& site){return (site.factions&factions)!=0;};
+    terrain_radar_site_count_=static_cast<std::size_t>(std::count_if(routes.radar_sites.begin(),routes.radar_sites.end(),visible));
+    terrain_pioneer_site_count_=static_cast<std::size_t>(std::count_if(routes.pioneer_sites.begin(),routes.pioneer_sites.end(),visible));
+    terrain_alternate_base_count_=static_cast<std::size_t>(std::count_if(routes.alternate_bases.begin(),routes.alternate_bases.end(),visible));
+    terrain_alternate_base_factions_=static_cast<unsigned>(std::popcount(routes.alternate_base_factions));
+    terrain_route_resource_connections_.fill(0);
+    for(const auto& deposit:routes.resource_deposits)
+        for(std::size_t faction=0;faction<terrain_route_resource_connections_.size();++faction)
+            terrain_route_resource_connections_[faction]+=(deposit.reachable_factions&(1U<<faction))!=0;
+    return routes;
+}
+
+const thandor::ArmyAssetPreset* EditorApp::terrain_overlay_profile(TerrainOverlayMode mode) const noexcept {
     const auto* selected=catalog_.army_preset(selected_asset_id_);
-    if(terrain_compatibility_overlay_==1){
+    if(mode==TerrainOverlayVehicle){
         if(selected!=nullptr&&selected->has_traversal_profile&&
            (selected->browser_kind==thandor::PlacementBrowserKind::Unit||
             selected->visual_kind==thandor::PlacementVisualKind::PlayerStart))return selected;
@@ -14944,12 +15839,14 @@ const thandor::ArmyAssetPreset* EditorApp::terrain_overlay_profile() const noexc
             if(preset.browser_visible&&preset.has_traversal_profile&&
                preset.browser_kind==thandor::PlacementBrowserKind::Unit)return &preset;
     }
-    if(terrain_compatibility_overlay_==2){
-        if(selected!=nullptr&&selected->has_placement_occupancy_class&&
-           selected->browser_kind==thandor::PlacementBrowserKind::Building)return selected;
+    if(mode==TerrainOverlayBuilding){
+        const auto is_ordinary_building=[](const thandor::ArmyAssetPreset& preset){
+            return preset.browser_kind==thandor::PlacementBrowserKind::Building&&
+                !preset.has_placement_occupancy_class;
+        };
+        if(selected&&is_ordinary_building(*selected))return selected;
         for(const auto& preset:catalog_.army_presets())
-            if(preset.browser_visible&&preset.has_placement_occupancy_class&&
-               preset.browser_kind==thandor::PlacementBrowserKind::Building)return &preset;
+            if(preset.browser_visible&&is_ordinary_building(preset))return &preset;
     }
     return nullptr;
 }
@@ -15015,14 +15912,14 @@ void EditorApp::add_asset_placement(uint32_t x,uint32_t y,uint32_t asset_id){
     if(!document_||x>=document_->field().width()||y>=document_->field().height())return;
     const auto* preset=catalog_.army_preset(asset_id);
     if(preset==nullptr){
-        status_="ARM registry ID "+std::to_string(asset_id)+" is not available in the asset catalog.";
+        status_=tr("ARM registry ID ")+std::to_string(asset_id)+tr(" is not available in the asset catalog.");
         return;
     }
     const std::string compatibility=catalog_.placement_compatibility_diagnostic(
         *preset,document_->level());
     if(!compatibility.empty()){
-        status_="Cannot place "+preset->display_name+": "+compatibility+
-            ". Use a game-ready card for this base map; raw/internal records remain in Files.";
+        status_=tr("Cannot place ")+preset->display_name+": "+compatibility+
+            tr(". Use a game-ready card for this base map; raw/internal records remain in Files.");
         return;
     }
     const auto role=placement_role_for_preset(*preset);
@@ -15034,10 +15931,10 @@ void EditorApp::add_asset_placement(uint32_t x,uint32_t y,uint32_t asset_id){
     if(preset->has_placement_occupancy_class&&
        document_->field().terrain_rejects_placement_occupancy_class(
            x,y,preset->placement_occupancy_class)){
-        const char* support=preset->placement_occupancy_class==0U?"Xenite field (FLD 0x0800)":
-            (preset->placement_occupancy_class==1U?"Tritium field (FLD 0x1000)":"required resource field");
-        status_="Cannot place "+preset->display_name+": runtime class 14 requires "+support+
-            " at the building centre. Place/paint the matching deposit field first.";
+        const char* support=preset->placement_occupancy_class==0U?tr("Xenite field (FLD 0x0800)"):
+            (preset->placement_occupancy_class==1U?tr("Tritium field (FLD 0x1000)"):tr("required resource field"));
+        status_=tr("Cannot place ")+preset->display_name+tr(": runtime class 14 requires ")+support+
+            tr(" at the building centre. Place/paint the matching deposit field first.");
         return;
     }
 
@@ -15072,11 +15969,11 @@ void EditorApp::add_asset_placement(uint32_t x,uint32_t y,uint32_t asset_id){
     }
     rebuild_objects();
 
-    status_="Placed "+preset->display_name+" (ARM "+std::to_string(placed_asset_id)+") from the 3D asset browser.";
+    status_=tr("Placed ")+preset->display_name+tr(" (ARM ")+std::to_string(placed_asset_id)+tr(") from the 3D asset browser.");
     if(placed_asset_id!=asset_id)
         status_+=" The selected stock alias "+std::to_string(asset_id)+" was normalized to the canonical ID.";
     if(preset->has_placement_occupancy_class){
-        const char* support=preset->placement_occupancy_class==0U?"Xenite":"Tritium";
+        const char* support=preset->placement_occupancy_class==0U?tr("Xenite"):tr("Tritium");
         status_+=" Resource extractor is bound to the underlying "+std::string(support)+
             " support field; its class-14 model animation is active only while that support bit is present.";
     }
@@ -15094,7 +15991,7 @@ void EditorApp::add_placement(uint32_t x,uint32_t y,thandor::PlacementRole role)
         const auto* preset=catalog_.army_preset(asset_id);
         if(preset==nullptr||(preset->visual_kind!=thandor::PlacementVisualKind::PowerResource&&
                             preset->visual_kind!=thandor::PlacementVisualKind::BuildingResource)){
-            status_="Select the single blue energy-resource or gold building-resource card before placing a buildable deposit.";
+            status_=tr("Select the single blue energy-resource or gold building-resource card before placing a buildable deposit.");
             return;
         }
     }
@@ -15106,7 +16003,7 @@ void EditorApp::export_game_level_package(){
         const auto issues=catalog_.validate_level_placements(document_->level());
         if(!issues.empty()){
             const auto& first=issues.front();
-            throw std::runtime_error("game export blocked: "+std::to_string(issues.size())+
+            throw std::runtime_error(tr("game export blocked: ")+std::to_string(issues.size())+
                 " placement(s) have an unavailable ARM/MDL chain; first is placement "+
                 std::to_string(first.placement_index)+" ARM "+std::to_string(first.registry_id)+
                 ": "+first.message);
@@ -15114,8 +16011,8 @@ void EditorApp::export_game_level_package(){
         const auto path=document_->export_game_level_package(
             catalog_.game_root(),level_package_slot_,backup_existing_level_package_);
         document_->mark_clean();
-        status_="Installed and runtime-validated "+path.filename().string()+
-            "; PATCH00 page-0x22/0x23 aliases were synchronized and stale map shadows were removed. Restart the game.";
+        status_=tr("Installed and runtime-validated ")+path.filename().string()+
+            tr("; PATCH00 page-0x22/0x23 aliases were synchronized and stale map shadows were removed. Restart the game.");
     }catch(const std::exception& e){status_=e.what();}
 }
 
@@ -15125,8 +16022,8 @@ void EditorApp::update_patch00_overrides(){
         options.include_custom_assets=patch00_include_custom_assets_;
         const auto path=document_->update_patch00_overrides(
             catalog_.game_root(),level_package_slot_,options,backup_existing_patch00_);
-        status_="Updated "+path.filename().string()+
-            " with safe custom resources and global text aliases only. Restart the game to remount patches.";
+        status_=tr("Updated ")+path.filename().string()+
+            tr(" with safe custom resources and global text aliases only. Restart the game to remount patches.");
     }catch(const std::exception& e){status_=e.what();}
 }
 

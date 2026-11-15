@@ -1,0 +1,79 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/gameplay/army/pool.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_GAMEPLAY_ARMY_POOL_H
+#define THANDOR_GAMEPLAY_ARMY_POOL_H
+
+#include <thandor/core/types.h>
+#include <thandor/gameplay/army/types.h>
+#include <thandor/gameplay/session/types.h>
+#include <thandor/network/protocol/types.h>
+#include <thandor/ui/ingame/types.h>
+#include <thandor/core/contracts.h>
+
+/* The army model state bits ARMY_RUNTIME_FLAG_DESTROYED and ARMY_MODEL_STATE_* are ArmyRuntimeFlags
+   (gameplay/army/types.h). */
+/* g_ArmyRuntimeSlots: a 0x48000-byte pool of 0x120-byte ArmyRuntimeSlot entries (ArmyRuntime_InitializePoolAndGraphics) */
+inline constexpr int ARMY_RUNTIME_SLOT_COUNT = 0x400;
+/* g_ArmyGraphicsBindings: texture set and palette per faction slot 0-7 */
+inline constexpr int ARMY_GRAPHICS_BINDING_COUNT = 8;
+/* ArmyRuntime_CreateInstanceFromAsset creationFlags */
+inline constexpr int ARMY_CREATE_COUNT_FOR_ACTIVE_FACTION = 0x2; /* owned by the active faction: +1 on builtCount of the
+                                                     faction's selected model definition */
+inline constexpr int ARMY_CREATE_UNLOCK_TECHNOLOGY = 0x4; /* ModelDefinitionHierarchy_UnlockSelectedLinkedTechnology */
+
+/* g_ArmyRuntimeDepthBinClassByModelClass entries (ArmyRuntimeSlot.depthBinClass): the occupancy bits an army
+   marks in its faction's byte of the field cells. Structure classes (4, 11, 13-16, 20, 22, 23) use 0x90. */
+inline constexpr int ARMY_DEPTH_BIN_STRUCTURE_BIT = 0x10;
+inline constexpr int ARMY_DEPTH_BIN_CLASS_STRUCTURE = 0x90; /* persistent bit 7 | ARMY_DEPTH_BIN_STRUCTURE_BIT */
+
+/* Faction graphics ('gfx') texture source asset layout used by ArmyGraphics_CopyFrontendPlayerPaletteAndTexture */
+inline constexpr int ARMY_GRAPHICS_PLAYER_IMAGE_SUBRESOURCE = 0x71; /* image replaced by the frontend player's picture */
+inline constexpr int ARMY_GRAPHICS_PALETTE_TABLE_OFFSET = 0x200; /* first palette, from the asset start */
+inline constexpr int ARMY_GRAPHICS_PALETTE_BYTES = 0x800; /* 256 entries of 8 bytes */
+inline constexpr int ARMY_GRAPHICS_PLAYER_IMAGE_DWORDS = 0x400; /* 0x1000 bytes of pixel data */
+
+bool ArmyRuntime_InitializePoolAndGraphics(void *ownerContext,uint16_t *graphicsBasePath,uint32_t *outError);
+
+void ArmyRuntime_ShutdownPoolAndGraphics();
+
+void ArmyRuntime_DestroyInstanceAndRefreshUi(WorldRuntimeContext *worldRuntime,GameEntityRuntime *entityRuntime);
+
+ArmyRuntimeSlot *ArmyRuntime_CreateInstanceFromAsset
+          (WorldObjectAllocationFlags creationFlags,AngleTurn32 orientationAngle,Q12 worldXQ12,
+          Q12 worldYQ12,FactionRuntimeIndex factionIndex,PckArmyAssetIdCatalog armyAssetId,
+          WorldRuntimeContext *worldRuntime,uint32_t *outError);
+
+void ArmyRuntime_InitializeTerrainOccupancyFlags (WorldRuntimeContext *worldRuntime,ArmyRuntimeSlot *armyRuntime);
+
+void ArmyGraphics_CopyFrontendPlayerPaletteAndTexture(FrontendPlayerRuntimeId frontendPlayerRuntimeId,
+          ArmyGraphicsAssetAddress32 armyGraphicsAsset);
+
+extern ArmyRuntimeSlot *g_ArmyRuntimeSlots;
+extern ArmyGraphicsBinding g_ArmyGraphicsBindings[8];
+extern const uint32_t g_ArmyRuntimeDepthBinClassByModelClass[24]; /* uint32_t[24] depth-bin/occupancy class per model runtime class (0x88/0x90/0xA0/0xC0; 0x90 = structure), copied to ArmyRuntimeSlot.depthBinClass; gameplay/army runtime and placement */
+
+extern void *g_ArmyRuntimeRebaseBaseMinusOne;
+
+/* Army token: an army runtime as its byte offset from g_ArmyRuntimeRebaseBaseMinusOne, i.e. slot offset + 1
+   (0 = none). The form the in-game commands and the placement state carry; CommandDispatch_IsPoolToken
+   (network/protocol/commands.cpp) checks received ones. armyRuntime may be any view of the slot. */
+static inline int32_t ArmyRuntime_Token(const void *armyRuntime)
+{
+  return (int32_t)(reinterpret_cast<uintptr_t>(armyRuntime) - reinterpret_cast<uintptr_t>(g_ArmyRuntimeRebaseBaseMinusOne));
+}
+
+/* The army runtime an army token names; NULL for token 0. */
+static inline ArmyRuntimeSlot *ArmyRuntime_FromToken(int32_t token)
+{
+  if (token == 0) {
+    return nullptr;
+  }
+  return reinterpret_cast<ArmyRuntimeSlot *>((uintptr_t)(uint32_t)token + reinterpret_cast<uintptr_t>(g_ArmyRuntimeRebaseBaseMinusOne));
+}
+
+#endif /* THANDOR_GAMEPLAY_ARMY_POOL_H */

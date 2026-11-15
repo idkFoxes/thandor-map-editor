@@ -16,9 +16,11 @@ struct RgbaImage {
     std::vector<uint8_t> pixels; // RGBA8
 };
 
-// User-editable terrain textures are exchanged as uncompressed true-colour TGA files.  The
+// User-editable terrain textures are exchanged as true-colour TGA files.  The
 // stock ground GFX family is one 256x256 direct-colour subresource, so the editor can rebuild a
 // game-loadable GFX without quantising the imported pixels through a palette.
+RgbaImage decode_tga_rgba(std::span<const std::byte> bytes);
+std::vector<std::byte> encode_tga_rgba(const RgbaImage& image);
 RgbaImage load_tga_rgba(const std::filesystem::path& path);
 void save_tga_rgba(const std::filesystem::path& path, const RgbaImage& image);
 std::vector<std::byte> encode_single_rgba_gfx(const RgbaImage& image);

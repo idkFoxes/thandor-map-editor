@@ -1,0 +1,207 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/core/ptr32.h
+ */
+
+#ifndef THANDOR_CORE_PTR32_H
+#define THANDOR_CORE_PTR32_H
+
+/*
+32-bit pointer fields of the original data layouts (step 5f).
+
+The structs of the type headers (<area>/<module>/types.h) are the original's 32-bit layouts: file and
+asset images, save-game images (pools written raw), UI templates linked by byte offsets, and runtime records
+that code walks with the original strides and offsets. Their pointer fields are declared Ptr32<T> (data
+pointers) or Ptr32<R(args)> (function pointers). Ptr32<T> is a 4-byte field holding the pointer as a signed
+32-bit value. The exe is large-address-aware (the graphics driver gets the whole address space), but everything the
+game points to lies below 2 GB and fits: the image at its fixed base 0x10000000, the main thread's stack, and the
+game's own memory - the arena, every C++ allocation (operator new/delete) and SDL's allocations come from pools
+reserved below 2 GB (platform/bootstrap/low_memory.h; CMake option THANDOR_LARGE_ADDRESS_AWARE, OFF links
+/LARGEADDRESSAWARE:NO instead). Sign extension on reading keeps sentinels like (T *)-1 intact. A pointer that does
+not fit stops the game (Thandor_Ptr32Overflow). Savegames, assets and the UI templates depend on these layouts.
+UPtr32 is the same for a field the code keeps as uintptr_t (a pointer or a small value).
+The field converts to T * implicitly, so most code reads and writes it like a pointer. What does not work
+(compile errors): taking the field's address as a T **, ?: between the field and a T *, and pointer-typed
+references to it.
+*/
+
+#include <stddef.h>
+#include <stdint.h>
+#ifdef __cplusplus
+#include <type_traits>
+#endif
+
+#ifdef __cplusplus
+/* THANDOR_PTR(pointer) values (core/contracts.h): an untyped object address. They convert to object pointers
+   only; a function-pointer slot takes a typed THANDOR_SLOT(function) (core/slot.h), so a mismatched signature
+   does not compile. */
+struct ThandorAnyPtr {
+    void *ptr;
+    template <class T>
+        requires(!std::is_function_v<T>)
+    operator T *() const { return static_cast<T *>(ptr); }
+};
+/* THANDOR_SLOT(function) values (core/slot.h). */
+template <auto Fn> struct ThandorSlot;
+
+/* Stops the game with a log entry: a pointer of 2 GB or more was stored in a 32-bit field. */
+[[noreturn]] void Thandor_Ptr32Overflow(uintptr_t value);
+
+static __forceinline int32_t thandor_ptr32_pack(const volatile void *pointer)
+{
+    intptr_t value = reinterpret_cast<intptr_t>(pointer);
+    if ((intptr_t)(int32_t)value != value) {
+        Thandor_Ptr32Overflow((uintptr_t)value);
+    }
+    return (int32_t)value;
+}
+
+/* The address of a data or function pointer as a const volatile void * for thandor_ptr32_pack (a function
+   pointer only converts by reinterpret_cast). */
+template <class P> static __forceinline const volatile void *thandor_ptr32_address(P *pointer)
+{
+    if constexpr (std::is_function_v<P>) {
+        return reinterpret_cast<const volatile void *>(pointer);
+    }
+    else {
+        return pointer;
+    }
+}
+
+/* THANDOR_PTR32_BITS(value) values: the raw 32 bits of a pointer field given as an integer (a UI template's
+   link offset or no-link sentinel, a text resource id kept in a text pointer field). Unlike a T * they convert
+   to a Ptr32 at compile time, so a template image initialised with them stays constant data. */
+struct Ptr32Bits {
+    uint32_t bits;
+};
+#define THANDOR_PTR32_BITS(value) (Ptr32Bits{static_cast<uint32_t>(value)})
+
+template <class T> struct Ptr32 {
+    int32_t value;
+
+    Ptr32() = default;
+    constexpr Ptr32(Ptr32Bits raw) : value(static_cast<int32_t>(raw.bits)) {}
+    Ptr32(T *pointer) : value(thandor_ptr32_pack(thandor_ptr32_address(pointer))) {}
+    Ptr32(ThandorAnyPtr pointer)
+        requires(!std::is_function_v<T>)
+        : value(thandor_ptr32_pack(pointer.ptr)) {}
+    /* field = THANDOR_SLOT(function), also as an element of an array initialiser (an exact match, so MSVC does not
+       weigh it against Ptr32(T *) over the slot's function-pointer conversion) */
+    template <auto Fn> Ptr32(ThandorSlot<Fn>) : Ptr32(ThandorSlot<Fn>::template pick<T>()) {}
+    Ptr32 &operator=(T *pointer) { value = thandor_ptr32_pack(thandor_ptr32_address(pointer)); return *this; }
+    Ptr32 &operator=(ThandorAnyPtr pointer)
+        requires(!std::is_function_v<T>)
+    { value = thandor_ptr32_pack(pointer.ptr); return *this; }
+    /* field = THANDOR_SLOT(function) (the conversions alone would be ambiguous between operator=(T *pointer) and the
+       copy assignment) */
+    template <auto Fn> Ptr32 &operator=(ThandorSlot<Fn>) { return *this = ThandorSlot<Fn>::template pick<T>(); }
+
+    T *get() const { return reinterpret_cast<T *>(static_cast<intptr_t>(value)); }
+    operator T *() const { return get(); }
+    T *operator->() const { return get(); }
+    /* field cast to a U * or to an integer, as for a pointer */
+    template <class U> explicit operator U *() const { return reinterpret_cast<U *>(static_cast<intptr_t>(value)); }
+    explicit operator int32_t() const { return value; }
+    explicit operator uint32_t() const { return (uint32_t)value; }
+    explicit operator intptr_t() const { return (intptr_t)value; }
+    explicit operator uintptr_t() const { return (uintptr_t)(intptr_t)value; }
+
+    Ptr32 &operator++() { *this = get() + 1; return *this; }
+    Ptr32 &operator--() { *this = get() - 1; return *this; }
+    T *operator++(int) { T *old = get(); *this = old + 1; return old; }
+    T *operator--(int) { T *old = get(); *this = old - 1; return old; }
+    Ptr32 &operator+=(ptrdiff_t count) { *this = get() + count; return *this; }
+    Ptr32 &operator-=(ptrdiff_t count) { *this = get() - count; return *this; }
+};
+
+/* A pointer-or-value field kept as uintptr_t by the code (UPtr32): 4 bytes on x64, read sign-extended. */
+struct UPtr32 {
+    int32_t value;
+
+    UPtr32() = default;
+    UPtr32(uintptr_t bits) : value(thandor_ptr32_pack(reinterpret_cast<const void *>(bits))) {}
+    UPtr32 &operator=(uintptr_t bits) { value = thandor_ptr32_pack(reinterpret_cast<const void *>(bits)); return *this; }
+    operator uintptr_t() const { return (uintptr_t)(intptr_t)value; }
+    template <class U> explicit operator U *() const { return reinterpret_cast<U *>(static_cast<intptr_t>(value)); }
+    UPtr32 &operator+=(uintptr_t count) { return *this = (uintptr_t)*this + count; }
+    UPtr32 &operator-=(uintptr_t count) { return *this = (uintptr_t)*this - count; }
+};
+
+/*
+Explicit conversions between a pointer and a 32-bit value of the original layouts, for the places that keep a
+pointer in a plain 32-bit integer (a field that holds a pointer or an offset/id, a saved offset computed from two
+pointers, a pointer dword of a UI template). They replace the plain (uint32_t)pointer / (int)pointer /
+C-style T * casts of the value, which truncate silently and are compile errors in g++.
+
+Thandor_PointerToU32(pointer) / Thandor_PointerToI32(pointer): the pointer's address as 32 bits, the same value
+the plain cast gave; a pointer of 2 GB or more (which a 32-bit field cannot hold) stops the game
+(Thandor_Ptr32Overflow), as for a Ptr32 field. Data and function pointers.
+
+Thandor_U32ToPointer<T>(value): the T * of a 32-bit value (any integer type of up to 4 bytes), sign-extended like
+a Ptr32 field: addresses below 2 GB come back unchanged and sentinels like 0xFFFFFFFF become (T *)-1. A wider
+integer (uintptr_t) does not compile: it is not a 32-bit value.
+*/
+template <class P> static __forceinline int32_t Thandor_PointerToI32(P *pointer)
+{
+    return thandor_ptr32_pack(thandor_ptr32_address(pointer));
+}
+template <class P> static __forceinline uint32_t Thandor_PointerToU32(P *pointer)
+{
+    return (uint32_t)thandor_ptr32_pack(thandor_ptr32_address(pointer));
+}
+/* A Ptr32 field already holds the 32-bit value. */
+template <class P> static __forceinline int32_t Thandor_PointerToI32(const Ptr32<P> &field)
+{
+    return field.value;
+}
+template <class P> static __forceinline uint32_t Thandor_PointerToU32(const Ptr32<P> &field)
+{
+    return (uint32_t)field.value;
+}
+template <class T = void, class I> static __forceinline T *Thandor_U32ToPointer(I value)
+{
+    static_assert((std::is_integral_v<I> || std::is_enum_v<I>) && sizeof(I) <= 4,
+                  "Thandor_U32ToPointer takes a 32-bit integer");
+    return reinterpret_cast<T *>(static_cast<intptr_t>(static_cast<int32_t>(value)));
+}
+#endif /* __cplusplus */
+
+#ifdef __cplusplus
+/* The address an untyped-address macro argument stands for (THANDOR_PTR, THANDOR_PTR32_AT), as a void *: the
+   argument may be a data pointer (also to const, which the original's tables ignore), a function pointer, an
+   integer holding an address, or a Ptr32/UPtr32 field (its explicit pointer conversion). The same conversions as
+   the former C-style cast to void *, spelled out per kind. */
+template <class P> static __forceinline void *thandor_any_address(P p)
+{
+    if constexpr (std::is_pointer_v<P>) {
+        if constexpr (std::is_function_v<std::remove_pointer_t<P>>) {
+            return reinterpret_cast<void *>(p);
+        }
+        else {
+            return const_cast<void *>(static_cast<const volatile void *>(p));
+        }
+    }
+    else if constexpr (std::is_integral_v<P> || std::is_enum_v<P>) {
+        return reinterpret_cast<void *>(p);
+    }
+    else {
+        return static_cast<void *>(p);
+    }
+}
+
+/* THANDOR_PTR(p) (core/contracts.h): p's address as a ThandorAnyPtr. */
+template <class P> static __forceinline ThandorAnyPtr Thandor_AnyPtr(P p)
+{
+    return ThandorAnyPtr{thandor_any_address(p)};
+}
+
+/* The 32-bit pointer slot (a Ptr32<T> lvalue) at address p inside an original layout: a pointer in a text
+   command stream, a pointer field reached by byte offset. */
+#define THANDOR_PTR32_AT(T, p) (*static_cast<Ptr32<T> *>(thandor_any_address(p)))
+#endif
+
+/* Bytes of a 32-bit pointer field (sizeof(Ptr32<void>)). */
+inline constexpr auto THANDOR_PTR32_BYTES = 4;
+
+#endif

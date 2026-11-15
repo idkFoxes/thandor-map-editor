@@ -1,0 +1,20 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/core.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_CORE_H
+#define THANDOR_CORE_H
+
+#include <thandor/core/types.h>
+#include <thandor/core/contracts.h>
+#include <thandor/core/error.h>
+#include <thandor/core/math.h>
+#include <thandor/core/memory.h>
+#include <thandor/core/settings.h>
+#include <thandor/core/slot.h>
+#include <thandor/core/text.h>
+
+#endif /* THANDOR_CORE_H */

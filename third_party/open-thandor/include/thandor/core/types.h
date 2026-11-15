@@ -1,0 +1,738 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/core/types.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_CORE_TYPES_H
+#define THANDOR_CORE_TYPES_H
+
+#include <stdint.h>
+#include <thandor/core/flags.h>
+#include <thandor/core/ptr32.h> /* Ptr32: the pointer fields of these 32-bit layouts */
+
+struct GraphicsFixedMatrix3x4;
+struct GraphicsFixedVec3;
+struct SoundVoiceSet;
+struct SoundVoice;
+struct SoundSampleAsset;
+struct SoftwareBgraWordLanes;
+struct SoftwareRgbWordLanes;
+struct ModelPackedPointRecord;
+
+/* One-byte boolean of the original: any byte value, only its low byte counts (assigning 0x100 gives
+   false). Since step 13 all code uses bool; Bool8 stays only where a byte layout fixes it (owner decision D3):
+   the struct fields TerrainPlacementResult::rejected and FrameProviderResult::noFrame, and bytes read from files
+   or packets. Do not use it for new code. */
+using Bool8 = uint8_t;
+
+using FactionRuntimeIndex = int;
+
+using Q12 = int;
+
+enum {
+    WORLD_OWNER_RUNTIME_MODEL=0,
+    WORLD_OWNER_RUNTIME_SHOT=1,
+    WORLD_OWNER_RUNTIME_EFFECT=2
+};
+using WorldOwnerRuntimeClassId = int;
+
+enum {
+    MODEL_RUNTIME_CLASS_00=0,
+    MODEL_RUNTIME_CLASS_01_GROUND=1,
+    MODEL_RUNTIME_CLASS_02_TRACKED=2,
+    MODEL_RUNTIME_CLASS_03_ARTICULATED_WALKER=3,
+    MODEL_RUNTIME_CLASS_04=4,
+    MODEL_RUNTIME_CLASS_05=5,
+    MODEL_RUNTIME_CLASS_06=6,
+    MODEL_RUNTIME_CLASS_07=7,
+    MODEL_RUNTIME_CLASS_08=8,
+    MODEL_RUNTIME_CLASS_09=9,
+    MODEL_RUNTIME_CLASS_10_CONTINUOUS_RADAR=10,
+    MODEL_RUNTIME_CLASS_11=11,
+    MODEL_RUNTIME_CLASS_12=12,
+    MODEL_RUNTIME_CLASS_13=13,
+    MODEL_RUNTIME_CLASS_14=14,
+    MODEL_RUNTIME_CLASS_15=15,
+    MODEL_RUNTIME_CLASS_16=16,
+    MODEL_RUNTIME_CLASS_17_DEPLOYING_GLIDER=17,
+    MODEL_RUNTIME_CLASS_18=18,
+    MODEL_RUNTIME_CLASS_19_WATER_SURFACE=19,
+    MODEL_RUNTIME_CLASS_20=20,
+    MODEL_RUNTIME_CLASS_21_AIRCRAFT=21,
+    MODEL_RUNTIME_CLASS_22=22,
+    MODEL_RUNTIME_CLASS_23=23
+};
+using ModelRuntimeClassId = int;
+
+enum {
+    ARM_0001_UNIT_MDL0100=1, /* Jeep Wiesel: MG */
+    ARM_0002_UNIT_MDL0100=2, /* Jeep Wiesel: Laser */
+    ARM_0003_UNIT_MDL0100=3, /* Jeep Wiesel (bare) */
+    ARM_0010_UNIT_MDL0101=10, /* PSW Dingo: Dual-Laser */
+    ARM_0011_UNIT_MDL0101=11, /* PSW Dingo: Flak */
+    ARM_0012_UNIT_MDL0101=12, /* PSW Dingo: Moerser */
+    ARM_0013_UNIT_MDL0101=13, /* PSW Dingo: Kanone */
+    ARM_0014_UNIT_MDL0101=14, /* PSW Dingo: Doppel-MG */
+    ARM_0015_UNIT_MDL0101=15, /* PSW Dingo: MG */
+    ARM_0016_UNIT_MDL0101=16, /* PSW Dingo: Ionenstrahler */
+    ARM_0017_UNIT_MDL0101=17, /* PSW Dingo: Lenk-Raketen */
+    ARM_0018_UNIT_MDL0101=18, /* PSW Dingo: Raketenwerfer */
+    ARM_0019_UNIT_MDL0101=19, /* PSW Dingo (bare) */
+    ARM_0030_UNIT_MDL0102=30, /* PW Wolf: Flakgeschuetz */
+    ARM_0031_UNIT_MDL0102=31, /* PW Wolf: MK */
+    ARM_0032_UNIT_MDL0102=32, /* PW Wolf: Flammenwerfer */
+    ARM_0033_UNIT_MDL0102=33, /* PW Wolf: Lasergeschuetz */
+    ARM_0034_UNIT_MDL0102=34, /* PW Wolf: Raketenbatt. */
+    ARM_0035_UNIT_MDL0102=35, /* PW Wolf: Zwil.kanone */
+    ARM_0036_UNIT_MDL0102=36, /* PW Wolf: Ionenwerfer */
+    ARM_0037_UNIT_MDL0102=37, /* PW Wolf: ThermoRaketen */
+    ARM_0038_UNIT_MDL0102=38, /* PW Wolf: Reparaturmodul */
+    ARM_0039_UNIT_MDL0102=39, /* PW Wolf (bare) */
+    ARM_0050_UNIT_MDL0103=50, /* Pionierfahrzeug (bare) */
+    ARM_0060_UNIT_MDL0111=60, /* PNZ-3 Dachs: Haubitze */
+    ARM_0061_UNIT_MDL0111=61, /* PNZ-3 Dachs: Ionenstrahler */
+    ARM_0062_UNIT_MDL0111=62, /* PNZ-3 Dachs: Dual-Laser */
+    ARM_0063_UNIT_MDL0111=63, /* PNZ-3 Dachs: Raketenwerfer */
+    ARM_0064_UNIT_MDL0111=64, /* PNZ-3 Dachs: Lenk-Raketen */
+    ARM_0065_UNIT_MDL0111=65, /* PNZ-3 Dachs: Doppel-MG */
+    ARM_0066_UNIT_MDL0111=66, /* PNZ-3 Dachs: Kanone */
+    ARM_0067_UNIT_MDL0111=67, /* PNZ-3 Dachs (bare) */
+    ARM_0080_UNIT_MDL0112=80, /* PNZ-5 Panther: Flakgeschuetz */
+    ARM_0081_UNIT_MDL0112=81, /* PNZ-5 Panther: Raketenbatt. */
+    ARM_0082_UNIT_MDL0112=82, /* PNZ-5 Panther: MK */
+    ARM_0083_UNIT_MDL0112=83, /* PNZ-5 Panther: Zwil.kanone */
+    ARM_0084_UNIT_MDL0112=84, /* PNZ-5 Panther: Flammenwerfer */
+    ARM_0085_UNIT_MDL0112=85, /* PNZ-5 Panther: Ionenwerfer */
+    ARM_0086_UNIT_MDL0112=86, /* PNZ-5 Panther: ThermoRaketen */
+    ARM_0087_UNIT_MDL0112=87, /* PNZ-5 Panther: Lasergeschuetz */
+    ARM_0088_UNIT_MDL0112=88, /* PNZ-5 Panther: Reparaturmodul */
+    ARM_0089_UNIT_MDL0112=89, /* PNZ-5 Panther (bare) */
+    ARM_0100_UNIT_MDL0113=100, /* PNZ-9 Goliath: Laserturm */
+    ARM_0101_UNIT_MDL0113=101, /* PNZ-9 Goliath: Artillerie */
+    ARM_0102_UNIT_MDL0113=102, /* PNZ-9 Goliath: Ionenkanone */
+    ARM_0103_UNIT_MDL0113=103, /* PNZ-9 Goliath: Raketenrampe */
+    ARM_0104_UNIT_MDL0113=104, /* PNZ-9 Goliath: Radar */
+    ARM_0105_UNIT_MDL0113=105, /* PNZ-9 Goliath (bare) */
+    ARM_0110_UNIT_MDL0120=110, /* WLK-1 Emu: 2x Dual-Laser */
+    ARM_0111_UNIT_MDL0120=111, /* WLK-1 Emu: 2x Kanone */
+    ARM_0112_UNIT_MDL0120=112, /* WLK-1 Emu: 2x Laser */
+    ARM_0113_UNIT_MDL0120=113, /* WLK-1 Emu: 2x Raketenwerfer */
+    ARM_0114_UNIT_MDL0120=114, /* WLK-1 Emu: 2x Doppel-MG */
+    ARM_0115_UNIT_MDL0120=115, /* WLK-1 Emu: 2x MG */
+    ARM_0116_UNIT_MDL0120=116, /* WLK-1 Emu: 2x Lenk-Raketen */
+    ARM_0117_UNIT_MDL0120=117, /* WLK-1 Emu (bare) */
+    ARM_0130_UNIT_MDL0121=130, /* WLK-2 Orang: Dual-Laser, Laser */
+    ARM_0131_UNIT_MDL0121=131, /* WLK-2 Orang: Lasergeschuetz, Laser */
+    ARM_0132_UNIT_MDL0121=132, /* WLK-2 Orang: 2x Raketenwerfer */
+    ARM_0133_UNIT_MDL0121=133, /* WLK-2 Orang: Raketenbatt., Raketenwerfer */
+    ARM_0134_UNIT_MDL0121=134, /* WLK-2 Orang: MK, MG */
+    ARM_0135_UNIT_MDL0121=135, /* WLK-2 Orang: MK, Doppel-MG */
+    ARM_0136_UNIT_MDL0121=136, /* WLK-2 Orang: Zwil.kanone, Kanone */
+    ARM_0137_UNIT_MDL0121=137, /* WLK-2 Orang: Ionenwerfer, Ionenstrahler */
+    ARM_0138_UNIT_MDL0121=138, /* WLK-2 Orang: ThermoRaketen, Lenk-Raketen */
+    ARM_0139_UNIT_MDL0121=139, /* WLK-2 Orang: Reparaturmodul */
+    ARM_0140_UNIT_MDL0121=140, /* WLK-2 Orang: Flakgeschuetz, Flak */
+    ARM_0141_UNIT_MDL0121=141, /* WLK-2 Orang (bare) */
+    ARM_0150_UNIT_MDL0122=150, /* WLK-3 Gorilla: 2x Raketenbatt. */
+    ARM_0151_UNIT_MDL0122=151, /* WLK-3 Gorilla: 2x Lasergeschuetz */
+    ARM_0152_UNIT_MDL0122=152, /* WLK-3 Gorilla: 2x MK */
+    ARM_0153_UNIT_MDL0122=153, /* WLK-3 Gorilla: 2x Flakgeschuetz */
+    ARM_0154_UNIT_MDL0122=154, /* WLK-3 Gorilla: 2x Zwil.kanone */
+    ARM_0155_UNIT_MDL0122=155, /* WLK-3 Gorilla: 2x Ionenwerfer */
+    ARM_0156_UNIT_MDL0122=156, /* WLK-3 Gorilla: 2x ThermoRaketen */
+    ARM_0157_UNIT_MDL0122=157, /* WLK-3 Gorilla (bare) */
+    ARM_0170_UNIT_MDL0130=170, /* GLT-1 Moskito: Laser */
+    ARM_0171_UNIT_MDL0130=171, /* GLT-1 Moskito: MG */
+    ARM_0172_UNIT_MDL0130=172, /* GLT-1 Moskito (bare) */
+    ARM_0180_UNIT_MDL0132=180, /* GLT-2 Libelle: 2x MG */
+    ARM_0181_UNIT_MDL0132=181, /* GLT-2 Libelle: 2x Doppel-MG */
+    ARM_0182_UNIT_MDL0132=182, /* GLT-2 Libelle: 2x Kanone */
+    ARM_0183_UNIT_MDL0132=183, /* GLT-2 Libelle: 2x Laser */
+    ARM_0184_UNIT_MDL0132=184, /* GLT-2 Libelle: 2x Dual-Laser */
+    ARM_0185_UNIT_MDL0132=185, /* GLT-2 Libelle: 2x Raketenwerfer */
+    ARM_0186_UNIT_MDL0132=186, /* GLT-2 Libelle: 2x Ionenstrahler */
+    ARM_0187_UNIT_MDL0132=187, /* GLT-2 Libelle: 2x Lenk-Raketen */
+    ARM_0188_UNIT_MDL0132=188, /* GLT-2 Libelle (bare) */
+    ARM_0200_UNIT_MDL0131=200, /* GLT-3 Hornisse: 2x Lasergeschuetz */
+    ARM_0201_UNIT_MDL0131=201, /* GLT-3 Hornisse: Raketenbatt., Raketenwerfer */
+    ARM_0202_UNIT_MDL0131=202, /* GLT-3 Hornisse: 2x MK */
+    ARM_0203_UNIT_MDL0131=203, /* GLT-3 Hornisse: Zwil.kanone, Kanone */
+    ARM_0204_UNIT_MDL0131=204, /* GLT-3 Hornisse: 2x Ionenwerfer */
+    ARM_0205_UNIT_MDL0131=205, /* GLT-3 Hornisse: 2x ThermoRaketen */
+    ARM_0206_UNIT_MDL0131=206, /* GLT-3 Hornisse: 2x Flakgeschuetz */
+    ARM_0207_UNIT_MDL0131=207, /* GLT-3 Hornisse: Reparaturmodul */
+    ARM_0208_UNIT_MDL0131=208, /* GLT-3 Hornisse (bare) */
+    ARM_0220_UNIT_MDL0133=220, /* GLT-3 Hornisse: Artillerie */
+    ARM_0221_UNIT_MDL0133=221, /* GLT-3 Hornisse: Laserturm */
+    ARM_0222_UNIT_MDL0133=222, /* GLT-3 Hornisse: Ionenkanone */
+    ARM_0223_UNIT_MDL0133=223, /* GLT-3 Hornisse: Raketenrampe */
+    ARM_0224_UNIT_MDL0133=224, /* GLT-3 Hornisse (bare) */
+    ARM_0240_UNIT_MDL0143=240, /* SP-F Kraehe (bare) */
+    ARM_0242_UNIT_MDL0142=242, /* B-12 Habicht (bare) */
+    ARM_0244_UNIT_MDL0141=244, /* B-18 Adler (bare) */
+    ARM_0250_UNIT_MDL0150=250, /* Delfin-Klasse: MG */
+    ARM_0251_UNIT_MDL0150=251, /* Delfin-Klasse: Laser */
+    ARM_0252_UNIT_MDL0150=252, /* Delfin-Klasse: Doppel-MG */
+    ARM_0260_UNIT_MDL0152=260, /* Orkan-Klasse: Haubitze */
+    ARM_0261_UNIT_MDL0152=261, /* Orkan-Klasse: Flak */
+    ARM_0262_UNIT_MDL0152=262, /* Orkan-Klasse: Flakgeschuetz */
+    ARM_0263_UNIT_MDL0152=263, /* Orkan-Klasse: MK */
+    ARM_0264_UNIT_MDL0152=264, /* Orkan-Klasse: Kanone */
+    ARM_0265_UNIT_MDL0152=265, /* Orkan-Klasse: Zwil.kanone */
+    ARM_0266_UNIT_MDL0152=266, /* Orkan-Klasse: Dual-Laser */
+    ARM_0267_UNIT_MDL0152=267, /* Orkan-Klasse: Lasergeschuetz */
+    ARM_0268_UNIT_MDL0152=268, /* Orkan-Klasse: Ionenstrahler */
+    ARM_0269_UNIT_MDL0152=269, /* Orkan-Klasse: Ionenwerfer */
+    ARM_0270_UNIT_MDL0152=270, /* Orkan-Klasse: Lenk-Raketen */
+    ARM_0271_UNIT_MDL0152=271, /* Orkan-Klasse: ThermoRaketen */
+    ARM_0272_UNIT_MDL0152=272, /* Orkan-Klasse: Raketenwerfer */
+    ARM_0273_UNIT_MDL0152=273, /* Orkan-Klasse: Raketenbatt. */
+    ARM_0274_UNIT_MDL0152=274, /* Orkan-Klasse: Reparaturmodul */
+    ARM_0275_UNIT_MDL0152=275, /* Orkan-Klasse (bare) */
+    ARM_0280_UNIT_MDL0151=280, /* Taifun-Klasse: Artillerie */
+    ARM_0281_UNIT_MDL0151=281, /* Taifun-Klasse: Laserturm */
+    ARM_0282_UNIT_MDL0151=282, /* Taifun-Klasse: Ionenkanone */
+    ARM_0283_UNIT_MDL0151=283, /* Taifun-Klasse: Raketenrampe */
+    ARM_0284_UNIT_MDL0151=284, /* Taifun-Klasse: Radar */
+    ARM_0285_UNIT_MDL0151=285, /* Taifun-Klasse (bare) */
+    ARM_0295_UNIT_MDL0153=295, /* Taifun-Klasse (bare) */
+    ARM_0300_BUILDING_MDL0301=300, /* Hauptquartier: MG */
+    ARM_0301_BUILDING_MDL0318=301, /* leichte Waffenfab. */
+    ARM_0302_BUILDING_MDL0300=302, /* Panzerfabrik: MG */
+    ARM_0303_BUILDING_MDL0316=303, /* Walkerfabrik: MG */
+    ARM_0304_BUILDING_MDL0324=304, /* Gleiterfabrik: MG */
+    ARM_0305_BUILDING_MDL0317=305, /* Hafen */
+    ARM_0306_BUILDING_MDL0310=306, /* Flughafen */
+    ARM_0310_BUILDING_MDL0305=310, /* Kraftwerk: 4x Hauptquartier */
+    ARM_0318_KULISSE_MDL0324=318,
+    ARM_0320_BUILDING_MDL0311=320, /* Spezial- Forschungslabor */
+    ARM_0321_BUILDING_MDL0326=321, /* Forschungslabor Ionen-Laser */
+    ARM_0322_BUILDING_MDL0327=322, /* Forschungslabor Flak-Kanonen */
+    ARM_0323_BUILDING_MDL0328=323, /* Forschungslabor Raketen-Artillerie */
+    ARM_0330_BUILDING_MDL0303=330, /* Xenit-Mine */
+    ARM_0331_BUILDING_MDL0308=331, /* Xenit-Silo */
+    ARM_0332_BUILDING_MDL0302=332, /* Tritium-Pumpe */
+    ARM_0333_BUILDING_MDL0307=333, /* Tritium-Tank */
+    ARM_0340_BUILDING_MDL0314=340, /* Geschuetzturm: Radar */
+    ARM_0345_BUILDING_MDL0315=345, /* (no name): Laserspule */
+    ARM_0350_BUILDING_MDL0322=350, /* schwerer Geschuetzturm: Ionenkanone */
+    ARM_0351_BUILDING_MDL0322=351, /* schwerer Geschuetzturm: Laserturm */
+    ARM_0352_BUILDING_MDL0322=352, /* schwerer Geschuetzturm: Raketenrampe */
+    ARM_0357_KULISSE_MDL0357=357,
+    ARM_0358_KULISSE_MDL0358=358,
+    ARM_0359_KULISSE_MDL0359=359,
+    ARM_0360_BUILDING_MDL0314=360, /* Geschuetzturm: MK */
+    ARM_0361_BUILDING_MDL0314=361, /* Geschuetzturm: Zwil.kanone */
+    ARM_0362_BUILDING_MDL0314=362, /* Geschuetzturm: Flakgeschuetz */
+    ARM_0363_BUILDING_MDL0314=363, /* Geschuetzturm: Raketenbatt. */
+    ARM_0364_BUILDING_MDL0314=364, /* Geschuetzturm: Lasergeschuetz */
+    ARM_0365_BUILDING_MDL0314=365, /* Geschuetzturm: Ionenwerfer */
+    ARM_0366_BUILDING_MDL0314=366, /* Geschuetzturm: ThermoRaketen */
+    ARM_0370_BUILDING_MDL0312=370, /* leichter Geschuetzturm: Ionenstrahler */
+    ARM_0371_BUILDING_MDL0312=371, /* leichter Geschuetzturm: Flak */
+    ARM_0372_BUILDING_MDL0312=372, /* leichter Geschuetzturm: Raketenwerfer */
+    ARM_0373_BUILDING_MDL0312=373, /* leichter Geschuetzturm: Doppel-MG */
+    ARM_0374_BUILDING_MDL0312=374, /* leichter Geschuetzturm: MG */
+    ARM_0375_BUILDING_MDL0312=375, /* leichter Geschuetzturm: Laser */
+    ARM_0376_BUILDING_MDL0312=376, /* leichter Geschuetzturm: Lenk-Raketen */
+    ARM_0377_BUILDING_MDL0312=377, /* leichter Geschuetzturm: Kanone */
+    ARM_0380_BUILDING_MDL0329=380, /* hohe Mauer */
+    ARM_0381_BUILDING_MDL0319=381, /* Mauer */
+    ARM_0382_BUILDING_MDL0320=382, /* Panzersperre */
+    ARM_0390_BUILDING_MDL0321=390, /* Pionierbasis */
+    ARM_0391_BUILDING_MDL0325=391, /* Pionierbasis */
+    ARM_0392_BUILDING_MDL0309=392, /* Hauptquartier */
+    ARM_0395_BUILDING_MDL0323=395, /* AR-R Silo */
+    ARM_0400_RUINEN_MDL0400=400,
+    ARM_0401_RUINEN_MDL0401=401,
+    ARM_0402_RUINEN_MDL0402=402,
+    ARM_0403_RUINEN_MDL0403=403,
+    ARM_0404_RUINEN_MDL0404=404,
+    ARM_0405_RUINEN_MDL0405=405,
+    ARM_0406_RUINEN_MDL0406=406,
+    ARM_0407_RUINEN_MDL0407=407,
+    ARM_0408_RUINEN_MDL0408=408,
+    ARM_0409_RUINEN_MDL0409=409,
+    ARM_0410_RUINEN_MDL0410=410,
+    ARM_0411_RUINEN_MDL0411=411,
+    ARM_0412_RUINEN_MDL0412=412,
+    ARM_0413_RUINEN_MDL0413=413,
+    ARM_0414_RUINEN_MDL0414=414,
+    ARM_0415_RUINEN_MDL0415=415,
+    ARM_0416_RUINEN_MDL0416=416,
+    ARM_0417_RUINEN_MDL0417=417,
+    ARM_0418_RUINEN_MDL0418=418,
+    ARM_0419_RUINEN_MDL0419=419,
+    ARM_0420_RUINEN_MDL0420=420,
+    ARM_0421_RUINEN_MDL0421=421,
+    ARM_0422_RUINEN_MDL0422=422,
+    ARM_0423_RUINEN_MDL0423=423,
+    ARM_0424_RUINEN_MDL0424=424,
+    ARM_0425_RUINEN_MDL0425=425,
+    ARM_0426_RUINEN_MDL0426=426,
+    ARM_0427_RUINEN_MDL0427=427,
+    ARM_0428_RUINEN_MDL0428=428,
+    ARM_0429_RUINEN_MDL0429=429,
+    ARM_0430_RUINEN_MDL0430=430,
+    ARM_0431_RUINEN_MDL0431=431,
+    ARM_0432_RUINEN_MDL0432=432,
+    ARM_0433_RUINEN_MDL0433=433,
+    ARM_0434_RUINEN_MDL0434=434,
+    ARM_0435_RUINEN_MDL0435=435,
+    ARM_0436_RUINEN_MDL0436=436,
+    ARM_0437_RUINEN_MDL0437=437,
+    ARM_0438_RUINEN_MDL0438=438,
+    ARM_0439_RUINEN_MDL0439=439,
+    ARM_0440_RUINEN_MDL0440=440,
+    ARM_0500_LBAUM_MDL0500=500,
+    ARM_0501_LBAUM_MDL0501=501,
+    ARM_0502_LBAUM_MDL0502=502,
+    ARM_0503_LBAUM_MDL0503=503,
+    ARM_0504_LBAUM_MDL0504=504,
+    ARM_0505_LBAUM_MDL0505=505,
+    ARM_0506_LBAUM_MDL0506=506,
+    ARM_0507_LBAUM_MDL0507=507,
+    ARM_0540_NBAUM_MDL0540=540,
+    ARM_0541_NBAUM_MDL0541=541,
+    ARM_0542_NBAUM_MDL0542=542,
+    ARM_0543_NBAUM_MDL0543=543,
+    ARM_0544_NBAUM_MDL0544=544,
+    ARM_0545_NBAUM_MDL0545=545,
+    ARM_0546_NBAUM_MDL0546=546,
+    ARM_0547_NBAUM_MDL0547=547,
+    ARM_0548_NBAUM_MDL0548=548,
+    ARM_0549_NBAUM_MDL0549=549,
+    ARM_0550_NBAUM_MDL0550=550,
+    ARM_0551_NBAUM_MDL0551=551,
+    ARM_0552_NBAUM_MDL0552=552,
+    ARM_0553_NBAUM_MDL0553=553,
+    ARM_0554_NBAUM_MDL0554=554,
+    ARM_0555_NBAUM_MDL0555=555,
+    ARM_0556_NBAUM_MDL0556=556,
+    ARM_0557_NBAUM_MDL0557=557,
+    ARM_0558_NBAUM_MDL0558=558,
+    ARM_0559_NBAUM_MDL0559=559,
+    ARM_0560_NBAUM_MDL0560=560,
+    ARM_0561_NBAUM_MDL0561=561,
+    ARM_0562_NBAUM_MDL0562=562,
+    ARM_0563_NBAUM_MDL0563=563,
+    ARM_0580_PALMEN_MDL0580=580,
+    ARM_0581_PALMEN_MDL0581=581,
+    ARM_0582_PALMEN_MDL0582=582,
+    ARM_0583_PALMEN_MDL0583=583,
+    ARM_0584_PALMEN_MDL0584=584,
+    ARM_0585_PALMEN_MDL0585=585,
+    ARM_0586_PALMEN_MDL0586=586,
+    ARM_0587_PALMEN_MDL0587=587,
+    ARM_0588_PALMEN_MDL0588=588,
+    ARM_0620_STEIN_MDL0620=620,
+    ARM_0621_STEIN_MDL0621=621,
+    ARM_0622_STEIN_MDL0622=622,
+    ARM_0623_STEIN_MDL0623=623,
+    ARM_0624_STEIN_MDL0624=624,
+    ARM_0625_STEIN_MDL0625=625,
+    ARM_0626_STEIN_MDL0626=626,
+    ARM_0627_STEIN_MDL0627=627,
+    ARM_0628_STEIN_MDL0628=628,
+    ARM_0629_STEIN_MDL0629=629,
+    ARM_0630_STEIN_MDL0630=630,
+    ARM_0631_STEIN_MDL0631=631,
+    ARM_0632_STEIN_MDL0632=632,
+    ARM_0633_STEIN_MDL0633=633,
+    ARM_0634_STEIN_MDL0634=634,
+    ARM_0635_STEIN_MDL0635=635,
+    ARM_0636_STEIN_MDL0636=636,
+    ARM_0637_STEIN_MDL0637=637,
+    ARM_0638_STEIN_MDL0638=638,
+    ARM_0639_STEIN_MDL0639=639,
+    ARM_0640_STEIN_MDL0640=640,
+    ARM_0641_STEIN_MDL0641=641,
+    ARM_0642_STEIN_MDL0642=642,
+    ARM_0647_STEIN_MDL0647=647,
+    ARM_0648_STEIN_MDL0648=648,
+    ARM_0649_STEIN_MDL0649=649,
+    ARM_0650_STEIN_MDL0650=650,
+    ARM_0651_STEIN_MDL0651=651,
+    ARM_0652_STEIN_MDL0652=652,
+    ARM_0653_STEIN_MDL0653=653,
+    ARM_0654_STEIN_MDL0654=654,
+    ARM_0655_STEIN_MDL0655=655,
+    ARM_0656_STEIN_MDL0656=656,
+    ARM_0657_STEIN_MDL0657=657,
+    ARM_0658_STEIN_MDL0658=658,
+    ARM_0660_BUSCH_MDL0660=660,
+    ARM_0661_BUSCH_MDL0661=661,
+    ARM_0662_BUSCH_MDL0662=662,
+    ARM_0663_BUSCH_MDL0663=663,
+    ARM_0664_BUSCH_MDL0664=664,
+    ARM_0665_BUSCH_MDL0665=665,
+    ARM_0710_FARNE_MDL0710=710,
+    ARM_0711_FARNE_MDL0711=711,
+    ARM_0712_FARNE_MDL0712=712,
+    ARM_0713_FARNE_MDL0713=713,
+    ARM_0750_KAKTUS_MDL0750=750,
+    ARM_0751_KAKTUS_MDL0751=751,
+    ARM_0752_KAKTUS_MDL0752=752,
+    ARM_0800_ROHSTOFF_MDL0800=800,
+    ARM_0801_ROHSTOFF_MDL0801=801,
+    ARM_0802_ROHSTOFF_MDL0802=802,
+    ARM_0803_ROHSTOFF_MDL0804=803,
+    ARM_0805_ROHSTOFF_MDL0805=805,
+    ARM_0806_ROHSTOFF_MDL0806=806,
+    ARM_0807_ROHSTOFF_MDL0807=807,
+    ARM_0808_ROHSTOFF_MDL0808=808,
+    ARM_0810_ROHSTOFF_MDL0809=810,
+    ARM_0811_ROHSTOFF_MDL0810=811,
+    ARM_0814_ROHSTOFF_MDL0811=814,
+    ARM_0815_ROHSTOFF_MDL0812=815,
+    ARM_0850_ROHSTOFF_MDL0850=850,
+    ARM_0851_ROHSTOFF_MDL0851=851,
+    ARM_0852_ROHSTOFF_MDL0852=852,
+    ARM_0853_ROHSTOFF_MDL0853=853,
+    ARM_0854_ROHSTOFF_MDL0854=854,
+    ARM_0855_ROHSTOFF_MDL0855=855
+};
+using PckArmyAssetIdCatalog = int;
+
+using PackedArgb32 = uint32_t;
+
+enum {
+    EFF_0001_EGRXA0=1,
+    EFF_0002_EGRXB0=2,
+    EFF_0003_EGRXC0=3,
+    EFF_0004_EGRXC0=4,
+    EFF_0005_EGRXG0=5,
+    EFF_0006_EGRXD0=6,
+    EFF_0007_EGRXE0=7,
+    EFF_0008_EGRXF0=8,
+    EFF_0009_EPEXA0=9,
+    EFF_0010_EGRXH0=10,
+    EFF_0020_EPARA0=20,
+    EFF_0021_EPARB0=21,
+    EFF_0022_EPARA0=22,
+    EFF_0023_EPARB0=23,
+    EFF_0024_EPARB0=24,
+    EFF_0025_EPARC0=25,
+    EFF_0030_EHUNA0=30,
+    EFF_0031_EHUNB0=31,
+    EFF_0032_EHUNC0=32,
+    EFF_0033_EHUNB0=33,
+    EFF_0034_EHUNA0=34,
+    EFF_0035_EHUNC0=35,
+    EFF_0036_EHUND0=36,
+    EFF_0037_EHUND0=37,
+    EFF_0050_EDESA0=50,
+    EFF_0051_EDESB0=51,
+    EFF_0052_EDESC0=52,
+    EFF_0053_EDESD0=53,
+    EFF_0054_EDESE0=54,
+    EFF_0055_EDESF0=55,
+    EFF_0070_EMMGA0=70,
+    EFF_0071_EMLAS0=71,
+    EFF_0072_EMLAS0=72,
+    EFF_0073_EMKAN0=73,
+    EFF_0074_EMFLK0=74,
+    EFF_0075_EMION0=75,
+    EFF_0076_EMLAS0=76,
+    EFF_0077_EMFLK0=77,
+    EFF_0078_EMKAN0=78,
+    EFF_0079_EMKAN0=79,
+    EFF_0080_EMRAK0=80,
+    EFF_0081_EMTRM0=81,
+    EFF_0082_EMECR0=82,
+    EFF_0083_EMRAK0=83,
+    EFF_0084_EMKAB0=84,
+    EFF_0085_EMTRM0=85,
+    EFF_0090_EHUNB1=90,
+    EFF_0100_EREXH0=100,
+    EFF_0101_EREXD0=101,
+    EFF_0102_EREXB0=102,
+    EFF_0103_EREXH0=103,
+    EFF_0104_EREXC0=104,
+    EFF_0105_ERARA0=105,
+    EFF_0106_ERARA0=106,
+    EFF_0107_EREXE0=107,
+    EFF_0108_EREXF0=108,
+    EFF_0109_EREXG0=109,
+    EFF_0110_EREXI0=110,
+    EFF_0111_EREXJ0=111,
+    EFF_0112_ERNEA0=112,
+    EFF_0113_ERNEB0=113,
+    EFF_0114_ELTRI0=114,
+    EFF_0115_EREXK0=115,
+    EFF_0116_ELTRI0=116,
+    EFF_0117_EREXI0=117,
+    EFF_0118_EREXI0=118,
+    EFF_0120_EBAUA0=120,
+    EFF_0121_EBAUB0=121,
+    EFF_0122_EBAUC0=122,
+    EFF_0123_EBAUD0=123,
+    EFF_0124_EBAUE0=124,
+    EFF_0125_EBAUF0=125,
+    EFF_0126_EBAUD0=126,
+    EFF_0130_EKKWK0=130,
+    EFF_0131_ERARC0=131,
+    EFF_0132_EFGLA0=132,
+    EFF_0133_EFGLC0=133,
+    EFF_0134_EFGLB0=134,
+    EFF_0135_EFKFA0=135,
+    EFF_0136_EFKFB0=136,
+    EFF_0137_EFKFC0=137,
+    EFF_0138_EFBTA0=138,
+    EFF_0139_EFBTB0=139,
+    EFF_0140_EFBTC0=140,
+    EFF_0141_EFGLD0=141,
+    EFF_0142_ERARB0=142,
+    EFF_0143_EGATH0=143,
+    EFF_0144_EFWLK0=144,
+    EFF_0145_EFWLK0=145,
+    EFF_0146_EFWLK0=146,
+    EFF_0147_EPEXA0=147,
+    EFF_0148_EWAYP0=148,
+    EFF_0149_ETARG0=149,
+    EFF_0150_ELRAK0=150,
+    EFF_0151_ELION0=151,
+    EFF_0152_ELPRO0=152,
+    EFF_0153_ELFOR0=153,
+    EFF_0200_FBNBA0=200,
+    EFF_0201_FBNBB0=201,
+    EFF_0202_FBNBC0=202,
+    EFF_0203_FBNBD0=203,
+    EFF_0204_FBNBE0=204,
+    EFF_0205_FBNBF0=205,
+    EFF_0206_FBNBG0=206,
+    EFF_0207_FBNBH0=207,
+    EFF_0208_FBNBI0=208,
+    EFF_0209_FBNBJ0=209,
+    EFF_0210_FBNBK0=210,
+    EFF_0211_FBNBL0=211,
+    EFF_0212_FBNSA0=212,
+    EFF_0213_FBNSB0=213,
+    EFF_0214_FBNSC0=214,
+    EFF_0215_FBNSD0=215,
+    EFF_0216_FBNSE0=216,
+    EFF_0217_FBNSF0=217,
+    EFF_0218_FBNSG0=218,
+    EFF_0219_FBNSH0=219,
+    EFF_0220_FBNSI0=220,
+    EFF_0221_FBNSJ0=221,
+    EFF_0222_FBNSK0=222,
+    EFF_0223_FBNSL0=223,
+    EFF_0224_FBTBA0=224,
+    EFF_0225_EBLBA0=225,
+    EFF_0226_FBTBA0=226,
+    EFF_0227_EBLBB0=227,
+    EFF_0228_FBTBB0=228,
+    EFF_0229_EBLBC0=229,
+    EFF_0230_FBTBB0=230,
+    EFF_0231_FBPLB0=231,
+    EFF_0232_FBPLC0=232,
+    EFF_0233_FBPLD0=233,
+    EFF_0234_FBPLE0=234,
+    EFF_0235_FBPLF0=235,
+    EFF_0236_FBPLG0=236,
+    EFF_0237_FBPLH0=237,
+    EFF_0238_FBPLI0=238,
+    EFF_0239_FBPLA0=239,
+    EFF_0240_ERCKA0=240,
+    EFF_0241_ERCKB0=241,
+    EFF_0242_ERCKC0=242
+};
+using PckEffectDefinitionIdCatalog = int;
+
+using AngleTurn32 = uint32_t;
+
+using GraphicsWorldCoordinateQ12 = int;
+
+using UQ12 = uint32_t;
+
+enum {
+    ASSET_MAGIC_TEC=6514036,
+    ASSET_MAGIC_FNC=6516326,
+    ASSET_MAGIC_FLD=6581350,
+    ASSET_MAGIC_EFF=6710885,
+    ASSET_MAGIC_PAL=7102832,
+    ASSET_MAGIC_MDL=7103597,
+    ASSET_MAGIC_SAM=7168371,
+    ASSET_MAGIC_FLM=7171174,
+    ASSET_MAGIC_ROM=7171954,
+    ASSET_MAGIC_ARM=7172705,
+    ASSET_MAGIC_SPR=7499891,
+    ASSET_MAGIC_STR=7500915,
+    ASSET_MAGIC_SHT=7628915,
+    ASSET_MAGIC_LEV=7759212,
+    ASSET_MAGIC_GFX=7890535
+};
+using AssetMagic = int;
+
+using FieldGridDimension = uint32_t;
+
+using AssetFormatVersion = uint32_t;
+
+/* FieldGridCell.flagsAndMaterial (+0x50, a dword of the FLD cell and of the savegame): the soil material in the low
+   byte, a random variant (FIELD_CELL_RANDOM_VARIANT_MASK) and flag bits. A flag enum class over the int the
+   decompiled code held (THANDOR_SIGNED_WORD_FLAG_ENUM, step 13): the stored word and every expression on it keep
+   their bits and signedness; values from a file keep bits without an enumerator. The material byte is read with
+   FieldCell_MaterialId, the whole word with FieldCell_RawWord (as the int) or FieldCell_RawBits (as the uint32_t
+   the code cast it to), and FieldCell_FromRawWord turns a raw dword back into a cell word.
+   The projection pass (graphics/terrain/terrain_render.cpp) also uses this word as
+   TerrainProjectedVertexWorkRecord.projectionFlags; its TERRAIN_VERTEX_* bits live in the same allocation. */
+enum class FieldCellPackedFlagsAndMaterial : int32_t {
+    FIELD_CELL_MATERIAL_ID_MASK = 0xff,
+    FIELD_CELL_RANDOM_VARIANT_MASK = 0x700,
+    FIELD_CELL_XENITE_SUPPORT = 0x800,
+    FIELD_CELL_TRITIUM_SUPPORT = 0x1000,
+    FIELD_CELL_XENITE_OR_TRITIUM_SUPPORT_MASK = 0x1800,
+    FIELD_CELL_FIRST_COLUMN_BOUNDARY = 0x2000,
+    FIELD_CELL_FIRST_ROW_BOUNDARY = 0x4000,
+    FIELD_CELL_DEBUG_MARKED = 0x8000, // no code in the game sets it; cleared at grid init, drawn by a debug overlay
+    FIELD_CELL_CONNECTED_REGION_VISITED = 0x10000,
+    FIELD_CELL_VERTEX_POINT_A_NOT_PROJECTED = 0x200000, /* TERRAIN_VERTEX_POINT_A_NOT_PROJECTED of the projection pass */
+    FIELD_CELL_VERTEX_POINT_B_NOT_PROJECTED = 0x4000000, /* TERRAIN_VERTEX_POINT_B_NOT_PROJECTED of the projection pass */
+    FIELD_CELL_LAST_COLUMN_BOUNDARY = 0x8000000,
+    FIELD_CELL_TERRAIN_VISUAL_CLEARABLE_UNRESOLVED_BIT28 = 0x10000000,
+    FIELD_CELL_FLUID_RECEIVER_EXCLUDED = 0x20000000,
+    FIELD_CELL_FLUID_SOURCE_EXCLUDED = 0x40000000,
+    FIELD_CELL_LAST_ROW_BOUNDARY = static_cast<int32_t>(0x80000000u),
+    /* the four map-edge bits FieldGrid_InitializeRuntimeCellsAndBoundaryFlags sets on the outermost ring of cells;
+       neighbour loops test them before touching a neighbour */
+    FIELD_CELL_GRID_EDGE_MASK = static_cast<int32_t>(0x88006000u)
+};
+THANDOR_SIGNED_WORD_FLAG_ENUM(FieldCellPackedFlagsAndMaterial);
+using enum FieldCellPackedFlagsAndMaterial;
+
+/* The soil material id (low byte) of a cell word. */
+constexpr int FieldCell_MaterialId(FieldCellPackedFlagsAndMaterial cellWord)
+{
+    return ToBits(cellWord & FIELD_CELL_MATERIAL_ID_MASK);
+}
+/* The whole cell word as the signed dword the decompiled code read (bit 31 is FIELD_CELL_LAST_ROW_BOUNDARY). */
+constexpr int32_t FieldCell_RawWord(FieldCellPackedFlagsAndMaterial cellWord)
+{
+    return ToBits(cellWord);
+}
+/* The whole cell word as an unsigned dword (where the code cast the word to uint32_t or masked it with one). */
+constexpr uint32_t FieldCell_RawBits(FieldCellPackedFlagsAndMaterial cellWord)
+{
+    return static_cast<uint32_t>(ToBits(cellWord));
+}
+/* A raw dword (file, packet, random bits, a uint32_t mask) as a cell word; no bits are dropped. */
+constexpr FieldCellPackedFlagsAndMaterial FieldCell_FromRawWord(uint32_t rawWord)
+{
+    return FromBits<FieldCellPackedFlagsAndMaterial>(static_cast<int32_t>(rawWord));
+}
+/* The resource-support bit of a resource selector: FIELD_CELL_XENITE_SUPPORT shifted left by resourceShift
+   (0 Xenite, 1 Tritium; the callers mask the shift with 31, as the original did). */
+constexpr FieldCellPackedFlagsAndMaterial FieldCell_ResourceSupportBit(uint32_t resourceShift)
+{
+    return FromBits<FieldCellPackedFlagsAndMaterial>(ToBits(FIELD_CELL_XENITE_SUPPORT) << resourceShift);
+}
+
+using AssetRelativeOffset = uint32_t;
+
+struct GraphicsFixedVec3 {
+    GraphicsWorldCoordinateQ12 x; 
+    GraphicsWorldCoordinateQ12 y; 
+    GraphicsWorldCoordinateQ12 z; 
+};
+
+struct GraphicsFixedMatrix3x4 {
+    int32_t basisRow0[3]; 
+    int32_t basisRow1[3]; 
+    int32_t basisRow2[3]; 
+    struct GraphicsFixedVec3 translation; 
+};
+
+using ModelDefinitionHierarchyNodeAddress32 = intptr_t; /* address of a definition hierarchy node, pointer-sized (5f) */
+
+/* g_FileSystemEnumerateDirectoryOrVolumeEntries: what to list. */
+enum class FileSystemEnumerationMode : int {
+    FILESYSTEM_ENUMERATE_FILES=0,
+    FILESYSTEM_ENUMERATE_VOLUME_LABEL=1,
+    FILESYSTEM_ENUMERATE_DIRECTORIES=2
+};
+
+enum {
+    FILESYSTEM_SEEK_BEGIN=0,
+    FILESYSTEM_SEEK_CURRENT=1,
+    FILESYSTEM_SEEK_END=2
+};
+using FileSystemSeekOrigin = int;
+
+/* g_SessionNetworkRoleFlags: the session's network role. Every test masks with SESSION_NETWORK_ROLE_NETWORKED_MASK
+   or one role bit; LOCAL is the value with neither bit. The original int becomes uint32_t (only bit operations and
+   equality tests use it). */
+enum class SessionNetworkRoleFlags : uint32_t {
+    SESSION_NETWORK_ROLE_LOCAL=0,
+    SESSION_NETWORK_ROLE_CLIENT=1,
+    SESSION_NETWORK_ROLE_HOST=2,
+    SESSION_NETWORK_ROLE_NETWORKED_MASK=3
+};
+THANDOR_FLAG_ENUM(SessionNetworkRoleFlags);
+using enum SessionNetworkRoleFlags;
+
+/* struct SoundVoice stays incomplete: a voice handle of the audio slots (g_Sound*), the SDL3 backend's
+   voice object behind it (the original's DirectSound buffer). */
+
+struct SoundVoiceSet {
+    struct SoundVoice *voices[8]; 
+};
+
+using SoftwareColorLaneUnsigned16 = uint16_t;
+
+using InGameSimulationStepBatchTicks = uint32_t;
+
+using FixedMathScale32 = int;
+
+using SoftwareColorLaneFixed16 = uint16_t;
+
+using AssetDecodedBlockCount = uint32_t;
+
+struct SoundSampleAsset {
+    AssetMagic magic;
+    uint8_t reserved04_0B[8];
+    AssetFormatVersion formatVersion;
+    uint8_t reserved10_AF[160];
+    AssetDecodedBlockCount decodedBlockCount;
+    uint8_t reservedB4_1FF[332];
+};
+
+/* Options of WideNumber_FormatUtf16 (g_WideNumberFormatUtf16): a flag enum class over the int parameter the code
+   had (THANDOR_SIGNED_WORD_FLAG_ENUM: unsigned, GCC compiles the formatter differently), names kept. */
+enum class WideNumberFormatFlags : int32_t {
+    WIDE_FORMAT_SIGNED_VALUE = 0x1,
+    WIDE_FORMAT_HEXADECIMAL = 0x2,
+    WIDE_FORMAT_FIXED_FRACTION_WIDTH = 0x4,
+    WIDE_FORMAT_PAD_WITH_ZERO = 0x8,
+    WIDE_FORMAT_PAD_WITH_SPACE = 0x10,
+    WIDE_FORMAT_SHOW_PLUS_SIGN = 0x20,
+    WIDE_FORMAT_WRITE_TERMINATOR = 0x40,
+    WIDE_FORMAT_GROUP_THOUSANDS = 0x80
+};
+THANDOR_SIGNED_WORD_FLAG_ENUM(WideNumberFormatFlags);
+using enum WideNumberFormatFlags;
+
+struct SoftwareBgraWordLanes {
+    SoftwareColorLaneUnsigned16 blue; 
+    SoftwareColorLaneUnsigned16 green; 
+    SoftwareColorLaneUnsigned16 red; 
+    SoftwareColorLaneUnsigned16 alpha; 
+};
+
+struct SoftwareRgbWordLanes {
+    SoftwareColorLaneFixed16 blue; 
+    SoftwareColorLaneFixed16 green; 
+    SoftwareColorLaneFixed16 red; 
+    short zero; 
+};
+
+using UQ8 = uint32_t;
+
+struct ModelPackedPointRecord {
+    uint32_t packedLookupKey; 
+    struct GraphicsFixedVec3 localPosition; 
+};
+
+#endif /* THANDOR_CORE_TYPES_H */

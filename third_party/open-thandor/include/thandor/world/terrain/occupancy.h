@@ -1,0 +1,45 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/world/terrain/occupancy.h
+ * Reverse engineering by idkFoxes 2026
+ */
+
+#ifndef THANDOR_WORLD_TERRAIN_OCCUPANCY_H
+#define THANDOR_WORLD_TERRAIN_OCCUPANCY_H
+
+#include <thandor/core/types.h>
+#include <thandor/ui/ingame/types.h>
+#include <thandor/world/terrain/types.h>
+#include <thandor/core/contracts.h>
+
+/* TerrainOccupancyMask_ClassifyNeighborhoodAtWorldPoint packs two bits per faction slot i: bit 2i+1 = present now,
+   bit 2i = only the persistent occupancy bit (seen before). */
+inline constexpr uint32_t TERRAIN_OCCUPANCY_CLASS_PRESENT_BITS = 0xaaaaaaaa;
+/* The model-node runtimeFlags bits TERRAIN_OCCUPANCY_FLAG_* are ModelRuntimeFlags (gameplay/army/types.h). */
+/* Rounding bias added to a Q12 radius before dividing by FIELD_GRID_WORLD_COLUMN_STEP_X (just under half a Q12
+   unit, not half the cell step) */
+inline constexpr uint32_t TERRAIN_OCCUPANCY_RADIUS_ROUND_Q12 = 0x7ffU;
+
+void TerrainOccupancyBit2_MarkAroundWorldPoint(FieldGridRadiusUnits radiusWorldUnits,Q12 worldYQ12,Q12 worldXQ12,
+          FieldGridOccupancyByteIndex occupancyByteOffset,FieldGridAsset *fieldGrid);
+
+uint32_t TerrainOccupancyMask_ClassifyNeighborhoodAtWorldPoint
+          (Q12 neighborhoodRadiusQ12,Q12 worldYQ12,Q12 worldXQ12,FieldGridAsset *fieldGrid);
+
+TerrainOccupancyResolvedMasks
+TerrainOccupancyMask_ResolveRuntimeClassFlags
+          (ModelRuntimeFlags baseRuntimeFlags,FieldGridRegionMask secondaryOccupancyMask,
+          FieldGridRegionMask primaryOccupancyMask,char activeFactionIndex);
+
+void FieldGrid_ClearOccupancyMaskBits0To6AllCells(FieldGridAsset *fieldGrid);
+
+void FieldGrid_SetOccupancyMaskByteBit0AllCells
+          (FieldGridOccupancyByteIndex occupancyMaskByteIndex,FieldGridAsset *fieldGrid);
+
+void FieldGrid_ClearOccupancyMaskByteBit0AllCells
+          (FieldGridOccupancyByteIndex occupancyMaskByteIndex,FieldGridAsset *fieldGrid);
+
+bool TerrainGrid_TestProjectedCellMaskBits01(Q12 worldYQ12,Q12 worldXQ12,WorldRuntimeContext *worldRuntime);
+
+#endif /* THANDOR_WORLD_TERRAIN_OCCUPANCY_H */

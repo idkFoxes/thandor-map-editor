@@ -166,6 +166,7 @@ struct ArmyAssetPreset {
     uint32_t name_text_resource_id{};
     bool has_model_name_text_offset{};
     std::string localized_name;
+    std::string localized_name_de;
     std::string localized_name_source_path;
     std::string localized_name_source_archive;
     uint32_t runtime_model_class_id{};
@@ -425,6 +426,8 @@ struct MapAssetGroup {
     std::string field_path;
     std::vector<std::size_t> asset_indices;
     std::vector<uint32_t> placement_registry_ids;
+    std::string game_title_en;
+    std::string game_title_de;
 };
 
 // V533 InGameLevelRuntime_LoadResourcesAfterDefaultResetCf scans the ARM registry and retains the

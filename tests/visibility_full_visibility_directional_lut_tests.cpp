@@ -60,7 +60,7 @@ int main() {
         check(field_cpp.find("(1.0F - intensity) * 127.5F") == std::string::npos,
               "superseded symmetric directional-ramp mapping survived");
         check(editor_cpp.find("if(fog_preview_mode_==0)return 255U;") != std::string::npos &&
-              editor_cpp.find("renderer_.update_fog_visibility(frame_index,fog_preview_runtime_cells_,fog_preview_mode_!=0)") != std::string::npos,
+              editor_cpp.find("renderer_.update_fog_visibility(frame_index,fog_preview_runtime_cells_,fog_preview_mode_!=0,") != std::string::npos,
               "fog Off no longer restores full model intensity and disables the GPU fog mask");
         check(terrain_vert.find("directDrawFinalizeVertexLighting") !=
                   std::string::npos &&

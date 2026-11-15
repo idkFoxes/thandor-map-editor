@@ -1,0 +1,168 @@
+/*
+ * Open Thandor
+ * Project: https://github.com/idkFoxes/open-thandor/tree/main
+ * File: https://github.com/idkFoxes/open-thandor/blob/main/include/thandor/platform/sdl3/platform.h
+ * Project code (not in the original game)
+ */
+
+#ifndef THANDOR_PLATFORM_SDL3_PLATFORM_H
+#define THANDOR_PLATFORM_SDL3_PLATFORM_H
+
+/* The SDL3 platform backend: window, event pump, keyboard, mouse, periodic timers, video presentation and audio on
+   SDL3, in place of the original's Win32 window, DirectDraw, DirectInput, WinMM and DirectSound. The game reaches it
+   through the original's function slots (g_PlatformPumpEvents, g_TimerRegisterPeriodic, g_GraphicsSetDisplayMode,
+   g_GraphicsFramebufferPresent, g_Sound*, g_Pointer*, ...); ProcessEntry (platform/bootstrap/runtime.cpp) and
+   Runtime_Shutdown call the entry points below where the original called Graphics_Init, DirectInputMouse_Init and
+   DirectSound_Init. This header has no SDL types; the backend's own shared declarations are in
+   thandor/platform/sdl3/sdl_objects.h. */
+
+#include <thandor/core/types.h>
+#include <thandor/graphics/backend/types.h>
+#include <thandor/platform/sdl3/types.h>
+#include <thandor/platform/system/types.h>
+
+/* --- window and event pump (src/platform/sdl3/platform.cpp) --- */
+
+/* Starts SDL (video, events), creates the hidden main window (at OPEN_THANDOR_WINDOW_X/Y in the developer tools'
+   windowed mode) and publishes its HWND in g_MainWindow. The renderer and the display mode kind (window,
+   borderless, fullscreen) are applied by the first display mode switch (SdlVideo_ApplyDisplayMode), which also
+   shows the window. Returns false (logged) when SDL or the window cannot be started. */
+bool SdlPlatform_CreateMainWindow(const char *title);
+/* Where the original's TimerSystem_Init ran: installs the SDL timers in g_TimerRegisterPeriodic/g_TimerUnregisterPeriodic and
+   SdlPlatform_PumpEvents in g_PlatformPumpEvents. */
+void SdlPlatform_InstallTimersAndPump();
+/* g_PlatformPumpEvents: runs the developer tools' pump hook, then handles every pending SDL event (keyboard,
+   text, mouse, focus); a quit request shuts the game down and ends the process. */
+void SdlPlatform_PumpEvents();
+/* End of ProcessEntry, after Runtime_Shutdown: stops SDL. */
+void SdlPlatform_Quit();
+
+/* --- periodic timers (src/platform/sdl3/timer.cpp) --- */
+
+/* g_TimerRegisterPeriodic: calls callback every 1000 / frequencyHz ms (truncated, as timeSetEvent) on SDL's timer
+   thread; 32 slots, a request without a free slot is ignored. */
+void SdlTimer_RegisterPeriodic(TimerFrequencyHz frequencyHz,TimerCallbackProc *callback);
+/* g_TimerUnregisterPeriodic: stops the first timer registered with callback. */
+void SdlTimer_UnregisterPeriodic(TimerCallbackProc *callback);
+/* Runtime_Shutdown: stops every timer. */
+void SdlTimer_Shutdown();
+
+/* --- video (src/platform/sdl3/video.cpp) --- */
+
+/* In place of the original's Graphics_Init: allocates the graphics tables, lists the renderers as the graphics
+   adapters ("Vulkan (GPU)", "DirectX 12 (GPU)", "Software (CPU)"; only GPU renderers whose driver is available,
+   probed once; with OPEN_THANDOR_GPU / -GPU / -SOFTWARE only the forced one) and for each of them the display
+   modes (640x480 up to the desktop size, 16 and 32 bits per pixel), and installs SdlVideo_ApplyDisplayMode as the
+   base display-mode step. Returns 0 or the error code. */
+uint32_t SdlVideo_Init();
+/* Runtime_Shutdown, after Graphics_Shutdown: releases the framebuffer, the renderer (SDL_GPU device or
+   SDL_Renderer) and the window. */
+void SdlVideo_Shutdown();
+/* Base step of g_GraphicsSetDisplayMode: switches to the adapter's renderer when it is not the running one (a
+   GPU renderer that cannot start falls back Vulkan -> Direct3D 12 -> software, logged), applies the display mode
+   kind (window, borderless fullscreen, exclusive fullscreen), a w x h memory framebuffer in XRGB8888 (32-bit
+   colour only, the requested depth is not looked at), the pixel format, the published framebuffer and the
+   blitters; then the chained finalize step. */
+bool SdlVideo_ApplyDisplayMode(uint32_t adapterIndex,uint32_t bitsPerPixel,uint32_t height,uint32_t width,
+                                uint32_t *errorCode);
+/* g_GraphicsFramebufferPresent: composes the software cursor into the framebuffer, presents it letterboxed
+   (through the SDL_GPU device, or an SDL_Renderer streaming texture for the software renderer) and removes the
+   cursor again. */
+void SdlVideo_Present(SoftwareFramebufferAccess *framebuffer);
+/* The renderer choice kept in the persistent settings (PERSISTENT_SETTING_RENDERER, not the original's adapter
+   index): the adapter index of the saved renderer (or of the one forced by OPEN_THANDOR_GPU / -GPU / -SOFTWARE; an
+   unavailable one gives the first adapter), and saving the renderer of an adapter (not while one is forced). The
+   original's PERSISTENT_SETTING_ADAPTER_INDEX gets 0, the one display adapter. */
+uint32_t SdlVideo_SavedAdapterIndex();
+void SdlVideo_SaveAdapterIndex(uint32_t adapterIndex);
+/* The second label part of an adapter (shown in brackets after its name): "GPU" or "CPU". */
+uint16_t *SdlVideo_AdapterDetailUtf16(uint32_t adapterIndex);
+/* The display mode kind (PERSISTENT_DISPLAY_MODE_*): the saved one (PERSISTENT_SETTING_DISPLAY_MODE_KIND), saving
+   it, the one in use, and the one the next SdlVideo_ApplyDisplayMode applies. The developer tools' window
+   (OPEN_THANDOR_WINDOWED) stays a window and saves nothing: a chosen kind is logged and only kept for the
+   session (the settings page then sees it as the saved one). */
+uint32_t SdlVideo_SavedDisplayModeKind();
+void SdlVideo_SaveDisplayModeKind(uint32_t kind);
+uint32_t SdlVideo_DisplayModeKind();
+void SdlVideo_SetDisplayModeKind(uint32_t kind);
+/* Whether the renderer in use is a GPU one (Vulkan, DirectX 12), not the software renderer. */
+bool SdlVideo_GpuRendererActive();
+/* The GPU renderers' rasterization ([graphics] gpu_rasterization, PERSISTENT_GPU_RASTERIZATION_*): the saved one, and
+   saving one, which a running GPU device takes from its next scene on (OPEN_THANDOR_GPU_RASTER still wins at the
+   next device start; the developer tools' compare mode keeps the exact one). */
+uint32_t SdlVideo_GpuRasterization();
+void SdlVideo_SetGpuRasterization(uint32_t rasterization);
+/* The GPU renderers' UI scale ([graphics] ui_scale: PERSISTENT_UI_SCALE_AUTO or 1..PERSISTENT_UI_SCALE_MAX): the
+   saved one, and saving one. The scale divides the display mode (the physical window / fullscreen size, which it
+   never changes) into the logical UI resolution g_FramebufferWidth x g_FramebufferHeight. A saved scale takes
+   effect at the next display mode switch (the advanced settings page sets the mode in use again at once).
+   UiScaleChangePending: the scale the running display mode would get now (OPEN_THANDOR_UI_SCALE wins; auto and the
+   640x480 floor resolved) differs from the one it was set up with. AppliedUiScale: that one (1 for the software
+   renderer). DisplayModeWidth / Height: the running display mode's physical size (the framebuffer size times
+   the scale, before rounding down) - the size to pass to g_GraphicsSetDisplayMode to set the mode in use again. */
+uint32_t SdlVideo_SavedUiScale();
+void SdlVideo_SaveUiScale(uint32_t scale);
+bool SdlVideo_UiScaleChangePending();
+uint32_t SdlVideo_AppliedUiScale();
+uint32_t SdlVideo_DisplayModeWidth();
+uint32_t SdlVideo_DisplayModeHeight();
+/* Frame pacing of the presents (render rate only, the game's timers are untouched; but as in the original a
+   simulation step runs at the first frame after its timer countdown, so a limit below 60 slows the game: 30 fps
+   gives about 14 instead of 20 steps per second).
+   VSync: [graphics] vsync = on|off in thandor.ini (PERSISTENT_SETTING_VSYNC, default on), OPEN_THANDOR_VSYNC=0|1
+   wins at start. On: the GPU renderers present in vsync mode and wait for a free swapchain image, the software
+   renderer's SDL_Renderer presents with vsync. Off: the GPU renderers present in mailbox mode (else immediate) and
+   drop a frame rather than wait (unless a frame limit is set).
+   Frame limit: [graphics] frame_limit = 0|60|120|144 (PERSISTENT_SETTING_FRAME_LIMIT, frames per second, 0 = no
+   limit, default 0; other values up to PERSISTENT_FRAME_LIMIT_MAX work too, at least 60 is recommended),
+   OPEN_THANDOR_FRAME_LIMIT=n wins at start. SdlVideo_Present waits (high-resolution sleep) so that at most that many
+   frames per second are presented; the GPU renderers then also wait for a free swapchain image (no dropped frames).
+   Get returns the value in effect (the environment's when it was set); Set applies it immediately (also during a
+   frame loop) and saves it in the persistent settings (written to thandor.ini at the next flush). A frame limit
+   above PERSISTENT_FRAME_LIMIT_MAX is taken as 0. */
+bool SdlVideo_GetVsync();
+void SdlVideo_SetVsync(bool on);
+uint32_t SdlVideo_GetFrameLimit();
+void SdlVideo_SetFrameLimit(uint32_t fps);
+/* g_GraphicsFramebufferCaptureRegion: the memory framebuffer as a one-image ARGB8888 'gfx' asset. */
+GraphicsCapturedTextureSourceAsset *SdlVideo_CaptureRegion32Bit(uint32_t captureHeight,uint32_t captureWidth,
+                                                                int32_t sourceY,int32_t sourceX);
+
+/* --- keyboard and mouse (src/platform/sdl3/input.cpp) --- */
+
+/* In place of the original's DirectInputMouse_Init: hides the system cursor, hooks the display-mode switch (cursor buffers),
+   starts the cursor-animation timer, installs g_PointerFlushEvents/g_PointerSetPosition, loads the cursor assets
+   and seeds the lock-key bits. Returns false with the error in *outError. */
+bool SdlInput_Init(uint32_t *outError);
+/* Runtime_Shutdown: stops the cursor timer and gives the system cursor back. */
+void SdlInput_Shutdown();
+/* g_GraphicsSetDisplayMode hook: frees and recreates the cursor buffers around the chained mode switch. */
+bool SdlInput_SetDisplayMode(uint32_t adapterIndex,uint32_t bitsPerPixel,uint32_t height,uint32_t width,
+                              uint32_t *errorCode);
+/* g_PointerSetPosition */
+void SdlInput_SetPosition(int32_t positionY,int32_t positionX);
+/* g_PointerFlushEvents */
+void SdlInput_FlushEvents();
+
+/* --- audio (src/platform/sdl3/audio.cpp) --- */
+
+/* In place of the original's DirectSound_Init: opens a 22050 Hz 16-bit stereo SDL audio stream with the mixer and installs the
+   g_Sound* slots. Without an audio device the silent backend stays (returns 0, as the original's DirectSound_Init). Returns 0 or
+   the allocator's error code. */
+uint32_t SdlAudio_Init();
+/* Runtime_Shutdown: closes the audio stream and frees the voice-set registry. */
+void SdlAudio_Shutdown();
+uint32_t SdlAudio_CreateSampleVoiceSet(SoundSampleAsset *sampleAsset,uint32_t sampleByteCount,
+                                       SoundVoiceSet **outVoiceSet);
+void SdlAudio_ReleaseSampleVoiceSet(SoundVoiceSet *voiceSet);
+bool SdlAudio_PlayOneShot(uint32_t leftChannelGainQ15,uint32_t rightChannelGainQ15,SoundVoiceSet *voiceSet,
+                           SoundVoice **outVoice);
+bool SdlAudio_PlayLooping(uint32_t leftChannelGainQ15,uint32_t rightChannelGainQ15,SoundVoiceSet *voiceSet,
+                           SoundVoice **outVoice);
+void SdlAudio_StopVoice(SoundVoice *voice);
+/* Inverted like the original's DirectSound_IsVoicePlaying: false while the voice plays, true when it is NULL or stopped. */
+bool SdlAudio_IsVoiceFinished(SoundVoice *voice);
+void SdlAudio_SetVoiceGains(uint32_t leftChannelGainQ15,uint32_t rightChannelGainQ15,SoundVoice *voice);
+void SdlAudio_StopAllVoices();
+
+#endif /* THANDOR_PLATFORM_SDL3_PLATFORM_H */
